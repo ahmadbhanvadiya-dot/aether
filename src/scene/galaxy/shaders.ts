@@ -223,14 +223,15 @@ void main() {
   emissive = vec3(1.0, 0.72, 0.4) * lights * 0.35 * (1.0 - smoothstep(-0.2, 0.05, NdL));
 
 #elif KIND == K_DARK
-  float veins = max(t.g, t.a * 0.8);
-  albedo = mix(vec3(0.018, 0.017, 0.024), vec3(0.06, 0.055, 0.07), smoothstep(-0.4, 0.5, t.r));
+  // Thin, sparse fissures: only the very crest of the vein field glows.
+  float veins = max(smoothstep(0.62, 0.92, t.g), smoothstep(0.7, 0.95, t.a) * 0.6);
+  albedo = mix(vec3(0.016, 0.015, 0.02), vec3(0.05, 0.047, 0.058), smoothstep(-0.4, 0.5, t.r));
   rough = 40.0;
-  water = 0.35; // glassy sheen
-  float pulse = 0.75 + 0.25 * sin(uTime * 0.6 + t.b * 6.0);
+  water = 0.25; // glassy sheen
+  float pulse = 0.7 + 0.3 * sin(uTime * 0.6 + t.b * 6.0);
   vec3 veinCol = mix(uViolet, uIon, smoothstep(-0.5, 0.8, t.b));
   float night = 1.0 - smoothstep(-0.3, 0.2, NdL);
-  emissive = veinCol * veins * pulse * (0.35 + night * 0.9);
+  emissive = veinCol * veins * pulse * (0.12 + night * 0.7);
 
 #elif KIND == K_DESERT
   float basin = smoothstep(-0.2, -0.45, t.r);
@@ -345,7 +346,9 @@ void main() {
   float lon = atan(p.z, p.x);
   vec2 uv = vec2(lon / (2.0 * PI) + 0.5 + uTime * uSpeed, lat / PI + 0.5);
   float d = texture2D(uTerrain, uv).a;
-  float cover = smoothstep(0.08, 0.5, d) * smoothstep(1.0, 0.6, abs(p.y) * 0.9 + 0.1);
+  // Wide, soft ramp so cloud edges feather instead of cutting like brush strokes.
+  float cover = smoothstep(-0.05, 0.6, d);
+  cover *= cover * smoothstep(1.0, 0.6, abs(p.y) * 0.9 + 0.1);
 
   vec3 N = normalize(vWorldNormal);
   vec3 L = normalize(uSunPos - vWorldPos);

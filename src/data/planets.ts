@@ -97,7 +97,7 @@ export const PLANETS: PlanetData[] = [
     axialTilt: 0.12,
     spin: 0.05,
     radiusKm: 4_980,
-    atmosphere: { day: '#7C5CFF', night: '#3A2A8A', shell: 1.06, density: 0.22, intensity: 0.55 },
+    atmosphere: { day: '#7C5CFF', night: '#3A2A8A', shell: 1.05, density: 0.2, intensity: 0.35 },
     accent: '#8C6CFF',
   },
   {

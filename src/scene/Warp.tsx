@@ -36,7 +36,7 @@ export function Projection() {
     if (shift > 0.001) {
       const w = size.width
       const h = size.height
-      if (aspect < 0.9 || w <= 900) camera.setViewOffset(w, h, 0, h * 0.2 * shift, w, h)
+      if (aspect < 0.9 || w <= 900) camera.setViewOffset(w, h, 0, h * 0.26 * shift, w, h)
       else camera.setViewOffset(w, h, w * 0.17 * shift, 0, w, h)
     } else if (camera.view?.enabled) {
       camera.clearViewOffset()

@@ -40,6 +40,8 @@ export function enterGalaxyIntro() {
   galaxyCam.mode = 'intro'
   galaxyCam.focus = null
   galaxyCam.hasHome = false
+  // Every arrival starts from the overview, never from a stale selection.
+  if (useExperience.getState().focus) useExperience.getState().setFocus(null)
 }
 
 const tmpPos = new Vector3()
@@ -109,7 +111,9 @@ export function GalaxyRig() {
       const toStar = tmpPos.copy(P).multiplyScalar(-1).normalize()
       side.crossVectors(UP, toStar).normalize()
       const aspect = size.width / size.height
-      const dist = data.radius * (data.rings ? 5.6 : 4.6) * (aspect < 0.9 ? 1.35 : 1)
+      // Narrow screens show the panel as a bottom sheet: pull back so the world fits above it.
+      const narrow = aspect < 0.9 || size.width <= 900
+      const dist = data.radius * (data.rings ? 5.6 : 4.6) * (narrow ? 1.5 : 1)
       galaxyCam.offset
         .copy(toStar)
         .multiplyScalar(0.62)

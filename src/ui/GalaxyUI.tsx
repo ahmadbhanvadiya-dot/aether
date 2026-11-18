@@ -44,7 +44,7 @@ function HoverLabel() {
           <span className="font-display text-[1.35rem] leading-none tracking-[0.14em] text-starlight">
             {shown.name}
           </span>
-          <span className="max-w-[26ch] whitespace-normal text-[0.8125rem] leading-snug text-haze">
+          <span className="w-[24ch] whitespace-normal text-[0.8125rem] leading-snug text-haze">
             {shown.teaser}
           </span>
         </span>
