@@ -45,6 +45,8 @@ export const director = {
   descent: 0,
   /** Surface camera: 0 → high in the sky, 1 → at the location */
   landing: 0,
+  /** Observatory: 0 → galaxy view, 1 → zenith dial above Elys */
+  observatory: 0,
   /** Scene clock that stops when motion is paused */
   time: 0,
 }
@@ -66,6 +68,15 @@ export const telemetry = {
   hover: { x: 0, y: 0, visible: false, radiusPx: 0 },
   /** The surface signal's projected screen position. */
   signal: { x: 0, y: 0, visible: false },
+  /** Observatory chart: projected Elys and worlds (CSS px), and how far the dial view is in. */
+  chart: {
+    ox: 0,
+    oy: 0,
+    active: 0,
+    worlds: Object.fromEntries(
+      ['aurelis', 'nyx', 'solara', 'vesper', 'thalassa', 'orion'].map((id) => [id, { x: 0, y: 0, radiusPx: 0 }]),
+    ) as Record<string, { x: number; y: number; radiusPx: number }>,
+  },
   /** Ithra's projected screen position in CSS pixels. */
   ithra: { x: 0, y: 0, visible: false },
 }

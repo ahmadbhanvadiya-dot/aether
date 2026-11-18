@@ -76,6 +76,8 @@ function switchToSurface() {
   director.space = 'surface'
   director.landing = 0
   surfaceCam.mode = 'landing'
+  const planet = useExperience.getState().exploring
+  if (planet) useExploration.getState().markVisited(planet)
 }
 
 function runDescent() {
@@ -116,7 +118,8 @@ function switchToGalaxy() {
   beginGalaxyAscent()
 }
 
-export function startAscent() {
+/** Climbs back to orbit; `then` runs once the galaxy view has settled (e.g. open the Observatory). */
+export function startAscent(then?: () => void) {
   const st = useExperience.getState()
   if (st.phase !== 'surface') return
   sound.unlock()
@@ -135,6 +138,7 @@ export function startAscent() {
     s.setPhase('galaxy')
     s.setExploring(null)
     s.setLocation(null)
+    then?.()
   }
   const tl = gsap.timeline({ onComplete: finish })
   timeline = tl
@@ -259,6 +263,7 @@ export function jumpToLocation(id: string) {
   primeGalaxyFocus(loc.planet)
   st.setLocation(id)
   st.setExploring(loc.planet)
+  useExploration.getState().markVisited(loc.planet)
   surfaceCam.mode = 'free'
   st.setPhase('surface')
 }

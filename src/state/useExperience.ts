@@ -12,6 +12,7 @@ import { PLANETS, type PlanetId } from '../data/planets'
  * descending → from a world's orbit down through its atmosphere
  * surface    → exploring a world's surface
  * ascending  → back up to the world's orbit
+ * observatory → the archive: the system seen from the zenith as a planisphere
  */
 export type Phase =
   | 'boot'
@@ -23,6 +24,7 @@ export type Phase =
   | 'descending'
   | 'surface'
   | 'ascending'
+  | 'observatory'
 
 interface ExperienceState {
   phase: Phase
@@ -43,6 +45,8 @@ interface ExperienceState {
   signalHovered: boolean
   /** The latest discovery notification. */
   notice: Notice | null
+  /** The world selected on the Observatory dial. */
+  observed: PlanetId
   setPhase: (phase: Phase) => void
   setSceneReady: () => void
   toggleMotion: () => void
@@ -54,6 +58,7 @@ interface ExperienceState {
   setLocation: (id: string | null) => void
   setSignalHovered: (v: boolean) => void
   setNotice: (n: Notice | null) => void
+  setObserved: (id: PlanetId) => void
 }
 
 export interface Notice {
@@ -77,6 +82,7 @@ export const useExperience = create<ExperienceState>((set) => ({
   location: null,
   signalHovered: false,
   notice: null,
+  observed: 'aurelis',
   setPhase: (phase) => set({ phase }),
   setSceneReady: () => set({ sceneReady: true }),
   toggleMotion: () => set((s) => ({ motionPaused: !s.motionPaused })),
@@ -93,6 +99,7 @@ export const useExperience = create<ExperienceState>((set) => ({
   setLocation: (location) => set({ location }),
   setSignalHovered: (signalHovered) => set({ signalHovered }),
   setNotice: (notice) => set({ notice }),
+  setObserved: (observed) => set({ observed }),
 }))
 
 /**
@@ -102,7 +109,7 @@ export const useExperience = create<ExperienceState>((set) => ({
 export const debugShot = (() => {
   if (typeof window === 'undefined') return null
   const shot = new URLSearchParams(window.location.search).get('shot')
-  if (shot === 'orbit' || shot === 'galaxy') return shot
+  if (shot === 'orbit' || shot === 'galaxy' || shot === 'observatory') return shot
   if (shot && PLANETS.some((p) => p.id === shot)) return shot as PlanetId
   if (shot && LOCATION_BY_ID[shot]) return `loc:${shot}` as const
   return null

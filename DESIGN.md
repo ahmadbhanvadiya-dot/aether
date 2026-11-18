@@ -1,9 +1,9 @@
 # AETHER — Design System
 
 **The source of truth for AETHER.** Every value below was read from the source code on
-2026‑11‑18. Phases 1–2 are live at <https://ahmadbhanvadiya-dot.github.io/aether/> (commit
-`8b03512`); Phase 3 (planet exploration) is implemented in the working tree and not yet
-deployed. When code and this document disagree, fix one of them in the same change.
+2026‑11‑18. Phases 1–3 are live at <https://ahmadbhanvadiya-dot.github.io/aether/> (merge
+commit `29131fa`); Phase 4 (the Observatory) is implemented in the working tree and not yet
+deployed. Product context lives in `PRODUCT.md`. When code and this document disagree, fix one of them in the same change.
 
 Status labels used throughout:
 
@@ -20,11 +20,12 @@ Status labels used throughout:
 4. [The six worlds](#4-the-six-worlds) (Implemented)
 5. [Interaction](#5-interaction) (Implemented)
 6. [Phase 3 — Planet exploration](#6-phase-3--planet-exploration) (Implemented)
-7. [Technical architecture](#7-technical-architecture) (Implemented)
-8. [Rules for future work](#8-rules-for-future-work) (Planned)
-9. [Known limitations](#9-known-limitations)
-10. [Decision log](#10-decision-log)
-11. [Roadmap](#11-roadmap)
+7. [Phase 4 — The Observatory](#7-phase-4--the-observatory) (Implemented)
+8. [Technical architecture](#8-technical-architecture) (Implemented)
+9. [Rules for future work](#9-rules-for-future-work) (Planned)
+10. [Known limitations](#10-known-limitations)
+11. [Decision log](#11-decision-log)
+12. [Roadmap](#12-roadmap)
 
 ---
 
@@ -97,7 +98,7 @@ per the Phase 1 brief, and the six world names, which are defined in caps in
 | Corner | Content |
 |--------|---------|
 | Top‑left | Eclipse mark (SVG). In galaxy overview, **Return to Vael** beside it. |
-| Top‑right | **Pause motion**, **Sound** (Phase 3) and **Hide interface** buttons (labels hidden below `sm`; Sound's below `lg`). |
+| Top‑right | **Observatory** (Phase 4; galaxy and surfaces), **Pause motion**, **Sound** (Phase 3) and **Hide interface** buttons (labels hidden below `sm`; Sound's below `lg`). In the Observatory, top‑left shows **← Galaxy**. |
 | Bottom‑left | Status line (`aria-live`) + live readout; in the galaxy and on surfaces a third line, "N of 18 discoveries". |
 | Bottom‑right | One contextual hint. |
 
@@ -114,6 +115,7 @@ Status and hint text by state (`ui/Hud.tsx`):
 | Descending (Phase 3) | Descending to NAME | Altitude above the world | — |
 | Surface (Phase 3) | Exploring NAME | Altitude N m (gas worlds: Above the cloud tops N m) | Drag to look around, select / tap the signal (once found: Drag to look around) |
 | Ascending (Phase 3) | Returning to orbit | Surface altitude, then orbital altitude | — |
+| Observatory (Phase 4) | The Observatory (corner hidden) | — | hidden: the ledger replaces both bottom corners |
 | Paused (any) | — | — | Motion paused |
 
 While a world's panel is open as a bottom sheet (narrow screens, galaxy only), both bottom HUD
@@ -158,10 +160,14 @@ Implemented:
   transitions (warp, travel) still complete.
 - Phase 3 reduced motion: descent, ascent and travel between locations become short veil
   crossfades (about 1.2s); lightning flashes are off; signal pings hold still; motes drop to 40%.
+- Phase 4 reduced motion: no letterbox; the rise to the dial takes 0.6s and the dial snaps to
+  the selected world; reveals and new timeline entries fade only.
 - Every interactive 3D object has a DOM equivalent: the world index (buttons, keyboard
   focusable, focus highlights the world) and panel buttons with `aria-label`s.
 - Keyboard: `H` hide interface and `M` sound, anywhere; in a focused world `Esc`, `←`, `→`;
-  on a surface `Esc` returns to orbit and `←` / `→` fly between locations. Shortcuts appear in
+  on a surface `Esc` returns to orbit and `←` / `→` fly between locations; `O` opens the
+  Observatory from the galaxy or a surface, and in it `Esc` / `O` close and `←` / `→` turn
+  the dial. Shortcuts appear in
   the buttons' `title` tooltips.
 - Visible focus: 1px `ion` outline (offset 5px on the Enter button, 3px on quiet buttons).
 - Live regions: HUD status (`aria-live="polite"`) and the world panel.
@@ -365,7 +371,7 @@ limited to 0.15 … π − 0.15. Auto‑rotate is off when motion is paused or r
 
 ## 4. The six worlds
 
-**Status: Implemented.** All six share one pipeline (§7) and differ through a *kind* recipe
+**Status: Implemented.** All six share one pipeline (§8) and differ through a *kind* recipe
 in the bake and surface shaders (`scene/galaxy/shaders.ts`), plus per‑world data.
 
 | World | Kind | Accent | Atmosphere day / night | Shell | Clouds | Rings |
@@ -690,8 +696,9 @@ ring latitude).
 
 ### Progress and persistence (`state/exploration.ts`)
 
-- A Zustand `persist` store in localStorage, key `aether-exploration` (version 1): `discovered`
-  (location id → timestamp) and `soundOn`. Storage errors (private browsing, blocked storage)
+- A Zustand `persist` store in localStorage, key `aether-exploration`: `discovered`
+  (location id → timestamp) and `soundOn`; Phase 4 (version 2) adds `visited` and
+  `observatorySeenAt` (see §7). Storage errors (private browsing, blocked storage)
   are caught; progress then lasts for the session.
 - Per world: the world panel shows "Three signals unexplored" or "N of 3 signals found"; the
   location panel shows "N of 3 signals found on WORLD".
@@ -729,7 +736,164 @@ Aurelis (Glass Shelf) 5.9 ms, Thalassa (Long Storm, the heaviest: water, rain, f
 
 ---
 
-## 7. Technical architecture
+## 7. Phase 4 — The Observatory
+
+**Status: Implemented** (working tree; not yet deployed). The record of everything the
+visitor has found. Product context (purpose, audience, constraints) is in `PRODUCT.md`.
+
+### The one idea: the planisphere
+
+The Observatory is not a separate screen laid over the galaxy. It is the galaxy, read from
+above. Opening it raises the galaxy camera to the zenith over Elys, so the live system
+becomes a **planisphere dial**: the real worlds on their real orbits, still turning, with a
+graduated ring, a reading line and each world's three locations marked on its orbit. The
+record sits beside the dial on wide screens and below it on narrow ones; the archive scrolls
+on under both.
+
+Rejected alternatives: a dashboard of stat tiles (banned in `PRODUCT.md` — statistics are
+plain label + value lines), a card grid of worlds (unnecessary cards), and a 2D chart drawn
+in SVG alone (it would duplicate the scene and drift from it).
+
+### Entry and exit
+
+| From | How | What happens |
+|------|-----|--------------|
+| Galaxy (overview or a focused world) | **Observatory** button (top‑right, first), or `O` | Letterbox closes; camera rises to the zenith (`director.observatory` 0 → 1, 2.8s `power3.inOut`); view shifts (`panelShift`, 2.2s); letterbox opens at 2.4s; the record reveals in a stagger |
+| A surface | Same button, or `O` | `startAscent(then)` climbs to orbit first, then the Observatory opens on the world just left |
+| Observatory → galaxy | **← Galaxy** (top‑left), `Esc` or `O` | Letterbox closes and reopens; the camera travels back to the overview pose saved at entry (`startGalaxyTravel(null)`) and comes upright |
+| Observatory → a world | **Explore NAME** (record, world rows, empty timeline) | Travel to the world's focus view, then `galaxyCam.onArrive` starts the Phase 3 descent: one continuous move from the dial to the surface |
+
+The world shown first is the focused world, else the most explored, else the last one
+shown. Reduced motion: no letterbox; opening is a 0.6s `power1.inOut` move, closing uses the
+0.7s reduced travel.
+
+### Camera (`scene/galaxy/GalaxyRig.tsx`, mode `observatory`)
+
+- Height above Elys: `H = 47 · (h/2) / (dialPx · tan(fov/2))`, so Orion's orbit fills the
+  dial. `dialPx` = `min(0.4h, 0.27w)` on wide screens; `min(0.38w, 0.24h)` on narrow ones
+  (≤ 900px or aspect < 0.9), the same value as `--obs-dial` in CSS.
+- Position lerps from the entry pose to `(0, H, 0)` by `director.observatory`; the target
+  lerps to the origin.
+- **The dial turns.** `camera.up` eases (rate 0.05/frame; 1 when paused or reduced) toward
+  the selected world's direction, blended in by `smoothstep(0.25, 1, k)`. The selected world
+  therefore always sits on the screen‑right reading line. Travel out of the Observatory
+  lerps `camera.up` back to +Y.
+- View offset: wide screens shift the dial left of the record (`panelShift = 1`, 17% of the
+  width). Narrow screens solve `panelShift` at open from the layout
+  (`observatoryDirector.narrowShift`), centring Elys in the room the record leaves below the
+  header.
+- Each frame the rig writes `telemetry.chart`: Elys's screen position, each world's screen
+  position and radius in px, and whether the chart is active.
+
+### The dial (`ui/ObservatoryUI.tsx → Chart`)
+
+An SVG and DOM layer positioned every frame from `telemetry.chart` (rAF, no React renders):
+
+- **Ring**: Orion's orbit + 38px, hairline, drawn in on open (`pathLength = 1`).
+- **Graduations**: 72 ticks, every 6th major (12px, else 5px), rotating with the dial.
+- **Reading line**: dashed, from the ring + 18px to + 70px along the selected world's angle,
+  pointing into the record.
+- **Location marks**: three per world, 2.6px, 11px apart, trailing the world along its
+  orbit; hollow until found, then filled in the world's accent.
+- **Labels**: buttons with name + explored %. Hover highlights the world in the scene;
+  click selects it. A label sits right of its world, clear of the disc (Orion: clear of its
+  rings), and flips left instead of running into the record column or off the screen. On
+  narrow screens labels sit on a `void` backing (0.62) so they read over crowded marks.
+- Worlds in the scene are clickable too (they select rather than focus here). `←` / `→`
+  step through the worlds.
+
+### The record (first view)
+
+Right column `clamp(360px, 33vw, 470px)` on a scrim; on narrow screens a single column under
+the dial.
+
+- **THE OBSERVATORY** (Italiana, `clamp(1.9rem, 2.5vw, 2.9rem)`, tracking 0.14em), subtitle
+  "A record of everything discovered beyond the known.", and three text links (Worlds,
+  Discoveries, Timeline) that scroll to the sections.
+- **Reading**: the selected world's portrait (96px), name, accent dot + classification,
+  teaser; facts as a 3‑column `<dl>` with hairlines — First landed (date or "Not yet"),
+  Explored %, Locations "N of 3 found"; the three locations, each with its discovery date or
+  "Not found"; **Explore NAME**; previous / next chevrons.
+- **Ledger** (`<dl>`, same grammar): Worlds visited "N of 6", Locations discovered,
+  Discoveries available (18), Exploration %, Most explored ("None yet", one name, or several
+  names + "(tied)").
+
+### The archive (scrolls under the dial)
+
+The dial fades out as the archive scrolls over it (opacity follows scroll over 55% of the
+viewport height).
+
+- **The six worlds**: one row each — portrait (64px; 52px narrow), name, classification,
+  teaser, Visited date, Explored %, Found "N of 3" — plus a separate **Explore** button. A
+  row click selects the world and scrolls back to the dial. The selected row is tinted
+  across its full width.
+- **Discoveries**: all 18, grouped by world in a 3‑column grid (1 column narrow). Found:
+  name, region, finding (Italiana), lore, accent dot + "Discovered" + date and time.
+  **Not found: name, region, a hatched redaction bar where the finding would be, and the
+  same hint the surface shows before discovery** — nothing a visitor could not already see
+  in the world — plus "Not yet discovered".
+- **Timeline**: every discovery, oldest first: date and time, accent dot on a hairline
+  spine, location name, finding, region. Empty state: one sentence and an Explore button.
+
+### New since your last visit
+
+`observatorySeenAt` is stored on every opening. Entries newer than the previous opening are
+marked "New since your last visit" and animate in: a 700ms `uiOut` rise from 10px and an
+accent ping on the dot, staggered 90ms among the new entries only. They wait (hidden) until
+the timeline is scrolled into view (IntersectionObserver, threshold 0.15), so the motion is
+seen. A first visit marks nothing as new. Reduced motion: fade only, no ping.
+
+### Thumbnails (`scene/galaxy/Thumbnails.tsx`)
+
+Portraits are baked from each world's **live** materials (surface, clouds, atmosphere,
+rings — registered in `galaxy.materials`), not from separate assets: once, on the first
+opening, into a 192px render target with 4× MSAA, seen three‑quarter, half lit. Pixels are
+read back, tone‑mapped through a small LUT, given an alpha matte derived from brightness
+(so atmospheres and rings keep soft edges), and stored as data URLs in `useThumbs`. Until
+they exist, portraits show a hairline circle.
+
+### Data and persistence
+
+- **One source of truth**: `useExploration` (`state/exploration.ts`), persisted as
+  `aether-exploration`, **version 2**: `discovered` (location id → timestamp), `visited`
+  (world id → first landing), `observatorySeenAt`, `soundOn`. `markVisited` runs whenever a
+  surface is entered (descent or `?shot=` jump).
+- **Migration 1 → 2**: a world's `visited` time is its earliest discovery; nothing else is
+  invented.
+- **No duplicate state**: every figure the Observatory shows is derived on render by the pure
+  functions in `state/progress.ts` — `worldProgress`, `systemProgress` (worlds, worlds
+  visited, found, total, percent, most explored with ties), `discoveryTimeline`, and
+  `formatWhen` (`Intl.DateTimeFormat`, the visitor's locale). The HUD count and the
+  Observatory read the same store.
+- Only the selected world (`observed`, in `useExperience`) and the per‑visit timeline record
+  are UI state.
+
+### HUD while open
+
+The status (bottom‑left) and hint (bottom‑right) corners hide — the ledger already says
+everything they would, and they would sit over the archive. The top corners stay above the
+Observatory's scrims (`z-index: 11`) and usable. Phase label: "The Observatory".
+
+### Accessibility
+
+- `Esc` closes, `O` toggles, `←` / `→` turn the dial. Every control is a real button;
+  hidden controls leave the tab order.
+- Labels are `aria-pressed`; world rows have `aria-label`s; dates are `<time datetime>`.
+- The redaction bar is decorative; unfound entries say "Not yet discovered" in text.
+- Reduced motion: see the entry table and the timeline above; the ring and reveals fade only.
+
+### Verified
+
+Tested in the dev build (desktop 1280×800 and phone 375×812 emulation): opening from the
+galaxy and from a surface (ascent then dial), closing back to an upright overview, Explore
+from the record and from a world row (travel → descent → surface, `visited` recorded),
+selection by label, row and arrow keys, the "new" timeline flow across close / discover /
+reopen, persistence across reloads, the v1 → v2 migration, no horizontal overflow on a
+phone, and the reduced‑motion timings.
+
+---
+
+## 8. Technical architecture
 
 **Status: Implemented.** React 19 · Vite 8 · TypeScript · three 0.187 · @react-three/fiber 9 ·
 @react-three/drei 10 (PerformanceMonitor only) · @react-three/postprocessing 3 · GSAP 3
@@ -751,7 +915,8 @@ src/
     useExperience.ts       Zustand store; quality tier; debugShot (?shot=)
     director.ts            palette; director (tweened values); telemetry; labels; Vael sun
     galaxy.ts              live world positions
-    exploration.ts         persisted discoveries + sound setting (Phase 3)
+    exploration.ts         persisted progress: discoveries, first landings, Observatory mark, sound (v2)
+    progress.ts            pure derivations: world/system progress, timeline, dates (Phase 4)
   scene/
     Experience.tsx         <Canvas>, pointer listeners, Clock, spaces, rigs, post stack
     CameraRig.tsx          Vael camera: framing, arrival, drift, dive, Ithra projection
@@ -767,7 +932,8 @@ src/
       World.tsx            one world: bake, surface, clouds, atmosphere, rings, hit sphere, orbit
       Star.tsx             Elys
       SpiralGalaxy.tsx     the surrounding galaxy
-      GalaxyRig.tsx        OrbitControls, intro/outro/travel/focus, readouts, hover projection
+      GalaxyRig.tsx        OrbitControls, intro/outro/travel/focus/observatory, readouts, projections
+      Thumbnails.tsx       portraits baked from the live world materials (Phase 4)
       shaders.ts           kind bake, world surface, clouds, atmosphere, rings, star, disc, warp
     surface/               (Phase 3)
       terrain.ts           height function in GLSL + TypeScript, polar grid
@@ -784,6 +950,8 @@ src/
     GalaxyUI.tsx           hover label, world index, info panel (+ Explore), Return to Vael, keys
     ExploreUI.tsx          veil, title card, location panel/strip, signal label, notice, keys
     exploreDirector.ts     descent, ascent, travel, discovery timelines; ?shot=<location>
+    ObservatoryUI.tsx      dial overlay, record, ledger, worlds, discoveries, timeline, keys (Phase 4)
+    observatoryDirector.ts open / close / explore choreography (Phase 4)
 ```
 
 ### Scene management
@@ -812,7 +980,10 @@ src/
 - `GalaxyRig` modes (`galaxyCam.mode`): `intro` (driven by `director.galaxyIntro`), `free`
   (OrbitControls around Elys), `travel` (tween `galaxyCam.t`), `focus` (follow + orbit a
   world), `outro` (recede during Return to Vael), `descent` / `ascent` (Phase 3: dive to and
-  climb from a world's atmosphere, driven by `director.descent`).
+  climb from a world's atmosphere, driven by `director.descent`), `observatory` (Phase 4: rise
+  to the zenith, turn the dial; §7). `startGalaxyTravel` and `beginObservatory` are exported
+  so the Observatory director can drive the rig; `galaxyCam.onArrive` chains a descent onto a
+  travel.
 - `Projection` owns FOV, clip planes and view offset: base FOV per space (Vael 34°/44°,
   galaxy 46°/60°, surface 55°/68°, portrait below 0.8 aspect) + `warp × 32°`; near/far
   0.05/1200 in space and 0.3/6000 on surfaces; view offset from `director.panelShift`.
@@ -822,10 +993,12 @@ src/
 
 | Store | Kind | Contents |
 |-------|------|----------|
-| `useExperience` | Zustand (React renders) | `phase` (`boot · arriving · orbit · warping · galaxy · returning · descending · surface · ascending`), `sceneReady`, `motionPaused`, `reducedMotion`, `cinema`, `focus`, `hovered`, `exploring`, `location`, `signalHovered`, `notice`, actions `setPhase`, `setSceneReady`, `toggleMotion`, `toggleCinema`, `setFocus`, `stepFocus`, `setHovered`, `setExploring`, `setLocation`, `setSignalHovered`, `setNotice` |
-| `useExploration` | Zustand + `persist` (localStorage `aether-exploration`) | `discovered` (id → timestamp), `soundOn`, `discover(id)` (true only the first time), `toggleSound` |
-| `director` | Mutable object (GSAP writes, `useFrame` reads) | `arrival`, `sun`, `sky`, `dive`, `letterbox`*, `hud`, `space` (`vael · galaxy · surface`), `warp`, `galaxyIntro`, `panelShift`, `descent`, `landing`, `time` |
-| `telemetry` | Mutable, read in `requestAnimationFrame` by DOM | `altitudeKm`, `readout`, `ithra {x,y,visible}`, `hover {x,y,visible,radiusPx}`, `signal {x,y,visible}` |
+| `useExperience` | Zustand (React renders) | `phase` (`boot · arriving · orbit · warping · galaxy · returning · descending · surface · ascending · observatory`), `observed` (the Observatory's selected world), `sceneReady`, `motionPaused`, `reducedMotion`, `cinema`, `focus`, `hovered`, `exploring`, `location`, `signalHovered`, `notice`, actions `setPhase`, `setSceneReady`, `toggleMotion`, `toggleCinema`, `setFocus`, `stepFocus`, `setHovered`, `setExploring`, `setLocation`, `setSignalHovered`, `setNotice` |
+| `useExploration` | Zustand + `persist` (localStorage `aether-exploration`, v2) | `discovered` (id → timestamp), `visited` (world → first landing), `observatorySeenAt`, `soundOn`, `discover(id)` (true only the first time), `markVisited`, `markObservatorySeen`, `toggleSound` |
+| `state/progress.ts` | Pure functions | Every derived figure (§7); never stored |
+| `useThumbs` | Zustand | Baked portrait data URLs |
+| `director` | Mutable object (GSAP writes, `useFrame` reads) | `arrival`, `sun`, `sky`, `dive`, `letterbox`*, `hud`, `space` (`vael · galaxy · surface`), `warp`, `galaxyIntro`, `panelShift`, `descent`, `landing`, `observatory`, `time` |
+| `telemetry` | Mutable, read in `requestAnimationFrame` by DOM | `altitudeKm`, `readout`, `ithra {x,y,visible}`, `hover {x,y,visible,radiusPx}`, `signal {x,y,visible}`, `chart {ox,oy,active,worlds}` (Phase 4) |
 | `surface`, `surfaceCam`, `signalFx` | Mutable (surface modules) | current world's height function, poses, envs, blended env; surface camera; signal bloom |
 | `labels`, `galaxy.positions` | Mutable vectors | Ithra's and the six worlds' live world positions |
 | `galaxyCam` | Mutable (GalaxyRig module) | camera mode, travel progress and poses |
@@ -864,11 +1037,14 @@ colors. Locations are `LOCATIONS` entries (fields in §6).
 - **`exploreDirector`** (a plain module, not a component) owns the Phase 3 timelines (descent,
   ascent, travel, discovery bloom, title card) so the 3D signal, the panels and the keyboard
   can all call it. It reaches the letterbox and veils through `data-*` selectors.
+- **`observatoryDirector`** (plain module) owns the Phase 4 timelines and reuses the Phase 3
+  ascent and descent, so every route between galaxy, surface and Observatory is one chain.
 - **`useFrame`** reads `director` and writes uniforms and transforms; never `setState`.
 - **CSS transitions** for interruptible UI (index, panel, hover label, buttons, cinema fade);
   CSS keyframes only for `panel-in`, `reveal-in` (lore on discovery) and the button's orbiting
   edge light.
-- **rAF loops in DOM components** (`Readout`, `OrbitLabel`, `HoverLabel`, `SignalLabel`) write
+- **rAF loops in DOM components** (`Readout`, `OrbitLabel`, `HoverLabel`, `SignalLabel`, the
+  Observatory `Chart`) write
   text and transforms directly from `telemetry`.
 
 ### Performance
@@ -895,7 +1071,8 @@ Measured on an RTX 3050 laptop (forced frames): Vael ≈ 5.3 ms at a 2000×1125 
 
 - `?shot=orbit` jumps to the settled title; `?shot=galaxy` to the overview;
   `?shot=<id>` (e.g. `?shot=orion`) to a focused world; `?shot=<location id>` (e.g.
-  `?shot=solara-rustgate`) straight onto a surface, primed so Return to orbit works.
+  `?shot=solara-rustgate`) straight onto a surface, primed so Return to orbit works;
+  `?shot=observatory` opens the Observatory from the overview.
 - Dev builds only: `window.__aether` (R3F state), `__store`, `__director`, `__galaxyCam`,
   `__galaxy`, `__gsap`, `__telemetry`.
 - `npm run build` = `tsc -b && vite build`, `base: './'`. GitHub Actions
@@ -903,11 +1080,10 @@ Measured on an RTX 3050 laptop (forced frames): Vael ≈ 5.3 ms at a 2000×1125 
 
 ---
 
-## 8. Rules for future work
+## 9. Rules for future work
 
 These are rules, not features. The global rules apply to all future work. The Phase 3
-subsections now record how the shipped implementation follows them; Observatory is still
-**Planned**.
+and Phase 4 subsections record how the shipped implementation follows them.
 
 ### Global rules
 
@@ -951,14 +1127,17 @@ subsections now record how the shipped implementation follows them; Observatory 
   least 5s; pausing motion does not hide them.
 - Accessibility: `aria-live="polite"`; hidden by Hide interface like all `.ui-hideable` UI.
 
-### Observatory screens (Phase 4)
+### Observatory (Phase 4 — implemented, see §7)
 
-- Full‑frame editorial screens on `void`, opened from the HUD; the scene stays behind, dimmed
-  by a scrim (and may pause its clock).
-- Titles in Italiana; data as `<dl>` lists with hairline rules — the same grammar as the
-  world panel facts.
-- World accents only as dots and chart marks.
-- `Esc` closes; focus returns to the control that opened the screen.
+- Followed: opened from the HUD; titles in Italiana; data as `<dl>` lists with hairline
+  rules; world accents only as dots and chart marks; `Esc` closes.
+- Differences from the original rule: the scene is not dimmed behind a screen — it *is* the
+  Observatory's centrepiece (the planisphere), and its clock keeps running so the dial is
+  alive; focus is not returned to the opening control, because closing is a camera move to
+  a different view (or a descent), not the dismissal of an overlay.
+- For future work: every figure goes through `state/progress.ts`; never store a derived
+  number. Statistics stay label + value lines — no tiles, rings or charts that restate a
+  number. Unfound content may show only what the surface shows before discovery.
 
 ### Adding a world
 
@@ -971,7 +1150,7 @@ subsections now record how the shipped implementation follows them; Observatory 
 
 ---
 
-## 9. Known limitations
+## 10. Known limitations
 
 | Item | Status |
 |------|--------|
@@ -987,10 +1166,16 @@ subsections now record how the shipped implementation follows them; Observatory 
 | Surfaces: notifications replace rather than queue | Accepted |
 | Surface performance not measured on a phone; low tier is a best guess | Open |
 | Ascent recomputes a sunlit view; the camera does not retrace the exact descent path | By design |
+| Observatory: progress lives in one browser's localStorage; clearing site data or another device starts over (no accounts, by design in `PRODUCT.md`) | By design |
+| Observatory: first‑landing dates for progress saved before Phase 4 are inferred from the earliest discovery; worlds landed on without a discovery then show "Not yet" | Accepted |
+| Observatory: portraits bake on the first opening (a brief hairline placeholder) | Accepted |
+| Observatory: on small phones the inner orbits are tight; labels can overlap each other at some orbital phases (they stay legible on their backing) | Open |
+| Observatory: the narrow dial position is solved once at opening; rotating the phone while it is open keeps the old offset until reopened | Open |
+| Observatory: not tested on a real phone or with a screen reader | Open |
 
 ---
 
-## 10. Decision log
+## 11. Decision log
 
 Superseded Phase 1 decisions, kept so nobody reintroduces them by accident.
 
@@ -1008,15 +1193,18 @@ Superseded Phase 1 decisions, kept so nobody reintroduces them by accident.
 | Night surfaces lit only by sky colors | Ambient floor from starlight and aurora | Nyx and night scenes rendered black |
 | Fissures / glow from thresholded fBm | Thin lines along noise zero‑contours | Thresholded fBm made blobs or nothing |
 | Location strip at the world‑index height | 72px above the bottom gutter | Collided with the three‑line HUD status |
+| Observatory as a full‑frame screen over a dimmed scene (Phase 4 rule) | The galaxy seen from the zenith as a turning planisphere | One continuous world; the record is anchored to the real system |
+| Narrow dial at a fixed 7% view offset | Offset solved from the layout at opening; dial radius shared with CSS (`--obs-dial`) | The fixed offset put Orion's label on the header links |
+| Timeline marked every entry new on a first visit, animating at open | Nothing is new on a first visit; new entries wait until the timeline is in view | "Since your last visit" must be true, and the motion must be seen |
 
 ---
 
-## 11. Roadmap
+## 12. Roadmap
 
 | Phase | Name | Status | Scope |
 |-------|------|--------|-------|
 | 1 | Arrival | **Complete** | Prelude, letterboxed arrival at Vael, Ithra, deep‑field sky, Pause motion, Hide interface, touch drag |
 | 2 | Galaxy | **Complete** | Warp, Elys, six worlds, spiral galaxy, hover/select/travel, info panel, world index, keyboard navigation, Return to Vael, GitHub Pages deploy |
-| 3 | Planet Exploration | **Complete** (not yet deployed) | Descent and ascent, six surface environments, 18 locations, flights between them, signals and discovery, notifications, persisted progress, synthesized sound with controls |
-| 4 | Observatory | Planned | Editorial data screens for the system and each world |
+| 3 | Planet Exploration | **Complete** | Descent and ascent, six surface environments, 18 locations, flights between them, signals and discovery, notifications, persisted progress, synthesized sound with controls |
+| 4 | Observatory | **Complete** (not yet deployed) | Planisphere dial from the zenith, world record and ledger, six‑world archive, discovery collection with redacted unfound entries, timeline with new‑since‑last‑visit, baked portraits, persisted progress v2, navigation between galaxy, surfaces and Observatory |
 | 5 | Final Polish | Planned | Real‑device testing, code splitting, ring shadows on Orion, surface shadows, performance tuning |

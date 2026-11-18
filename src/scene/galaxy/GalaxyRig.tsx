@@ -7,8 +7,11 @@ import { PLANET_BY_ID, type PlanetId } from '../../data/planets'
 import { director, telemetry } from '../../state/director'
 import { galaxy } from '../../state/galaxy'
 import { useExperience } from '../../state/useExperience'
+import { baseFov } from '../Warp'
 
-type Mode = 'intro' | 'outro' | 'free' | 'travel' | 'focus' | 'descent' | 'ascent'
+const baseFovFor = (aspect: number) => baseFov('galaxy', aspect)
+
+type Mode = 'intro' | 'outro' | 'free' | 'travel' | 'focus' | 'descent' | 'ascent' | 'observatory'
 
 const UP = new Vector3(0, 1, 0)
 const HOME_DIR = new Vector3(0.18, 0.44, 1).normalize()
@@ -36,7 +39,84 @@ export const galaxyCam = {
   /** Camera offset from the focused world when a descent begins. */
   dive: new Vector3(),
   diveInit: false,
+  /** Phase 4: the pose the Observatory rose from, and the dial's current up vector. */
+  obsFrom: new Vector3(),
+  obsFromTarget: new Vector3(),
+  obsUp: new Vector3(0, 0, -1),
+  obsInit: false,
+  /** Called once when a travel lands (used to chain Observatory → descent). */
+  onArrive: null as null | (() => void),
 }
+
+/** Live handles so module functions (the Observatory director) can start a travel. */
+const rig = {
+  camera: null as PerspectiveCamera | null,
+  controls: null as OrbitControls | null,
+  width: 1,
+  height: 1,
+}
+
+/** Phase 4: rise to the zenith above Elys. The dial view is driven by director.observatory. */
+export function beginObservatory() {
+  gsap.killTweensOf(galaxyCam)
+  galaxyCam.mode = 'observatory'
+  galaxyCam.obsInit = false
+  if (rig.controls) rig.controls.enabled = false
+}
+
+/**
+ * Starts a camera travel from wherever the camera is: to a world's focus view,
+ * or (null) back to the overview. Used by focus changes and by the Observatory.
+ */
+export function startGalaxyTravel(focus: PlanetId | null) {
+  const { camera, controls } = rig
+  if (!camera || !controls) return
+  const aspect = rig.width / rig.height
+  if (galaxyCam.mode === 'free') {
+    galaxyCam.home.copy(camera.position)
+    galaxyCam.hasHome = true
+  }
+  galaxyCam.focus = focus
+  galaxyCam.from.copy(camera.position)
+  galaxyCam.fromTarget.copy(controls.target)
+  if (focus) focusOffset(focus, aspect, rig.width, galaxyCam.offset)
+
+  const reduced = useExperience.getState().reducedMotion
+  const homePos = galaxyCam.hasHome ? galaxyCam.home : new Vector3().copy(HOME_DIR).multiplyScalar(homeDistance(aspect))
+  const travelDistance = galaxyCam.from.distanceTo(
+    focus ? new Vector3().copy(galaxy.positions[focus]).add(galaxyCam.offset) : homePos,
+  )
+  galaxyCam.mode = 'travel'
+  galaxyCam.t = 0
+  controls.enabled = false
+  gsap.killTweensOf(galaxyCam)
+  gsap.to(galaxyCam, {
+    t: 1,
+    duration: reduced ? 0.7 : MathUtils.clamp(1.5 + travelDistance / 45, 1.8, 3.4),
+    ease: reduced ? 'power1.inOut' : 'power3.inOut',
+    onComplete: () => {
+      galaxyCam.mode = focus ? 'focus' : 'free'
+      if (focus) galaxyCam.last.copy(galaxy.positions[focus])
+      camera.up.set(0, 1, 0)
+      controls.enabled = true
+      const done = galaxyCam.onArrive
+      galaxyCam.onArrive = null
+      done?.()
+    },
+  })
+  gsap.to(director, { panelShift: focus ? 1 : 0, duration: reduced ? 0.5 : 1.6, ease: 'power3.inOut' })
+}
+
+/** Height above Elys at which Orion's orbit (and rings) fill the dial. */
+function zenithHeight(fovDeg: number, width: number, height: number) {
+  const narrow = width / height < 0.9 || width <= 900
+  // Dial radius in px: on wide screens it sits left of the reading panel.
+  // Narrow: matches --obs-dial in index.css, which reserves its room below the header.
+  const dialPx = narrow ? Math.min(width * 0.38, height * 0.24) : Math.min(height * 0.4, width * 0.27)
+  const tanHalf = Math.tan(MathUtils.degToRad(fovDeg) / 2)
+  return (47 * (height / 2)) / (dialPx * tanHalf)
+}
+
 
 /** Phase 3: the camera dives from the focus view toward the world's atmosphere. */
 export function beginGalaxyDescent() {
@@ -129,6 +209,13 @@ export function GalaxyRig() {
 
   useEffect(() => () => controls.dispose(), [controls])
 
+  useEffect(() => {
+    rig.camera = camera
+    rig.controls = controls
+    rig.width = size.width
+    rig.height = size.height
+  }, [camera, controls, size.width, size.height])
+
   // Leaving the galaxy: capture the pose so the outro recedes from where you are.
   useEffect(() => {
     if (phase === 'returning' && director.space === 'galaxy') {
@@ -153,33 +240,13 @@ export function GalaxyRig() {
       galaxyCam.home.copy(camera.position)
       galaxyCam.hasHome = true
     }
+    // The Observatory owns the camera while it is open; it records the focus only.
+    if (galaxyCam.mode === 'observatory') {
+      galaxyCam.focus = focus
+      return
+    }
     if (galaxyCam.focus === focus && galaxyCam.mode !== 'travel') return
-
-    galaxyCam.focus = focus
-    galaxyCam.from.copy(camera.position)
-    galaxyCam.fromTarget.copy(controls.target)
-
-    if (focus) focusOffset(focus, size.width / size.height, size.width, galaxyCam.offset)
-
-    const reduced = useExperience.getState().reducedMotion
-    const travelDistance = galaxyCam.from.distanceTo(
-      focus ? destPos.copy(galaxy.positions[focus]).add(galaxyCam.offset) : galaxyCam.home,
-    )
-    galaxyCam.mode = 'travel'
-    galaxyCam.t = 0
-    controls.enabled = false
-    gsap.killTweensOf(galaxyCam)
-    gsap.to(galaxyCam, {
-      t: 1,
-      duration: reduced ? 0.7 : MathUtils.clamp(1.5 + travelDistance / 45, 1.8, 3.4),
-      ease: reduced ? 'power1.inOut' : 'power3.inOut',
-      onComplete: () => {
-        galaxyCam.mode = focus ? 'focus' : 'free'
-        if (focus) galaxyCam.last.copy(galaxy.positions[focus])
-        controls.enabled = true
-      },
-    })
-    gsap.to(director, { panelShift: focus ? 1 : 0, duration: reduced ? 0.5 : 1.6, ease: 'power3.inOut' })
+    startGalaxyTravel(focus)
   }, [focus, camera, controls, size.width, size.height])
 
   useFrame(() => {
@@ -231,6 +298,33 @@ export function GalaxyRig() {
         // Arc over the orbital plane instead of cutting straight through it.
         tmpPos.y += Math.sin(Math.PI * e) * galaxyCam.from.distanceTo(destPos) * 0.14
         tmpTarget.lerpVectors(galaxyCam.fromTarget, destTarget, e)
+        camera.position.copy(tmpPos)
+        controls.target.copy(tmpTarget)
+        // Leaving the Observatory's zenith view: settle the horizon back upright.
+        camera.up.lerp(UP, Math.min(1, 0.06 + e * 0.5)).normalize()
+        camera.lookAt(tmpTarget)
+        break
+      }
+      case 'observatory': {
+        controls.enabled = false
+        if (!galaxyCam.obsInit) {
+          galaxyCam.obsFrom.copy(camera.position)
+          galaxyCam.obsFromTarget.copy(controls.target)
+          galaxyCam.obsInit = true
+        }
+        // The dial turns so the selected world sits on the reading line (screen right).
+        const sel = useExperience.getState().observed
+        const P = galaxy.positions[sel]
+        const theta = Math.atan2(P.z, P.x)
+        destPos.set(Math.sin(theta), 0, -Math.cos(theta))
+        const turn = motionPaused || reducedMotion ? 1 : 0.05
+        galaxyCam.obsUp.lerp(destPos, turn).normalize()
+        const k = director.observatory
+        const H = zenithHeight(baseFovFor(aspect), size.width, size.height)
+        destTarget.set(0, 0, 0)
+        tmpPos.lerpVectors(galaxyCam.obsFrom, destTarget.set(0, H, 0), k)
+        tmpTarget.lerpVectors(galaxyCam.obsFromTarget, side.set(0, 0, 0), k)
+        camera.up.lerpVectors(UP, galaxyCam.obsUp, MathUtils.smoothstep(k, 0.25, 1)).normalize()
         camera.position.copy(tmpPos)
         controls.target.copy(tmpTarget)
         camera.lookAt(tmpTarget)
@@ -287,6 +381,24 @@ export function GalaxyRig() {
         controls.update()
         break
       }
+    }
+
+    // ---- Observatory chart: projected origin and worlds ---------------------
+    if (galaxyCam.mode === 'observatory') {
+      camera.updateMatrixWorld()
+      const o = telemetry.chart
+      projected.set(0, 0, 0).project(camera)
+      o.ox = (projected.x * 0.5 + 0.5) * size.width
+      o.oy = (-projected.y * 0.5 + 0.5) * size.height
+      for (const id of Object.keys(galaxy.positions) as PlanetId[]) {
+        projected.copy(galaxy.positions[id]).project(camera)
+        const w = o.worlds[id]
+        w.x = (projected.x * 0.5 + 0.5) * size.width
+        w.y = (-projected.y * 0.5 + 0.5) * size.height
+        const dist = camera.position.distanceTo(galaxy.positions[id])
+        w.radiusPx = (PLANET_BY_ID[id].radius / (dist * Math.tan(MathUtils.degToRad(camera.fov) / 2))) * (size.height / 2)
+      }
+      o.active = director.observatory
     }
 
     // ---- Readout ----------------------------------------------------------

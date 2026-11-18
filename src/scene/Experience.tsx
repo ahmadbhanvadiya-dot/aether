@@ -10,6 +10,7 @@ import { Nebula } from './Nebula'
 import { Planet } from './Planet'
 import { GalaxyRig } from './galaxy/GalaxyRig'
 import { GalaxySystem } from './galaxy/GalaxySystem'
+import { ThumbnailBaker } from './galaxy/Thumbnails'
 import { Ithra } from './Ithra'
 import { SurfaceRig } from './surface/SurfaceRig'
 import { SurfaceSpace } from './surface/SurfaceScene'
@@ -127,6 +128,7 @@ export function Experience() {
       <SurfaceRig />
       <Projection />
       <Precompile />
+      <ThumbnailBaker />
       <BloomControl bloom={bloom} />
       <EffectComposer multisampling={quality.tier === 'high' ? 4 : 0} enableNormalPass={false}>
         <Bloom

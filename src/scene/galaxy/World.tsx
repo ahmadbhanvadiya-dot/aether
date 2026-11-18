@@ -277,6 +277,10 @@ export function World({ data, seed }: { data: PlanetData; seed: number }) {
     return { surface, clouds, atmosphere, rings }
   }, [data, terrain])
 
+  useEffect(() => {
+    galaxy.materials[data.id] = materials
+  }, [data.id, materials])
+
   useFrame(() => {
     const t = director.time
     const angle = data.phase - (t / data.orbitPeriod) * Math.PI * 2
@@ -324,7 +328,13 @@ export function World({ data, seed }: { data: PlanetData; seed: number }) {
     e.stopPropagation()
     // Ignore the click that ends a drag-to-rotate.
     if (e.delta > 6) return
-    if (useExperience.getState().phase !== 'galaxy') return
+    const st = useExperience.getState()
+    // In the Observatory a world on the dial is selected, not flown to.
+    if (st.phase === 'observatory') {
+      st.setObserved(data.id)
+      return
+    }
+    if (st.phase !== 'galaxy') return
     document.body.style.cursor = ''
     setFocus(data.id)
   }

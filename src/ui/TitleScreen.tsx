@@ -7,6 +7,8 @@ import { enterGalaxyIntro } from '../scene/galaxy/GalaxyRig'
 import { debugShot, useExperience } from '../state/useExperience'
 import { GalaxyUI } from './GalaxyUI'
 import { ExploreUI } from './ExploreUI'
+import { ObservatoryUI } from './ObservatoryUI'
+import { closeObservatory, openObservatory } from './observatoryDirector'
 import { jumpToLocation } from './exploreDirector'
 import type { PlanetId } from '../data/planets'
 import { Hud } from './Hud'
@@ -38,6 +40,11 @@ function useCinemaShortcut() {
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return
       if (e.key === 'h' || e.key === 'H') toggleCinema()
+      if (e.key === 'o' || e.key === 'O') {
+        const phase = useExperience.getState().phase
+        if (phase === 'galaxy' || phase === 'surface') openObservatory()
+        else if (phase === 'observatory') closeObservatory()
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -103,7 +110,8 @@ export function TitleScreen() {
             director.space = 'galaxy'
             enterGalaxyIntro()
             setPhase('galaxy')
-            if (shot !== 'galaxy') setTimeout(() => useExperience.getState().setFocus(shot as PlanetId), 300)
+            if (shot === 'observatory') setTimeout(openObservatory, 500)
+            else if (shot !== 'galaxy') setTimeout(() => useExperience.getState().setFocus(shot as PlanetId), 300)
           }
         }
         return
@@ -308,6 +316,7 @@ export function TitleScreen() {
 
       <GalaxyUI onReturnToVael={returnToVael} />
       <ExploreUI />
+      <ObservatoryUI />
 
       <div className="pointer-events-auto">
         <Hud />
