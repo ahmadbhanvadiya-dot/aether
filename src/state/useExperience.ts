@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { LOCATION_BY_ID } from '../data/locations'
 import { PLANETS, type PlanetId } from '../data/planets'
 
 /**
@@ -8,8 +9,20 @@ import { PLANETS, type PlanetId } from '../data/planets'
  * warping   → skimming Vael's limb, then the jump to the Aether system
  * galaxy    → free exploration of the six worlds
  * returning → the jump back to Vael's title screen
+ * descending → from a world's orbit down through its atmosphere
+ * surface    → exploring a world's surface
+ * ascending  → back up to the world's orbit
  */
-export type Phase = 'boot' | 'arriving' | 'orbit' | 'warping' | 'galaxy' | 'returning'
+export type Phase =
+  | 'boot'
+  | 'arriving'
+  | 'orbit'
+  | 'warping'
+  | 'galaxy'
+  | 'returning'
+  | 'descending'
+  | 'surface'
+  | 'ascending'
 
 interface ExperienceState {
   phase: Phase
@@ -22,6 +35,14 @@ interface ExperienceState {
   focus: PlanetId | null
   /** The world under the pointer (or highlighted from the index). */
   hovered: PlanetId | null
+  /** The world whose surface is mounted (from descent start until ascent ends). */
+  exploring: PlanetId | null
+  /** The surface location the camera is at or travelling to. */
+  location: string | null
+  /** The signal under the pointer on the surface. */
+  signalHovered: boolean
+  /** The latest discovery notification. */
+  notice: Notice | null
   setPhase: (phase: Phase) => void
   setSceneReady: () => void
   toggleMotion: () => void
@@ -29,6 +50,16 @@ interface ExperienceState {
   setFocus: (id: PlanetId | null) => void
   stepFocus: (direction: 1 | -1) => void
   setHovered: (id: PlanetId | null) => void
+  setExploring: (id: PlanetId | null) => void
+  setLocation: (id: string | null) => void
+  setSignalHovered: (v: boolean) => void
+  setNotice: (n: Notice | null) => void
+}
+
+export interface Notice {
+  id: string
+  title: string
+  detail: string
 }
 
 const prefersReduced =
@@ -42,6 +73,10 @@ export const useExperience = create<ExperienceState>((set) => ({
   cinema: false,
   focus: null,
   hovered: null,
+  exploring: null,
+  location: null,
+  signalHovered: false,
+  notice: null,
   setPhase: (phase) => set({ phase }),
   setSceneReady: () => set({ sceneReady: true }),
   toggleMotion: () => set((s) => ({ motionPaused: !s.motionPaused })),
@@ -54,17 +89,22 @@ export const useExperience = create<ExperienceState>((set) => ({
       return { focus: PLANETS[next].id, hovered: null }
     }),
   setHovered: (hovered) => set({ hovered }),
+  setExploring: (exploring) => set({ exploring }),
+  setLocation: (location) => set({ location }),
+  setSignalHovered: (signalHovered) => set({ signalHovered }),
+  setNotice: (notice) => set({ notice }),
 }))
 
 /**
- * `?shot=orbit`, `?shot=galaxy` or `?shot=<planet id>` jumps straight to a
- * settled shot, for review and capture.
+ * `?shot=orbit`, `?shot=galaxy`, `?shot=<planet id>` or `?shot=<location id>`
+ * jumps straight to a settled shot, for review and capture.
  */
 export const debugShot = (() => {
   if (typeof window === 'undefined') return null
   const shot = new URLSearchParams(window.location.search).get('shot')
   if (shot === 'orbit' || shot === 'galaxy') return shot
   if (shot && PLANETS.some((p) => p.id === shot)) return shot as PlanetId
+  if (shot && LOCATION_BY_ID[shot]) return `loc:${shot}` as const
   return null
 })()
 

@@ -10,13 +10,14 @@ import {
   PerspectiveCamera,
   ShaderMaterial,
 } from 'three'
-import { director } from '../state/director'
+import { director, type Space } from '../state/director'
 import { quality } from '../state/useExperience'
 import { warpFragment, warpVertex } from './galaxy/shaders'
 
 /** Base field of view for each space; the warp adds a kick on top. */
-export function baseFov(space: 'vael' | 'galaxy', aspect: number) {
+export function baseFov(space: Space, aspect: number) {
   if (space === 'vael') return aspect < 0.8 ? 44 : 34
+  if (space === 'surface') return aspect < 0.8 ? 68 : 55
   return aspect < 0.8 ? 60 : 46
 }
 
@@ -31,6 +32,10 @@ export function Projection() {
   useFrame(() => {
     const aspect = size.width / size.height
     camera.fov = baseFov(director.space, aspect) + director.warp * 32
+    // Surfaces reach the horizon; space scenes don't need the depth range.
+    const surface = director.space === 'surface'
+    camera.near = surface ? 0.3 : 0.05
+    camera.far = surface ? 6000 : 1200
 
     const shift = director.panelShift
     if (shift > 0.001) {
@@ -104,11 +109,12 @@ export function WarpStreaks() {
   )
 }
 
-/** Renders its children only while the camera is in the given space. */
-export function Space({ space, children }: { space: 'vael' | 'galaxy'; children: ReactNode }) {
+/** Renders its children only while the camera is in the given space(s). */
+export function Space({ space, children }: { space: Space | Space[]; children: ReactNode }) {
   const group = useRef<Group>(null)
   useFrame(() => {
-    if (group.current) group.current.visible = director.space === space
+    if (!group.current) return
+    group.current.visible = Array.isArray(space) ? space.includes(director.space) : director.space === space
   })
   return <group ref={group}>{children}</group>
 }

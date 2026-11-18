@@ -1,8 +1,8 @@
 import { PerformanceMonitor } from '@react-three/drei'
 import { Canvas, useFrame } from '@react-three/fiber'
 import { Bloom, EffectComposer, Noise, ToneMapping, Vignette } from '@react-three/postprocessing'
-import { BlendFunction, ToneMappingMode } from 'postprocessing'
-import { useEffect, useRef, useState } from 'react'
+import { BlendFunction, ToneMappingMode, type BloomEffect } from 'postprocessing'
+import { useEffect, useRef, useState, type RefObject } from 'react'
 import { director, pointer } from '../state/director'
 import { quality, useExperience } from '../state/useExperience'
 import { CameraRig } from './CameraRig'
@@ -11,6 +11,8 @@ import { Planet } from './Planet'
 import { GalaxyRig } from './galaxy/GalaxyRig'
 import { GalaxySystem } from './galaxy/GalaxySystem'
 import { Ithra } from './Ithra'
+import { SurfaceRig } from './surface/SurfaceRig'
+import { SurfaceSpace } from './surface/SurfaceScene'
 import { Precompile, Projection, Space, WarpStreaks } from './Warp'
 import { DistantGalaxies, Dust, ShootingStars, Starfield } from './Starfield'
 
@@ -30,8 +32,19 @@ function Clock() {
 
 const MAX_DPR = quality.tier === 'high' ? 1.75 : 1.5
 
+
+/** Daylit skies are bright: only the sun and true emitters should bloom there. */
+function BloomControl({ bloom }: { bloom: RefObject<BloomEffect | null> }) {
+  useFrame(() => {
+    const effect = bloom.current
+    if (effect) effect.luminanceMaterial.threshold = director.space === 'surface' ? 0.82 : 0.42
+  })
+  return null
+}
+
 export function Experience() {
   const [dpr, setDpr] = useState(MAX_DPR)
+  const bloom = useRef<BloomEffect>(null)
 
   useEffect(() => {
     // Mouse: the cursor position steers the drift.
@@ -92,9 +105,11 @@ export function Experience() {
       />
       <Clock />
       <Nebula />
-      <Starfield />
-      <DistantGalaxies />
-      <ShootingStars />
+      <Space space={['vael', 'galaxy']}>
+        <Starfield />
+        <DistantGalaxies />
+        <ShootingStars />
+      </Space>
       <Space space="vael">
         <Dust />
         <Planet />
@@ -103,13 +118,19 @@ export function Experience() {
       <Space space="galaxy">
         <GalaxySystem />
       </Space>
+      <Space space="surface">
+        <SurfaceSpace />
+      </Space>
       <WarpStreaks />
       <CameraRig />
       <GalaxyRig />
+      <SurfaceRig />
       <Projection />
       <Precompile />
+      <BloomControl bloom={bloom} />
       <EffectComposer multisampling={quality.tier === 'high' ? 4 : 0} enableNormalPass={false}>
         <Bloom
+          ref={bloom}
           mipmapBlur
           intensity={0.85}
           luminanceThreshold={0.42}

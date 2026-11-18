@@ -1,7 +1,9 @@
-import { Eye, EyeOff, Pause, Play } from 'lucide-react'
+import { Eye, EyeOff, Pause, Play, Volume2, VolumeX } from 'lucide-react'
 import { useEffect, useRef } from 'react'
 import { telemetry } from '../state/director'
+import { sound } from '../audio/sound'
 import { PLANET_BY_ID } from '../data/planets'
+import { discoveredCount, TOTAL_LOCATIONS, useExploration } from '../state/exploration'
 import { quality, useExperience, type Phase } from '../state/useExperience'
 
 const STATUS: Record<Phase, string> = {
@@ -11,6 +13,9 @@ const STATUS: Record<Phase, string> = {
   warping: "Leaving Vael's orbit",
   galaxy: 'The Aether system',
   returning: 'Returning to Vael',
+  descending: 'Descending',
+  surface: 'Exploring',
+  ascending: 'Returning to orbit',
 }
 
 /** Live readout, written straight to the DOM from whichever camera rig is active. */
@@ -57,11 +62,35 @@ export function Hud() {
   const cinema = useExperience((s) => s.cinema)
   const toggleCinema = useExperience((s) => s.toggleCinema)
   const focus = useExperience((s) => s.focus)
-  const status = phase === 'galaxy' && focus ? `In orbit around ${PLANET_BY_ID[focus].name}` : STATUS[phase]
+  const exploring = useExperience((s) => s.exploring)
+  const location = useExperience((s) => s.location)
+  const soundOn = useExploration((s) => s.soundOn)
+  const toggleSound = useExploration((s) => s.toggleSound)
+  const discovered = useExploration((s) => s.discovered)
+  const signalFound = location ? !!discovered[location] : false
+  const world = exploring ? PLANET_BY_ID[exploring].name : ''
+  const status =
+    phase === 'galaxy' && focus
+      ? `In orbit around ${PLANET_BY_ID[focus].name}`
+      : phase === 'descending'
+        ? `Descending to ${world}`
+        : phase === 'surface'
+          ? `Exploring ${world}`
+          : STATUS[phase]
   const inGalaxy = phase === 'galaxy'
+  const onSurface = phase === 'surface'
+  const showTotal = inGalaxy || onSurface
   const hint = motionPaused
     ? 'Motion paused'
-    : inGalaxy
+    : onSurface
+      ? signalFound
+        ? 'Drag to look around'
+        : quality.coarse
+          ? 'Drag to look around, tap the signal'
+          : 'Drag to look around, select the signal'
+      : phase === 'descending' || phase === 'ascending'
+        ? ''
+        : inGalaxy
       ? focus
         ? quality.coarse
           ? 'Drag to orbit, pinch to zoom'
@@ -108,6 +137,20 @@ export function Hud() {
         </button>
         <button
           type="button"
+          className="quiet-button ui-hideable px-3"
+          onClick={() => {
+            sound.unlock()
+            toggleSound()
+          }}
+          aria-pressed={soundOn}
+          aria-label={soundOn ? 'Turn sound off' : 'Turn sound on'}
+          title={soundOn ? 'Sound off (M)' : 'Sound on (M)'}
+        >
+          {soundOn ? <Volume2 size={15} strokeWidth={1.5} /> : <VolumeX size={15} strokeWidth={1.5} />}
+          <span className="hidden lg:inline">{soundOn ? 'Sound on' : 'Sound off'}</span>
+        </button>
+        <button
+          type="button"
           className="quiet-button px-3"
           onClick={toggleCinema}
           aria-pressed={cinema}
@@ -121,7 +164,7 @@ export function Hud() {
 
       <div
         className="hud-corner ui-hideable flex flex-col"
-        data-panel={focus !== null || undefined}
+        data-panel={(inGalaxy && focus !== null) || undefined}
         style={{
           bottom: 'calc(env(safe-area-inset-bottom) + var(--gutter))',
           left: 'calc(env(safe-area-inset-left) + var(--gutter))',
@@ -133,11 +176,16 @@ export function Hud() {
           {status}
         </span>
         <Readout />
+        {showTotal && (
+          <span className="tabular-nums">
+            {discoveredCount(discovered)} of {TOTAL_LOCATIONS} discoveries
+          </span>
+        )}
       </div>
 
       <div
         className="hud-corner ui-hideable hud-hint text-right"
-        data-panel={focus !== null || undefined}
+        data-panel={(inGalaxy && focus !== null) || undefined}
         style={{
           bottom: 'calc(env(safe-area-inset-bottom) + var(--gutter))',
           right: 'calc(env(safe-area-inset-right) + var(--gutter))',
