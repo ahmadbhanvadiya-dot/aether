@@ -6,6 +6,9 @@ import { director } from '../state/director'
 import { enterGalaxyIntro } from '../scene/galaxy/GalaxyRig'
 import { debugShot, useExperience } from '../state/useExperience'
 import { GalaxyUI } from './GalaxyUI'
+import { ExploreUI } from './ExploreUI'
+import { jumpToLocation } from './exploreDirector'
+import type { PlanetId } from '../data/planets'
 import { Hud } from './Hud'
 import { OrbitLabel } from './OrbitLabel'
 import { Wordmark } from './Wordmark'
@@ -92,11 +95,16 @@ export function TitleScreen() {
           // Wait until the scene is ready: this branch re-runs when readiness changes,
           // and a late re-run would reset the camera mid-travel.
           if (!sceneReady || !fontsReady) return
-          Object.assign(director, { space: 'galaxy', galaxyIntro: 1, hud: 0 })
-          enterGalaxyIntro()
-          setPhase('galaxy')
+          Object.assign(director, { galaxyIntro: 1, hud: 0 })
           const shot = debugShot
-          if (shot !== 'galaxy') setTimeout(() => useExperience.getState().setFocus(shot), 300)
+          if (shot.startsWith('loc:')) {
+            jumpToLocation(shot.slice(4))
+          } else {
+            director.space = 'galaxy'
+            enterGalaxyIntro()
+            setPhase('galaxy')
+            if (shot !== 'galaxy') setTimeout(() => useExperience.getState().setFocus(shot as PlanetId), 300)
+          }
         }
         return
       }
@@ -299,6 +307,7 @@ export function TitleScreen() {
       </section>
 
       <GalaxyUI onReturnToVael={returnToVael} />
+      <ExploreUI />
 
       <div className="pointer-events-auto">
         <Hud />

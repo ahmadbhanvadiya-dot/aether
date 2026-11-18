@@ -609,3 +609,280 @@ body {
     }
   }
 }
+
+/* ---------- Phase 3: exploration ---------- */
+
+/* The world's atmosphere filling the frame during descent and ascent. */
+.atmo-veil {
+  position: absolute;
+  inset: 0;
+  z-index: 15;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Explore action in the world panel. */
+.world-explore {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem 1rem;
+  margin-top: 0.5rem;
+}
+
+.explore-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 44px;
+  padding: 0 1.4rem 0 1.15rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.2em;
+  color: var(--color-starlight);
+  box-shadow: inset 0 0 0 1px rgb(233 237 249 / 0.22);
+  transition:
+    transform 140ms var(--ease-out-ui),
+    box-shadow 200ms ease,
+    background-color 200ms ease;
+  cursor: pointer;
+}
+
+.explore-button:active {
+  transform: scale(0.97);
+}
+
+.explore-button:focus-visible {
+  outline: 1px solid var(--color-ion);
+  outline-offset: 4px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .explore-button:hover {
+    background: rgb(233 237 249 / 0.05);
+    box-shadow: inset 0 0 0 1px rgb(233 237 249 / 0.36);
+  }
+}
+
+/* Location title card: lower third, centred. */
+.title-card {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 24svh;
+  z-index: 12;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0 var(--gutter);
+  text-align: center;
+  opacity: 0;
+  pointer-events: none;
+  text-shadow: 0 0 30px rgb(2 3 10 / 0.6);
+}
+
+.title-card-name {
+  font-family: var(--font-display);
+  font-size: clamp(2.6rem, 6.4vw, 5.6rem);
+  line-height: 1;
+  letter-spacing: 0.1em;
+  margin-right: -0.1em;
+  color: var(--color-starlight);
+}
+
+.title-card-region {
+  font-size: clamp(0.95rem, 1.2vw, 1.1rem);
+  font-weight: 300;
+  letter-spacing: 0.04em;
+  color: rgb(233 237 249 / 0.82);
+}
+
+[data-cinema] .title-card {
+  opacity: 0 !important;
+}
+
+.explore-ui {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 500ms ease;
+}
+
+.explore-ui[data-visible] {
+  opacity: 1;
+}
+
+.explore-ui:not([data-visible]) * {
+  pointer-events: none !important;
+}
+
+/* Location panel: type on a soft left scrim. No card. */
+.location-panel {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: min(400px, 36vw);
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  padding: 3rem 2.5rem 3rem calc(env(safe-area-inset-left) + var(--gutter));
+  background: linear-gradient(90deg, rgb(2 3 10 / 0.62) 0%, rgb(2 3 10 / 0.38) 60%, rgb(2 3 10 / 0) 100%);
+  pointer-events: auto;
+}
+
+.location-name {
+  font-family: var(--font-display);
+  font-size: clamp(2rem, 3vw, 2.8rem);
+  line-height: 1;
+  letter-spacing: 0.06em;
+  color: var(--color-starlight);
+}
+
+.location-copy {
+  max-width: 36ch;
+  font-size: 0.92rem;
+  line-height: 1.65;
+  font-weight: 300;
+  color: rgb(233 237 249 / 0.78);
+  animation: reveal-in 300ms var(--ease-out-ui) both;
+}
+
+@keyframes reveal-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+/* Signal state: hollow ring until found, a filled glowing dot after. */
+.signal-dot {
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1px var(--accent, var(--color-ion));
+  transition:
+    background-color 300ms ease,
+    box-shadow 300ms ease;
+}
+
+.signal-dot[data-found] {
+  background: var(--accent, var(--color-ion));
+  box-shadow: 0 0 10px var(--accent, var(--color-ion));
+}
+
+.location-strip {
+  position: absolute;
+  left: 50%;
+  bottom: calc(env(safe-area-inset-bottom) + var(--gutter) + 72px);
+  transform: translateX(-50%);
+  max-width: calc(100vw - 2 * var(--gutter));
+  pointer-events: auto;
+}
+
+.location-strip ol {
+  display: flex;
+  gap: 0.25rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.location-strip .world-index-item {
+  letter-spacing: 0.06em;
+  font-size: 0.8125rem;
+}
+
+/* Discovery notification: bottom-left, above the status lines. */
+.discovery-notice {
+  position: absolute;
+  left: calc(env(safe-area-inset-left) + var(--gutter));
+  bottom: calc(env(safe-area-inset-bottom) + var(--gutter) + 124px);
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  max-width: min(360px, calc(100vw - 2 * var(--gutter)));
+  opacity: 0;
+  transform: translateY(8px);
+  transition:
+    opacity 300ms var(--ease-out-ui),
+    transform 300ms var(--ease-out-ui);
+  text-shadow: 0 0 14px rgb(2 3 10 / 0.85);
+}
+
+.discovery-notice[data-visible] {
+  opacity: 1;
+  transform: none;
+}
+
+.discovery-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--color-ion);
+  box-shadow: 0 0 10px var(--color-ion);
+}
+
+/* Narrow screens: the panel becomes a compact block under the top HUD row,
+   and the notification sits above the location strip. */
+@media (max-width: 900px), (max-aspect-ratio: 9/10) {
+  .location-panel {
+    top: calc(env(safe-area-inset-top) + var(--gutter) + 34px);
+    transform: none;
+    width: auto;
+    right: 0;
+    gap: 0.45rem;
+    padding: 0.5rem var(--gutter) 2.5rem;
+    background: linear-gradient(180deg, rgb(2 3 10 / 0.55) 0%, rgb(2 3 10 / 0.3) 70%, rgb(2 3 10 / 0) 100%);
+  }
+
+  .location-name {
+    font-size: 1.7rem;
+  }
+
+  .location-copy {
+    font-size: 0.85rem;
+    line-height: 1.55;
+  }
+
+  .discovery-notice {
+    bottom: calc(env(safe-area-inset-bottom) + var(--gutter) + 124px);
+  }
+
+  .title-card {
+    bottom: 30svh;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .discovery-notice {
+    transform: none !important;
+  }
+  .location-copy {
+    animation-name: fade-only;
+  }
+}
+
+/* Phones: the HUD hint would collide with the status lines; on touch the
+   signal's own label already says what to do. */
+@media (max-width: 480px) {
+  .hud-hint {
+    display: none;
+  }
+}
+
+.world-label[data-side='below'] .orbit-label-leader {
+  display: none;
+}
+
+.world-label[data-side='below'] .orbit-label-text {
+  left: -110px;
+  right: auto;
+  top: 0;
+  width: 220px;
+  align-items: center;
+  text-align: center;
+}

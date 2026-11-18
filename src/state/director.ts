@@ -1,5 +1,7 @@
 import { Color, Vector3 } from 'three'
 
+export type Space = 'vael' | 'galaxy' | 'surface'
+
 /**
  * Palette as linear-space THREE colours. Hex values mirror DESIGN.md and the
  * CSS tokens in index.css.
@@ -32,13 +34,17 @@ export const director = {
   /** HUD, orbit ring and labels, 0 → 1 */
   hud: 0,
   /** Which world the camera is in. Only the active space renders. */
-  space: 'vael' as 'vael' | 'galaxy',
+  space: 'vael' as Space,
   /** Warp jump intensity: streaks, FOV kick. 0 → 1 */
   warp: 0,
   /** Galaxy approach after the jump: 0 → far, 1 → settled overview */
   galaxyIntro: 0,
   /** Shifts the frame so a focused world clears the info panel. 0 → 1 */
   panelShift: 0,
+  /** Galaxy camera diving at a focused world: 0 → orbit, 1 → at the atmosphere */
+  descent: 0,
+  /** Surface camera: 0 → high in the sky, 1 → at the location */
+  landing: 0,
   /** Scene clock that stops when motion is paused */
   time: 0,
 }
@@ -58,6 +64,8 @@ export const telemetry = {
   readout: '',
   /** Hovered world's projected screen position in CSS pixels. */
   hover: { x: 0, y: 0, visible: false, radiusPx: 0 },
+  /** The surface signal's projected screen position. */
+  signal: { x: 0, y: 0, visible: false },
   /** Ithra's projected screen position in CSS pixels. */
   ithra: { x: 0, y: 0, visible: false },
 }

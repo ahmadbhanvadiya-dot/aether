@@ -8,7 +8,7 @@ import { director, telemetry } from '../../state/director'
 import { galaxy } from '../../state/galaxy'
 import { useExperience } from '../../state/useExperience'
 
-type Mode = 'intro' | 'outro' | 'free' | 'travel' | 'focus'
+type Mode = 'intro' | 'outro' | 'free' | 'travel' | 'focus' | 'descent' | 'ascent'
 
 const UP = new Vector3(0, 1, 0)
 const HOME_DIR = new Vector3(0.18, 0.44, 1).normalize()
@@ -33,6 +33,60 @@ export const galaxyCam = {
   outroFrom: new Vector3(),
   outroTarget: new Vector3(),
   focus: null as PlanetId | null,
+  /** Camera offset from the focused world when a descent begins. */
+  dive: new Vector3(),
+  diveInit: false,
+}
+
+/** Phase 3: the camera dives from the focus view toward the world's atmosphere. */
+export function beginGalaxyDescent() {
+  gsap.killTweensOf(galaxyCam)
+  galaxyCam.mode = 'descent'
+  galaxyCam.diveInit = false
+}
+
+/** Phase 3: climbing back out to the focus view, driven by director.descent 1 → 0. */
+export function beginGalaxyAscent() {
+  // The world kept orbiting while we were on its surface: climb out to a fresh,
+  // sunlit view rather than the (now night-side) offset we descended from.
+  const f = galaxyCam.focus
+  if (f) {
+    focusOffset(f, window.innerWidth / window.innerHeight, window.innerWidth, galaxyCam.offset)
+    galaxyCam.dive.copy(galaxyCam.offset)
+    galaxyCam.diveInit = true
+  }
+  galaxyCam.mode = 'ascent'
+}
+
+/** Where the focus camera sits relative to a world (sunlit, gibbous view). */
+function focusOffset(planet: PlanetId, aspect: number, width: number, out: Vector3) {
+  const data = PLANET_BY_ID[planet]
+  const P = galaxy.positions[planet]
+  const toStar = new Vector3().copy(P).multiplyScalar(-1).normalize()
+  const sideV = new Vector3().crossVectors(UP, toStar).normalize()
+  // Narrow screens show the panel as a bottom sheet: pull back so the world fits above it.
+  const narrow = aspect < 0.9 || width <= 900
+  const dist = data.radius * (data.rings ? 5.6 : 4.6) * (narrow ? 1.5 : 1)
+  return out
+    .copy(toStar)
+    .multiplyScalar(0.62)
+    .addScaledVector(sideV, 0.72)
+    .addScaledVector(UP, 0.3)
+    .normalize()
+    .multiplyScalar(dist)
+}
+
+/**
+ * Debug shots that start on a surface: pretend we descended from the focus
+ * view, so the ascent has somewhere to return to.
+ */
+export function primeGalaxyFocus(planet: PlanetId) {
+  const aspect = window.innerWidth / window.innerHeight
+  galaxyCam.focus = planet
+  focusOffset(planet, aspect, window.innerWidth, galaxyCam.offset)
+  galaxyCam.dive.copy(galaxyCam.offset)
+  galaxyCam.diveInit = true
+  galaxyCam.hasHome = false
 }
 
 /** Called by the warp sequence before the galaxy approach starts. */
@@ -105,23 +159,7 @@ export function GalaxyRig() {
     galaxyCam.from.copy(camera.position)
     galaxyCam.fromTarget.copy(controls.target)
 
-    if (focus) {
-      const data = PLANET_BY_ID[focus]
-      const P = galaxy.positions[focus]
-      const toStar = tmpPos.copy(P).multiplyScalar(-1).normalize()
-      side.crossVectors(UP, toStar).normalize()
-      const aspect = size.width / size.height
-      // Narrow screens show the panel as a bottom sheet: pull back so the world fits above it.
-      const narrow = aspect < 0.9 || size.width <= 900
-      const dist = data.radius * (data.rings ? 5.6 : 4.6) * (narrow ? 1.5 : 1)
-      galaxyCam.offset
-        .copy(toStar)
-        .multiplyScalar(0.62)
-        .addScaledVector(side, 0.72)
-        .addScaledVector(UP, 0.3)
-        .normalize()
-        .multiplyScalar(dist)
-    }
+    if (focus) focusOffset(focus, size.width / size.height, size.width, galaxyCam.offset)
 
     const reduced = useExperience.getState().reducedMotion
     const travelDistance = galaxyCam.from.distanceTo(
@@ -213,6 +251,34 @@ export function GalaxyRig() {
         controls.update()
         break
       }
+      case 'descent':
+      case 'ascent': {
+        const f = galaxyCam.focus
+        if (!f) break
+        controls.enabled = false
+        const P = galaxy.positions[f]
+        const data = PLANET_BY_ID[f]
+        if (!galaxyCam.diveInit) {
+          galaxyCam.dive.subVectors(camera.position, P)
+          galaxyCam.diveInit = true
+        }
+        const k = director.descent
+        const dirV = tmpPos.copy(galaxyCam.dive).normalize()
+        const dist = MathUtils.lerp(galaxyCam.dive.length(), data.radius * 1.012, k)
+        camera.position.copy(P).addScaledVector(dirV, dist)
+        // Near the atmosphere the view tips from the planet's centre to its horizon.
+        side.crossVectors(dirV, UP).normalize()
+        destTarget.copy(P).addScaledVector(dirV, data.radius).addScaledVector(side, data.radius * 2.5)
+        tmpTarget.copy(P).lerp(destTarget, MathUtils.smoothstep(k, 0.55, 1))
+        camera.lookAt(tmpTarget)
+        controls.target.copy(P)
+        if (galaxyCam.mode === 'ascent' && currentPhase === 'galaxy' && k <= 0.001) {
+          galaxyCam.mode = 'focus'
+          galaxyCam.last.copy(P)
+          controls.enabled = true
+        }
+        break
+      }
       case 'free': {
         controls.minDistance = 16
         controls.maxDistance = 220
@@ -225,7 +291,8 @@ export function GalaxyRig() {
 
     // ---- Readout ----------------------------------------------------------
     const f = galaxyCam.focus
-    if (f && (galaxyCam.mode === 'focus' || galaxyCam.mode === 'travel')) {
+    const near = galaxyCam.mode === 'focus' || galaxyCam.mode === 'travel' || galaxyCam.mode === 'descent' || galaxyCam.mode === 'ascent'
+    if (f && near) {
       const data = PLANET_BY_ID[f]
       const d = camera.position.distanceTo(galaxy.positions[f])
       const alt = Math.max(0, (d / data.radius - 1) * data.radiusKm)

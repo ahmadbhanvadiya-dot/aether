@@ -2,7 +2,9 @@ import { ChevronLeft, ChevronRight, Orbit, Undo2 } from 'lucide-react'
 import { useEffect, useRef } from 'react'
 import { ORDINALS, PLANET_BY_ID, PLANETS, type PlanetId } from '../data/planets'
 import { telemetry } from '../state/director'
+import { discoveredCount, useExploration } from '../state/exploration'
 import { useExperience } from '../state/useExperience'
+import { startDescent } from './exploreDirector'
 
 /** Name + teaser on a leader line, following the hovered world. */
 function HoverLabel() {
@@ -20,7 +22,7 @@ function HoverLabel() {
         const h = telemetry.hover
         // Anchor on the disc's upper-right edge so the label never covers the world.
         const r = Math.max(h.radiusPx, 6) * 0.72
-        const right = h.x < window.innerWidth * 0.64
+        const right = h.x < Math.min(window.innerWidth * 0.64, window.innerWidth - 250)
         const x = right ? h.x + r : h.x - r
         node.style.transform = `translate3d(${x.toFixed(1)}px, ${(h.y - r).toFixed(1)}px, 0)`
         node.style.opacity = h.visible ? '1' : '0'
@@ -95,9 +97,17 @@ function InfoPanel({ focus }: { focus: PlanetId | null }) {
   const data = id ? PLANET_BY_ID[id] : null
   const index = id ? PLANETS.findIndex((p) => p.id === id) : 0
   const open = focus !== null
+  const discovered = useExploration((s) => s.discovered)
+  const found = id ? discoveredCount(discovered, id) : 0
+  const aside = useRef<HTMLElement>(null)
+
+  // Every time the panel opens, start at the top (a focused button can leave it scrolled).
+  useEffect(() => {
+    if (open && aside.current) aside.current.scrollTop = 0
+  }, [open, id])
 
   return (
-    <aside className="world-panel ui-hideable" data-open={open || undefined} aria-hidden={!open} aria-live="polite">
+    <aside ref={aside} className="world-panel ui-hideable" data-open={open || undefined} aria-hidden={!open} aria-live="polite">
       {data && (
         <div className="world-panel-body" key={data.id}>
           <p className="text-[0.8125rem] text-haze">{ORDINALS[index]} world from Elys</p>
@@ -115,6 +125,20 @@ function InfoPanel({ focus }: { focus: PlanetId | null }) {
               </div>
             ))}
           </dl>
+          <div className="world-explore">
+            <button
+              type="button"
+              className="explore-button"
+              onClick={() => startDescent(data.id)}
+              tabIndex={open ? 0 : -1}
+            >
+              <span className="enter-glyph" style={{ background: data.accent }} aria-hidden />
+              Explore {data.name}
+            </button>
+            <span className="text-[0.8125rem] text-haze tabular-nums">
+              {found === 0 ? 'Three signals unexplored' : `${found} of 3 signals found`}
+            </span>
+          </div>
           <div className="world-panel-actions">
             <button
               type="button"
