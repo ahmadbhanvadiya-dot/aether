@@ -1,0 +1,611 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-void: #02030a;
+  --color-midnight: #070c22;
+  --color-abyss: #132056;
+  --color-ion: #5ab0ff;
+  --color-violet: #8c6cff;
+  --color-starlight: #e9edf9;
+  --color-haze: #8a93b8;
+
+  --font-display: 'Italiana', 'Didot', serif;
+  --font-sans: 'Manrope Variable', 'Manrope', ui-sans-serif, system-ui, sans-serif;
+
+  --ease-out-ui: cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+:root {
+  color-scheme: dark;
+  --gutter: 24px;
+}
+
+@media (min-width: 768px) {
+  :root {
+    --gutter: 40px;
+  }
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-void);
+  color: var(--color-starlight);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+/* Elements revealed by the arrival sequence start hidden. */
+[data-reveal] {
+  opacity: 0;
+}
+
+/* ---------- Wordmark ---------- */
+
+.wordmark {
+  font-family: var(--font-display);
+  font-weight: 400;
+  /* Sized against the planet's disc: ~62% of height on landscape, ~86% of width on portrait. */
+  font-size: min(13.5svh, 15.5vw);
+  line-height: 0.9;
+  letter-spacing: 0.26em;
+  /* Tracking adds space after the last letter; pull it back so the word is optically centred. */
+  margin-right: -0.26em;
+  white-space: nowrap;
+  user-select: none;
+}
+
+@media (max-aspect-ratio: 4/5) {
+  .wordmark {
+    letter-spacing: 0.15em;
+    margin-right: -0.15em;
+  }
+}
+
+.wordmark-letter {
+  display: inline-block;
+  background: linear-gradient(180deg, #f4f6fd 30%, #b9cdf6 78%, #7f9fe6 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: none;
+  filter: drop-shadow(0 0 28px rgb(90 176 255 / 0.22));
+  will-change: transform, opacity, filter;
+}
+
+/* ---------- Enter button ---------- */
+
+@property --orbit {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+
+.enter-button {
+  position: relative;
+  isolation: isolate;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 1.05rem 2.1rem 1.05rem 1.8rem;
+  border-radius: 999px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  letter-spacing: 0.22em;
+  color: var(--color-starlight);
+  background: rgb(2 3 10 / 0.35);
+  box-shadow:
+    inset 0 0 0 1px rgb(233 237 249 / 0.18),
+    0 0 40px -12px rgb(90 176 255 / 0.35);
+  transition:
+    transform 140ms var(--ease-out-ui),
+    box-shadow 260ms ease,
+    background-color 260ms ease;
+  cursor: pointer;
+  touch-action: manipulation;
+  user-select: none;
+}
+
+/* A point of light that orbits the edge on hover. */
+.enter-button::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  padding: 1px;
+  background: conic-gradient(
+    from var(--orbit),
+    transparent 0deg,
+    transparent 210deg,
+    rgb(140 108 255 / 0.55) 290deg,
+    #5ab0ff 340deg,
+    transparent 360deg
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box exclude,
+    linear-gradient(#000 0 0);
+  opacity: 0;
+  transition: opacity 300ms ease;
+}
+
+.enter-glyph {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--color-ion);
+  box-shadow:
+    0 0 10px 2px rgb(90 176 255 / 0.65),
+    0 0 2px 0 #fff inset;
+}
+
+.enter-button:active {
+  transform: scale(0.97);
+}
+
+.enter-button:focus-visible {
+  outline: 1px solid var(--color-ion);
+  outline-offset: 5px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .enter-button:hover {
+    background: rgb(7 12 34 / 0.55);
+    box-shadow:
+      inset 0 0 0 1px rgb(233 237 249 / 0.26),
+      0 0 54px -10px rgb(90 176 255 / 0.5);
+  }
+
+  .enter-button:hover::before {
+    opacity: 1;
+    animation: orbit 2.6s linear infinite;
+  }
+}
+
+@keyframes orbit {
+  to {
+    --orbit: 360deg;
+  }
+}
+
+/* ---------- Quiet controls ---------- */
+
+.quiet-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  min-height: 40px;
+  min-width: 40px;
+  border-radius: 999px;
+  color: var(--color-haze);
+  transition:
+    color 200ms ease,
+    box-shadow 200ms ease;
+  cursor: pointer;
+}
+
+.quiet-button:focus-visible {
+  outline: 1px solid var(--color-ion);
+  outline-offset: 3px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .quiet-button:hover {
+    color: var(--color-starlight);
+    box-shadow: inset 0 0 0 1px rgb(233 237 249 / 0.16);
+  }
+}
+
+.hud-corner {
+  position: absolute;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  letter-spacing: 0.01em;
+  color: var(--color-haze);
+  text-shadow: 0 0 14px rgb(2 3 10 / 0.85);
+}
+
+/* ---------- Cinema mode ---------- */
+
+.ui-hideable {
+  transition: opacity 200ms ease;
+}
+
+[data-cinema] .ui-hideable,
+[data-cinema] .orbit-label {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+[data-cinema] .quiet-button {
+  color: rgb(138 147 184 / 0.55);
+}
+
+/* ---------- Ithra's label ---------- */
+
+.orbit-label {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+  will-change: transform, opacity;
+}
+
+.orbit-label-ring {
+  position: absolute;
+  left: -11px;
+  top: -11px;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1px rgb(90 176 255 / 0.55);
+}
+
+/* Diagonal leader, then a short horizontal run into the text. */
+.orbit-label-leader {
+  position: absolute;
+  left: 8px;
+  top: -8px;
+  width: 30px;
+  height: 1px;
+  background: rgb(233 237 249 / 0.35);
+  transform-origin: 0 50%;
+  transform: rotate(-38deg);
+}
+
+.orbit-label-leader::after {
+  content: '';
+  position: absolute;
+  left: 100%;
+  top: 0;
+  width: 34px;
+  height: 1px;
+  background: inherit;
+  transform-origin: 0 50%;
+  transform: rotate(38deg);
+}
+
+.orbit-label-text {
+  position: absolute;
+  left: 76px;
+  top: -34px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  white-space: nowrap;
+}
+
+.orbit-label[data-side='left'] .orbit-label-leader {
+  left: -8px;
+  transform: scaleX(-1) rotate(-38deg);
+}
+
+.orbit-label[data-side='left'] .orbit-label-text {
+  left: auto;
+  right: 76px;
+  align-items: flex-end;
+}
+
+/* ---------- Letterbox ---------- */
+
+.letterbox {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  /* Crop to 2.39:1, capped so tall phones keep most of the frame. */
+  height: clamp(28px, calc((100svh - 100vw / 2.39) / 2), 11svh);
+  background: #000;
+  will-change: transform;
+}
+
+.letterbox-top {
+  top: 0;
+  transform-origin: 50% 0;
+}
+
+.letterbox-bottom {
+  bottom: 0;
+  transform-origin: 50% 100%;
+}
+
+/* ---------- Prelude ---------- */
+
+.prelude {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  background: var(--color-void);
+  padding: 0 var(--gutter);
+}
+
+.prelude-line {
+  display: flex;
+  align-items: baseline;
+  gap: 0.9rem;
+  font-size: clamp(0.95rem, 1.2vw, 1.1rem);
+  font-weight: 300;
+  letter-spacing: 0.03em;
+  color: rgb(233 237 249 / 0.82);
+}
+
+.prelude-count {
+  min-width: 3.2ch;
+  font-size: 0.8125rem;
+  font-weight: 400;
+  color: var(--color-ion);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .enter-button:hover::before {
+    animation: none;
+  }
+  .wordmark-letter {
+    will-change: opacity;
+  }
+}
+
+/* ---------- Warp flash ---------- */
+
+.veil {
+  z-index: 15;
+  background: radial-gradient(110% 90% at 50% 50%, #e8f2ff 0%, #8fc4ff 30%, #070c22 100%);
+}
+
+/* ---------- Galaxy interface ---------- */
+
+.galaxy-ui {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 600ms ease;
+}
+
+.galaxy-ui[data-visible] {
+  opacity: 1;
+}
+
+.galaxy-ui:not([data-visible]) * {
+  pointer-events: none !important;
+}
+
+.galaxy-ui [data-hidden] {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.world-label .orbit-label-leader {
+  left: 0;
+  top: 0;
+}
+
+.world-label .orbit-label-text {
+  left: 68px;
+  top: -26px;
+}
+
+.world-label[data-side='left'] .orbit-label-leader {
+  left: 0;
+}
+
+.world-label[data-side='left'] .orbit-label-text {
+  right: 68px;
+}
+
+.world-index {
+  position: absolute;
+  left: 50%;
+  bottom: calc(env(safe-area-inset-bottom) + var(--gutter) + 34px);
+  transform: translate(-50%, 8px);
+  max-width: calc(100vw - 2 * var(--gutter));
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 300ms ease,
+    transform 300ms var(--ease-out-ui);
+}
+
+.world-index[data-visible] {
+  opacity: 1;
+  transform: translate(-50%, 0);
+  pointer-events: auto;
+}
+
+.world-index ol {
+  display: flex;
+  gap: 0.25rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.world-index-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-height: 40px;
+  padding: 0 0.85rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  color: var(--color-haze);
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    color 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.world-index-item[data-active],
+.world-index-item:focus-visible {
+  color: var(--color-starlight);
+  box-shadow: inset 0 0 0 1px rgb(233 237 249 / 0.16);
+  outline: none;
+}
+
+.world-index-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+}
+
+/* Info panel: no card, just type on a scrim that fades into space. */
+.world-panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: clamp(380px, 40vw, 480px);
+  display: flex;
+  align-items: center;
+  padding: 0 calc(env(safe-area-inset-right) + var(--gutter)) 0 4rem;
+  background: linear-gradient(270deg, rgb(2 3 10 / 0.88) 0%, rgb(2 3 10 / 0.66) 62%, rgb(2 3 10 / 0) 100%);
+  opacity: 0;
+  transform: translateX(24px);
+  pointer-events: none;
+  transition:
+    opacity 420ms ease,
+    transform 520ms var(--ease-out-ui);
+}
+
+.world-panel[data-open] {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+  transition-delay: 250ms;
+}
+
+.world-panel-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  width: 100%;
+  animation: panel-in 600ms var(--ease-out-ui) both;
+}
+
+@keyframes panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+
+.world-panel-name {
+  font-family: var(--font-display);
+  font-size: clamp(2.6rem, 4.4vw, 4.2rem);
+  line-height: 0.95;
+  letter-spacing: 0.16em;
+  margin-right: -0.16em;
+  color: var(--color-starlight);
+}
+
+.world-panel-copy {
+  max-width: 40ch;
+  font-size: 0.95rem;
+  line-height: 1.65;
+  font-weight: 300;
+  color: rgb(233 237 249 / 0.74);
+}
+
+.world-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 1.5rem;
+  margin-top: 0.4rem;
+}
+
+.world-facts > div {
+  padding: 0.65rem 0;
+  border-top: 1px solid rgb(233 237 249 / 0.1);
+}
+
+.world-facts dt {
+  font-size: 0.75rem;
+  color: var(--color-haze);
+}
+
+.world-facts dd {
+  margin-top: 0.15rem;
+  font-size: 0.9rem;
+  color: var(--color-starlight);
+}
+
+.world-panel-actions {
+  display: flex;
+  white-space: nowrap;
+  align-items: center;
+  gap: 0.25rem;
+  margin-top: 0.6rem;
+}
+
+/* Portrait and narrow screens: the panel becomes a bottom sheet; the world is framed above it. */
+@media (max-aspect-ratio: 9/10), (max-width: 900px) {
+  .world-panel {
+    top: auto;
+    left: 0;
+    width: auto;
+    max-height: 58svh;
+    display: block;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: none;
+    padding: 3rem var(--gutter) calc(env(safe-area-inset-bottom) + var(--gutter));
+    background: linear-gradient(0deg, rgb(2 3 10 / 0.96) 0%, rgb(2 3 10 / 0.86) 72%, rgb(2 3 10 / 0) 100%);
+    transform: translateY(24px);
+  }
+
+  .world-panel-body {
+    gap: 0.7rem;
+  }
+
+  .world-panel-name {
+    font-size: clamp(2.2rem, 9vw, 3rem);
+  }
+
+  .world-panel-copy {
+    font-size: 0.875rem;
+  }
+
+  .world-facts {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    column-gap: 1rem;
+  }
+
+  /* The sheet owns the bottom of the screen while it is open. */
+  .hud-corner[data-panel] {
+    opacity: 0 !important;
+    pointer-events: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .world-panel,
+  .world-index {
+    transform: none !important;
+  }
+  .world-panel-body {
+    animation-name: fade-only;
+  }
+  @keyframes fade-only {
+    from {
+      opacity: 0;
+    }
+  }
+}
