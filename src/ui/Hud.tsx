@@ -1,7 +1,8 @@
-import { Eye, EyeOff, Pause, Play, Volume2, VolumeX } from 'lucide-react'
+import { Eye, EyeOff, Pause, Play, Telescope, Volume2, VolumeX } from 'lucide-react'
 import { useEffect, useRef } from 'react'
 import { telemetry } from '../state/director'
 import { sound } from '../audio/sound'
+import { openObservatory } from './observatoryDirector'
 import { PLANET_BY_ID } from '../data/planets'
 import { discoveredCount, TOTAL_LOCATIONS, useExploration } from '../state/exploration'
 import { quality, useExperience, type Phase } from '../state/useExperience'
@@ -16,6 +17,7 @@ const STATUS: Record<Phase, string> = {
   descending: 'Descending',
   surface: 'Exploring',
   ascending: 'Returning to orbit',
+  observatory: 'The Observatory',
 }
 
 /** Live readout, written straight to the DOM from whichever camera rig is active. */
@@ -79,10 +81,16 @@ export function Hud() {
           : STATUS[phase]
   const inGalaxy = phase === 'galaxy'
   const onSurface = phase === 'surface'
-  const showTotal = inGalaxy || onSurface
+  const inObservatory = phase === 'observatory'
+  const showTotal = inGalaxy || onSurface || inObservatory
+  const canObserve = inGalaxy || onSurface
   const hint = motionPaused
     ? 'Motion paused'
-    : onSurface
+    : inObservatory
+      ? quality.coarse
+        ? 'Tap a world on the dial'
+        : 'Select a world on the dial'
+      : onSurface
       ? signalFound
         ? 'Drag to look around'
         : quality.coarse
@@ -125,6 +133,18 @@ export function Hud() {
         data-reveal
         data-hud
       >
+        {canObserve && (
+          <button
+            type="button"
+            className="quiet-button ui-hideable px-3"
+            onClick={() => openObservatory()}
+            title="Open the Observatory (O)"
+          >
+            <Telescope size={15} strokeWidth={1.5} aria-hidden />
+            <span className="hidden sm:inline">Observatory</span>
+            <span className="sr-only sm:hidden">Observatory</span>
+          </button>
+        )}
         <button
           type="button"
           className="quiet-button ui-hideable px-3"
@@ -163,7 +183,8 @@ export function Hud() {
       </div>
 
       <div
-        className="hud-corner ui-hideable flex flex-col"
+        className="hud-corner ui-hideable hud-status flex flex-col"
+        data-obs={inObservatory || undefined}
         data-panel={(inGalaxy && focus !== null) || undefined}
         style={{
           bottom: 'calc(env(safe-area-inset-bottom) + var(--gutter))',
@@ -185,6 +206,7 @@ export function Hud() {
 
       <div
         className="hud-corner ui-hideable hud-hint text-right"
+        data-obs={inObservatory || undefined}
         data-panel={(inGalaxy && focus !== null) || undefined}
         style={{
           bottom: 'calc(env(safe-area-inset-bottom) + var(--gutter))',

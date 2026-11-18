@@ -143,7 +143,7 @@ export function ExploreUI() {
             top: 'calc(env(safe-area-inset-top) + var(--gutter) - 14px)',
             left: 'calc(env(safe-area-inset-left) + var(--gutter) + 26px)',
           }}
-          onClick={startAscent}
+          onClick={() => startAscent()}
           tabIndex={onSurface ? 0 : -1}
           title="Return to orbit (Esc)"
         >

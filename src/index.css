@@ -886,3 +886,793 @@ body {
   align-items: center;
   text-align: center;
 }
+
+/* ---------- Phase 4: the Observatory ---------- */
+
+::selection {
+  background: rgb(90 176 255 / 0.32);
+  color: var(--color-starlight);
+}
+
+.observatory {
+  position: absolute;
+  inset: 0;
+  z-index: 9;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 500ms ease,
+    visibility 0s linear 500ms;
+}
+
+.observatory[data-visible] {
+  opacity: 1;
+  visibility: visible;
+  transition:
+    opacity 700ms ease,
+    visibility 0s linear 0s;
+}
+
+/* The chart over the real system seen from the zenith. */
+.obs-chart-fade {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.obs-chart-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.obs-ring {
+  stroke: rgb(233 237 249 / 0.16);
+  stroke-width: 1;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+}
+
+.observatory[data-visible] .obs-ring {
+  animation: obs-draw 1.8s var(--ease-out-ui) 0.9s both;
+}
+
+@keyframes obs-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.obs-ticks line {
+  stroke: rgb(233 237 249 / 0.2);
+  stroke-width: 1;
+}
+
+.obs-ticks line[data-major] {
+  stroke: rgb(233 237 249 / 0.42);
+}
+
+.obs-ticks {
+  opacity: 0;
+  transition: opacity 1.2s ease 1.6s;
+}
+
+.observatory[data-visible] .obs-ticks {
+  opacity: 1;
+}
+
+.obs-reading {
+  stroke: var(--color-ion);
+  stroke-opacity: 0.6;
+  stroke-width: 1;
+  stroke-dasharray: 2 4;
+}
+
+.obs-mark {
+  fill: rgb(2 3 10 / 0.6);
+  stroke: var(--accent);
+  stroke-width: 1;
+}
+
+.obs-mark[data-found] {
+  fill: var(--accent);
+}
+
+.obs-labels {
+  position: absolute;
+  inset: 0;
+}
+
+.obs-world-label {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 0.45rem;
+  padding: 4px 6px;
+  border-radius: 4px;
+  color: var(--color-haze);
+  pointer-events: auto;
+  cursor: pointer;
+  white-space: nowrap;
+  text-shadow: 0 0 12px rgb(2 3 10 / 0.9);
+  transition: color 180ms ease;
+}
+
+.obs-world-label-name {
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  letter-spacing: 0.14em;
+}
+
+.obs-world-label-pct {
+  font-size: 0.75rem;
+}
+
+.obs-world-label[data-selected] {
+  color: var(--color-starlight);
+}
+
+.obs-world-label:focus-visible {
+  outline: 1px solid var(--color-ion);
+  outline-offset: 2px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .obs-world-label:hover {
+    color: var(--color-starlight);
+  }
+}
+
+/* Scroll container: the first view, then the archive over a darkening scrim. */
+.obs-scroll {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgb(233 237 249 / 0.18) transparent;
+}
+
+.observatory:not([data-visible]) .obs-scroll,
+.observatory:not([data-visible]) .obs-labels {
+  pointer-events: none;
+}
+
+.obs-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+
+.obs-scroll::-webkit-scrollbar-thumb {
+  background: rgb(233 237 249 / 0.16);
+  border-radius: 8px;
+}
+
+.obs-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.obs-first {
+  position: relative;
+  min-height: 100svh;
+  display: grid;
+  grid-template-columns: 1fr clamp(360px, 33vw, 470px);
+  align-content: space-between;
+  row-gap: 1.4rem;
+  padding: calc(env(safe-area-inset-top) + var(--gutter) + 44px) calc(env(safe-area-inset-right) + var(--gutter))
+    calc(env(safe-area-inset-bottom) + var(--gutter) + 8px);
+  pointer-events: none;
+}
+
+/* Legibility for the right-hand column; the dial keeps the rest of the frame. */
+.obs-first::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 0 auto;
+  width: clamp(440px, 42vw, 600px);
+  background: linear-gradient(270deg, rgb(2 3 10 / 0.86) 0%, rgb(2 3 10 / 0.62) 62%, rgb(2 3 10 / 0) 100%);
+  pointer-events: none;
+}
+
+.obs-first > * {
+  position: relative;
+  grid-column: 2;
+  pointer-events: auto;
+}
+
+.obs-reveal {
+  opacity: 0;
+  transform: translateY(12px);
+}
+
+.observatory[data-visible] .obs-reveal {
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity 900ms var(--ease-out-ui) var(--d, 0s),
+    transform 900ms var(--ease-out-ui) var(--d, 0s);
+}
+
+.obs-title {
+  font-family: var(--font-display);
+  font-size: clamp(1.9rem, 2.5vw, 2.9rem);
+  line-height: 1;
+  letter-spacing: 0.14em;
+  margin-right: -0.14em;
+  color: var(--color-starlight);
+  text-wrap: balance;
+}
+
+.obs-subtitle {
+  margin-top: 0.9rem;
+  max-width: 34ch;
+  font-size: clamp(0.98rem, 1.1vw, 1.08rem);
+  font-weight: 300;
+  line-height: 1.5;
+  color: rgb(233 237 249 / 0.8);
+}
+
+.obs-nav {
+  display: flex;
+  gap: 1.4rem;
+  margin-top: 1.3rem;
+}
+
+.obs-nav-link {
+  font-size: 0.8125rem;
+  color: var(--color-haze);
+  text-decoration: underline;
+  text-decoration-color: rgb(138 147 184 / 0.35);
+  text-underline-offset: 5px;
+  cursor: pointer;
+  transition:
+    color 180ms ease,
+    text-decoration-color 180ms ease;
+}
+
+.obs-nav-link:focus-visible {
+  outline: 1px solid var(--color-ion);
+  outline-offset: 4px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .obs-nav-link:hover {
+    color: var(--color-starlight);
+    text-decoration-color: var(--color-ion);
+  }
+}
+
+.obs-first > .obs-back {
+  position: absolute;
+  top: calc(env(safe-area-inset-top) + var(--gutter) - 14px);
+  left: calc(env(safe-area-inset-left) + var(--gutter) + 26px);
+  grid-column: auto;
+}
+
+/* The selected world: its record beside the dial. */
+.obs-reading-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+.obs-reading-head {
+  display: flex;
+  align-items: center;
+  gap: 1.1rem;
+  animation: reveal-in 420ms var(--ease-out-ui) both;
+}
+
+.obs-reading-name {
+  font-family: var(--font-display);
+  font-size: clamp(2rem, 2.6vw, 2.6rem);
+  line-height: 1;
+  letter-spacing: 0.12em;
+  margin-bottom: 0.55rem;
+  color: var(--color-starlight);
+}
+
+.obs-accent-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  flex: none;
+}
+
+.obs-reading-copy {
+  max-width: 40ch;
+  font-size: 0.95rem;
+  font-weight: 300;
+  line-height: 1.6;
+  color: rgb(233 237 249 / 0.78);
+}
+
+.obs-facts,
+.obs-ledger {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  column-gap: 1.2rem;
+}
+
+.obs-facts > div,
+.obs-ledger > div {
+  padding: 0.6rem 0;
+  border-top: 1px solid rgb(233 237 249 / 0.1);
+}
+
+.obs-facts dt,
+.obs-ledger dt {
+  font-size: 0.75rem;
+  color: var(--color-haze);
+}
+
+.obs-facts dd,
+.obs-ledger dd {
+  margin-top: 0.15rem;
+  font-size: 0.9rem;
+  color: var(--color-starlight);
+}
+
+.obs-ledger {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.obs-reading-locations {
+  display: flex;
+  flex-direction: column;
+}
+
+.obs-reading-locations li {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.4rem 0;
+  font-size: 0.875rem;
+  border-top: 1px solid rgb(233 237 249 / 0.06);
+}
+
+.obs-reading-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.3rem;
+}
+
+.obs-portrait {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+}
+
+.obs-portrait img {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Loading: a faint outline where the portrait will appear. */
+.obs-portrait-wait {
+  width: 58%;
+  height: 58%;
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1px rgb(233 237 249 / 0.12);
+}
+
+/* Archive sections below the first view. */
+.obs-section {
+  position: relative;
+  padding: 88px max(calc(env(safe-area-inset-right) + var(--gutter)), calc((100% - 1160px) / 2)) 64px;
+  background: rgb(2 3 10 / 0.94);
+}
+
+#obs-worlds {
+  background: linear-gradient(180deg, rgb(2 3 10 / 0) 0, rgb(2 3 10 / 0.94) 140px);
+  padding-top: 160px;
+}
+
+.obs-section-last {
+  padding-bottom: calc(env(safe-area-inset-bottom) + var(--gutter) + 120px);
+}
+
+.obs-section-title {
+  font-family: var(--font-display);
+  font-size: clamp(1.8rem, 2.6vw, 2.4rem);
+  letter-spacing: 0.1em;
+  color: var(--color-starlight);
+  margin-bottom: 1.6rem;
+}
+
+.obs-section-note {
+  margin: -0.8rem 0 2rem;
+  font-size: 0.875rem;
+  color: var(--color-haze);
+}
+
+.obs-worlds li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 0.5rem;
+  border-top: 1px solid rgb(233 237 249 / 0.1);
+}
+
+.obs-worlds li:last-child {
+  border-bottom: 1px solid rgb(233 237 249 / 0.1);
+}
+
+.obs-world-row {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr) 140px 90px 90px;
+  align-items: center;
+  gap: 1.4rem;
+  padding: 1rem 0.5rem;
+  text-align: left;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 200ms ease;
+}
+
+.obs-world-row:focus-visible {
+  outline: 1px solid var(--color-ion);
+  outline-offset: 2px;
+}
+
+/* The selected world's whole row, Explore included. */
+.obs-worlds li[data-selected] {
+  background: rgb(233 237 249 / 0.04);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .obs-world-row:hover {
+    background: rgb(233 237 249 / 0.05);
+  }
+}
+
+.obs-world-main {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.obs-world-name {
+  font-family: var(--font-display);
+  font-size: 1.3rem;
+  letter-spacing: 0.12em;
+  color: var(--color-starlight);
+}
+
+.obs-world-class {
+  font-size: 0.8125rem;
+  color: rgb(233 237 249 / 0.8);
+}
+
+.obs-world-teaser {
+  font-size: 0.8125rem;
+  font-weight: 300;
+  color: var(--color-haze);
+}
+
+.obs-world-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  font-size: 0.9rem;
+  color: var(--color-starlight);
+}
+
+.obs-stat-label {
+  font-size: 0.75rem;
+  color: var(--color-haze);
+}
+
+.obs-collection-world + .obs-collection-world {
+  margin-top: 2.6rem;
+}
+
+.obs-collection-name {
+  display: flex;
+  align-items: baseline;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  font-family: var(--font-display);
+  font-size: 1.35rem;
+  letter-spacing: 0.12em;
+  color: var(--color-starlight);
+}
+
+.obs-collection-name span {
+  font-family: var(--font-sans);
+  font-size: 0.8125rem;
+  letter-spacing: 0;
+  color: var(--color-haze);
+}
+
+.obs-collection {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0 2rem;
+}
+
+.obs-entry {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 1rem 0 1.2rem;
+  border-top: 1px solid rgb(233 237 249 / 0.1);
+}
+
+.obs-entry-name {
+  font-size: 0.98rem;
+  font-weight: 500;
+  color: var(--color-starlight);
+}
+
+.obs-entry:not([data-found]) .obs-entry-name {
+  color: rgb(233 237 249 / 0.72);
+}
+
+.obs-entry-region,
+.obs-entry-meta {
+  font-size: 0.8125rem;
+  color: var(--color-haze);
+}
+
+.obs-entry-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 0.3rem;
+}
+
+.obs-entry-finding {
+  margin-top: 0.3rem;
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  letter-spacing: 0.04em;
+  color: var(--color-starlight);
+}
+
+.obs-entry-copy {
+  max-width: 48ch;
+  font-size: 0.875rem;
+  font-weight: 300;
+  line-height: 1.6;
+  color: rgb(233 237 249 / 0.72);
+}
+
+/* An unfound finding: the shape of a line, held back. */
+.obs-entry-redacted {
+  margin-top: 0.4rem;
+}
+
+.obs-entry-redacted span {
+  display: block;
+  width: 72%;
+  height: 0.95rem;
+  border-radius: 2px;
+  background: repeating-linear-gradient(115deg, rgb(233 237 249 / 0.07) 0 6px, rgb(233 237 249 / 0.03) 6px 12px);
+}
+
+/* Timeline */
+.obs-timeline {
+  position: relative;
+}
+
+.obs-timeline::before {
+  content: '';
+  position: absolute;
+  left: 152px;
+  top: 0.6rem;
+  bottom: 0.6rem;
+  width: 1px;
+  background: rgb(233 237 249 / 0.14);
+}
+
+.obs-event {
+  position: relative;
+  display: grid;
+  grid-template-columns: 136px 32px minmax(0, 1fr);
+  align-items: start;
+  padding: 0.9rem 0;
+}
+
+.obs-event-when {
+  display: flex;
+  flex-direction: column;
+  font-size: 0.8125rem;
+  color: var(--color-haze);
+}
+
+.obs-event-dot {
+  justify-self: center;
+  margin-top: 0.35rem;
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: var(--accent);
+  box-shadow: 0 0 10px var(--accent);
+}
+
+.obs-event-name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.4rem 0.9rem;
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--color-starlight);
+}
+
+.obs-event-detail {
+  margin-top: 0.2rem;
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  letter-spacing: 0.03em;
+  color: rgb(233 237 249 / 0.86);
+}
+
+.obs-event-region {
+  margin-top: 0.15rem;
+  font-size: 0.8125rem;
+  color: var(--color-haze);
+}
+
+.obs-event-new {
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--color-ion);
+}
+
+/* New since the last visit: written into the record one by one. */
+/* New entries wait, hidden, until the timeline is scrolled into view. */
+.observatory[data-visible] .obs-timeline:not([data-inview]) .obs-event[data-new] {
+  opacity: 0;
+}
+
+.observatory[data-visible] .obs-timeline[data-inview] .obs-event[data-new] {
+  animation: obs-entry 700ms var(--ease-out-ui) calc(0.15s + var(--i) * 90ms) both;
+}
+
+.observatory[data-visible] .obs-timeline[data-inview] .obs-event[data-new] .obs-event-dot {
+  animation: obs-ping 1.4s var(--ease-out-ui) calc(0.35s + var(--i) * 90ms) both;
+}
+
+@keyframes obs-entry {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+
+@keyframes obs-ping {
+  from {
+    box-shadow: 0 0 0 0 var(--accent);
+  }
+  40% {
+    box-shadow: 0 0 0 7px rgb(90 176 255 / 0);
+  }
+  to {
+    box-shadow: 0 0 10px var(--accent);
+  }
+}
+
+.obs-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1.2rem;
+  max-width: 52ch;
+  font-size: 0.95rem;
+  font-weight: 300;
+  line-height: 1.6;
+  color: rgb(233 237 249 / 0.78);
+}
+
+/* Narrow screens: dial on top, everything else in one column below it. */
+@media (max-width: 900px), (max-aspect-ratio: 9/10) {
+  .obs-first {
+    grid-template-columns: 1fr;
+    align-content: start;
+    row-gap: 1.6rem;
+    padding-top: calc(env(safe-area-inset-top) + var(--gutter) + 44px);
+  }
+
+  .obs-first::before {
+    display: none;
+  }
+
+  .obs-first > * {
+    grid-column: 1;
+  }
+
+  .obs-reading-wrap {
+    /* Room for the dial, drawn by the scene behind: Orion's orbit (--obs-dial,
+       matching zenithHeight in GalaxyRig) plus the ring and graduations, twice. */
+    --obs-dial: min(38vw, 24svh);
+    margin-top: calc(2 * (var(--obs-dial) + 52px));
+    padding-top: 1.4rem;
+    background: linear-gradient(180deg, rgb(2 3 10 / 0) 0, rgb(2 3 10 / 0.88) 1.4rem);
+  }
+
+  .obs-ledger {
+    background: rgb(2 3 10 / 0.88);
+  }
+
+  /* The inner orbits crowd on a phone: labels keep a soft backing over marks. */
+  .obs-world-label {
+    background: rgb(2 3 10 / 0.62);
+  }
+
+  .obs-title {
+    font-size: clamp(1.9rem, 8vw, 2.4rem);
+  }
+
+  .obs-world-row {
+    grid-template-columns: 52px minmax(0, 1fr);
+    gap: 0.4rem 1rem;
+  }
+
+  .obs-world-row .obs-portrait {
+    width: 52px !important;
+    height: 52px !important;
+    grid-row: span 4;
+  }
+
+  .obs-world-stat {
+    display: inline-flex;
+    flex-direction: row;
+    gap: 0.35rem;
+    font-size: 0.8125rem;
+    grid-column: 2;
+  }
+
+  .obs-collection {
+    grid-template-columns: 1fr;
+  }
+
+  .obs-timeline::before {
+    left: 106px;
+  }
+
+  .obs-event {
+    grid-template-columns: 92px 28px minmax(0, 1fr);
+  }
+
+  .obs-section {
+    padding-top: 64px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .obs-reveal {
+    transform: none !important;
+  }
+  .observatory[data-visible] .obs-ring {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+  .observatory[data-visible] .obs-timeline[data-inview] .obs-event[data-new] {
+    animation-name: fade-only;
+  }
+  .observatory[data-visible] .obs-timeline[data-inview] .obs-event[data-new] .obs-event-dot {
+    animation: none;
+  }
+}
+
+/* The HUD corners stay above the Observatory's scrims and remain usable. */
+.hud-corner {
+  z-index: 11;
+}
+
+/* In the Observatory the reading column owns the bottom-right corner. */
+.hud-hint[data-obs],
+.hud-status[data-obs] {
+  display: none;
+}
