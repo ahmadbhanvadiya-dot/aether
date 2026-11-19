@@ -1,13 +1,13 @@
-import { Orbit } from 'lucide-react'
+import { Orbit, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { sound } from '../audio/sound'
 import { CATEGORIES } from '../data/discoveries'
 import { LOCATION_BY_ID, locationsFor } from '../data/locations'
 import { PLANET_BY_ID } from '../data/planets'
 import { surfaceCam } from '../scene/surface/SurfaceRig'
-import { useExploration } from '../state/exploration'
+import { discoveredCount, hiddenCount, useExploration } from '../state/exploration'
 import { locationProgress, worldProgress } from '../state/progress'
-import { useExperience } from '../state/useExperience'
+import { quality, useExperience } from '../state/useExperience'
 import { startAscent, stepLocation, travelTo } from './exploreDirector'
 import { cancelScan, closeCard, startScan } from './scanner'
 import { CATEGORY_ICON, ScannerUI, unknownName, useScannable } from './ScannerUI'
@@ -45,6 +45,54 @@ function DiscoveryNotice() {
   )
 }
 
+/**
+ * First-scan guidance: shown on the surface only until the visitor's first
+ * discovery anywhere (derived from progress, nothing stored), after the landing
+ * title has faded. It can be dismissed for the visit.
+ */
+function ScanGuide({ onSurface }: { onSurface: boolean }) {
+  const discovered = useExploration((s) => s.discovered)
+  const scanning = useExperience((s) => s.scanning)
+  const card = useExperience((s) => s.card)
+  const notice = useExperience((s) => s.notice)
+  const [dismissed, setDismissed] = useState(false)
+  const [settled, setSettled] = useState(false)
+  const firstTime = discoveredCount(discovered) + hiddenCount(discovered) === 0
+
+  // Wait for the landing title card to finish before speaking.
+  useEffect(() => {
+    if (!onSurface) return
+    const t = setTimeout(() => setSettled(true), 4500)
+    return () => {
+      clearTimeout(t)
+      setSettled(false)
+    }
+  }, [onSurface])
+
+  const show = onSurface && settled && firstTime && !dismissed && !scanning && !card && !notice
+  if (!firstTime) return null
+  return (
+    <div className="scan-guide ui-hideable" data-visible={show || undefined} role="note" aria-hidden={!show}>
+      <p className="scan-guide-text">
+        Lights mark things worth scanning. {quality.coarse ? 'Tap' : 'Select'} one to scan it.
+      </p>
+      <p className="scan-guide-sub">
+        {quality.coarse ? 'Drag to look around.' : 'Drag, or hold Shift and use the arrow keys, to look around.'} Some
+        things only show to those who look.
+      </p>
+      <button
+        type="button"
+        className="scan-guide-close quiet-button"
+        onClick={() => setDismissed(true)}
+        tabIndex={show ? 0 : -1}
+        aria-label="Dismiss"
+      >
+        <X size={14} strokeWidth={1.5} aria-hidden />
+      </button>
+    </div>
+  )
+}
+
 /** What can be scanned here: the keyboard and touch route to every target, on screen or not. */
 function ScanList({ location, onSurface }: { location: string; onSurface: boolean }) {
   const discovered = useExploration((s) => s.discovered)
@@ -65,6 +113,11 @@ function ScanList({ location, onSurface }: { location: string; onSurface: boolea
               data-active={scanning === d.id || undefined}
               onClick={() => startScan(d.id)}
               tabIndex={onSurface ? 0 : -1}
+              aria-label={
+                found
+                  ? `${d.name}, ${CATEGORIES[d.category].label}. Show record`
+                  : `${unknownName(d)}. ${scanning === d.id ? 'Scanning' : 'Scan'}`
+              }
               style={{ ['--accent' as string]: accent }}
             >
               <span className="signal-dot" data-found={found || undefined} aria-hidden />
@@ -147,7 +200,7 @@ export function ExploreUI() {
         )}
       </div>
 
-      <div className="explore-ui" data-visible={onSurface || undefined} data-card={card ? true : undefined}>
+      <div className="explore-ui" data-visible={onSurface || undefined} data-card={card ? true : undefined} inert={!onSurface}>
         <button
           type="button"
           className="quiet-button ui-hideable pointer-events-auto absolute px-3"
@@ -213,6 +266,7 @@ export function ExploreUI() {
         </nav>
 
         <ScannerUI />
+        <ScanGuide onSurface={onSurface} />
         <DiscoveryNotice />
       </div>
     </>

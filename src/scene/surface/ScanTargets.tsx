@@ -94,6 +94,23 @@ interface Glint {
   mat: ShaderMaterial
   reveal: number
   dwell: number
+  /** Terrain between the eye and the object: 0 → clear, 1 → hidden (damped). */
+  occl: number
+  blocked: boolean
+}
+
+/**
+ * Is the line from the eye to a target blocked by the ground? Samples the
+ * terrain along the middle of the line (the ends are skipped: the eye and the
+ * object both sit just above the ground).
+ */
+function blocked(from: Vector3, to: Vector3) {
+  for (let i = 1; i < 14; i++) {
+    const t = 0.04 + (i / 14) * 0.86
+    const y = from.y + (to.y - from.y) * t
+    if (surface.height(from.x + (to.x - from.x) * t, from.z + (to.z - from.z) * t) > y + 0.6) return true
+  }
+  return false
 }
 
 export function ScanTargets({ planet }: { planet: PlanetId }) {
@@ -109,6 +126,8 @@ export function ScanTargets({ planet }: { planet: PlanetId }) {
           mesh: null,
           reveal: 0,
           dwell: 0,
+          occl: 0,
+          blocked: false,
           mat: new ShaderMaterial({
             vertexShader: vertex,
             fragmentShader: glintFragment,
@@ -147,11 +166,13 @@ export function ScanTargets({ planet }: { planet: PlanetId }) {
     }
   }, [accent])
   const beam = useRef<Mesh>(null)
+  const frame = useRef(0)
   const sweeps = useRef<(Mesh | null)[]>([])
   const pulse = useRef<Mesh>(null)
 
   useFrame(({ camera }, delta) => {
     const dt = Math.min(delta, 1 / 20)
+    frame.current++
     const st = useExperience.getState()
     const discovered = useExploration.getState().discovered
     const here = st.location
@@ -187,7 +208,10 @@ export function ScanTargets({ planet }: { planet: PlanetId }) {
         const focus = 0.4 + 0.6 * MathUtils.smoothstep(gaze, 0.8, 0.995)
         alpha = near * focus * (found ? 0.65 : 1)
       }
-      alpha *= clear * (gaze > 0 ? 1 : 0)
+      // Behind a ridge: tested every third frame (staggered), faded rather than popped.
+      if ((frame.current + glints.indexOf(g)) % 3 === 0) g.blocked = blocked(camPos, pos)
+      g.occl = MathUtils.damp(g.occl, g.blocked ? 1 : 0, 6, dt)
+      alpha *= clear * (gaze > 0 ? 1 : 0) * (1 - g.occl)
       mesh.visible = alpha > 0.004
       g.mat.uniforms.uAlpha.value = alpha
       g.mat.uniforms.uFound.value = found ? 1 : 0
@@ -214,7 +238,13 @@ export function ScanTargets({ planet }: { planet: PlanetId }) {
       projected.copy(pos).project(camera)
       entry.x = (projected.x * 0.5 + 0.5) * size.width
       entry.y = (-projected.y * 0.5 + 0.5) * size.height
-      entry.on = projected.z < 1 && Math.abs(projected.x) < 1.05 && Math.abs(projected.y) < 1.05 && clear > 0.5
+      const glintOf = glints.find((g) => g.d.id === d.id)
+      entry.on =
+        projected.z < 1 &&
+        Math.abs(projected.x) < 1.05 &&
+        Math.abs(projected.y) < 1.05 &&
+        clear > 0.5 &&
+        (!glintOf || glintOf.occl < 0.5)
       const glint = glints.find((g) => g.d.id === d.id)
       entry.alpha = d.kind === 'signal' ? 1 : (glint?.mat.uniforms.uAlpha.value as number) ?? 0
     }

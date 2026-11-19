@@ -88,6 +88,7 @@ function bakeAll(gl: WebGLRenderer) {
     // rewrites them every frame, so nothing needs restoring.
     m.surface.uniforms.uModelRot.value.setFromMatrix4(surface.matrixWorld)
     m.atmosphere.uniforms.uCenter.value.copy(P)
+    m.surface.uniforms.uCenter.value.copy(P)
     if (m.rings) m.rings.uniforms.uCenter.value.copy(P)
 
     const extent = planet.rings ? planet.rings.outer * r * 1.08 : r * planet.atmosphere.shell * 1.06

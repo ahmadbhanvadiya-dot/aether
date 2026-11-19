@@ -530,14 +530,13 @@ export function ObservatoryUI() {
               )
             })}
           </dl>
-          <div className="obs-archive-tabs" role="tablist" aria-label="Planet archive">
+          <div className="obs-archive-tabs" role="group" aria-label="Show the archive of">
             {progress.worlds.map((w) => (
               <button
                 key={w.planet.id}
                 type="button"
-                role="tab"
                 className="obs-archive-tab"
-                aria-selected={w.planet.id === observed}
+                aria-pressed={w.planet.id === observed}
                 data-selected={w.planet.id === observed || undefined}
                 onClick={() => setObserved(w.planet.id)}
                 tabIndex={open ? 0 : -1}
@@ -550,7 +549,7 @@ export function ObservatoryUI() {
               </button>
             ))}
           </div>
-          <div role="tabpanel" aria-label={`${world.planet.name} archive`}>
+          <div role="region" aria-label={`${world.planet.name} archive`}>
             {world.locations.map((lp) => (
               <div key={lp.location.id} className="obs-collection-world">
                 <h3 className="obs-collection-name">

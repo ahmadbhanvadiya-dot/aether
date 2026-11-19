@@ -76,13 +76,8 @@ function gridGeometry(rings: number, segments: number, first: number, ratio: num
 }
 
 /** Mounts the surface of the world being explored (from descent to ascent). */
-export function SurfaceSpace() {
-  const exploring = useExperience((s) => s.exploring)
-  if (!exploring) return null
-  return <SurfaceScene key={exploring} planet={exploring} />
-}
-
-function SurfaceScene({ planet }: { planet: PlanetId }) {
+/** Loaded on demand (see ./lazy.ts); mounted by SurfaceSpace in Experience. */
+export default function SurfaceScene({ planet }: { planet: PlanetId }) {
   const s = useMemo(() => prepareSurface(planet), [planet])
   const settings = SURFACES[planet]
   const group = useRef<Group>(null)

@@ -132,6 +132,36 @@ uniform vec3 uAtmoNight;
 uniform vec3 uIon;
 uniform vec3 uViolet;
 uniform float uHighlight;
+#ifdef RINGS
+uniform vec3 uCenter;
+uniform float uRingInner;
+uniform float uRingOuter;
+float ringHash(float n) { return fract(sin(n) * 43758.5453); }
+float ringNoise(float x) {
+  float i = floor(x);
+  return mix(ringHash(i), ringHash(i + 1.0), smoothstep(0.0, 1.0, fract(x)));
+}
+/**
+ * Light reaching a surface point through the rings: follow the ray toward the
+ * star to the ring plane (the spin axis is the ring normal) and use the rings'
+ * own density there, the same bands and gap the ring shader draws.
+ */
+float ringShadow(vec3 P, vec3 L) {
+  vec3 n = normalize(uModelRot * vec3(0.0, 1.0, 0.0));
+  float denom = dot(L, n);
+  if (abs(denom) < 1e-4) return 1.0;
+  float t = dot(uCenter - P, n) / denom;
+  if (t <= 0.0) return 1.0;
+  float r = length(P + L * t - uCenter);
+  float x = (r - uRingInner) / (uRingOuter - uRingInner);
+  if (x < 0.0 || x > 1.0) return 1.0;
+  float bands = ringNoise(x * 70.0) * 0.45 + ringNoise(x * 210.0) * 0.25 + ringNoise(x * 14.0) * 0.5;
+  float gap = smoothstep(0.6, 0.615, x) * (1.0 - smoothstep(0.655, 0.67, x));
+  float density = clamp(bands, 0.0, 1.0) * (1.0 - gap * 0.92);
+  density *= smoothstep(0.0, 0.08, x) * (1.0 - smoothstep(0.9, 1.0, x));
+  return 1.0 - density * 0.78;
+}
+#endif
 
 varying vec3 vObjPos;
 varying vec3 vWorldPos;
@@ -292,9 +322,15 @@ void main() {
   // --- Lighting ----------------------------------------------------------
   float dayMask = smoothstep(-0.06 - wrap, 0.22, NdL);
   float diffuse = max((dot(Nb, L) + wrap) / (1.0 + wrap), 0.0) * dayMask;
+#ifdef RINGS
+  float through = ringShadow(vWorldPos, L);
+  diffuse *= through;
+#else
+  float through = 1.0;
+#endif
 
   vec3 H = normalize(L + V);
-  float spec = pow(max(dot(N, H), 0.0), rough) * water * dayMask;
+  float spec = pow(max(dot(N, H), 0.0), rough) * water * dayMask * through;
   float fresnel = pow(1.0 - max(dot(N, V), 0.0), 5.0);
 
   vec3 color = albedo * uSunColor * diffuse * 1.9;

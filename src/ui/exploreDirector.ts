@@ -4,6 +4,7 @@ import { LOCATION_BY_ID, locationsFor } from '../data/locations'
 import { PLANET_BY_ID, type PlanetId } from '../data/planets'
 import { beginGalaxyAscent, beginGalaxyDescent, primeGalaxyFocus } from '../scene/galaxy/GalaxyRig'
 import { atmosphereFx, climb, DURATION, entry, glide, signalFx } from '../scene/motion'
+import { loadSurfaceScene } from '../scene/surface/lazy'
 import { beginClimb, beginTravel, surfaceCam } from '../scene/surface/SurfaceRig'
 import { prepareSurface, surface } from '../scene/surface/world'
 import { director } from '../state/director'
@@ -112,8 +113,9 @@ export function startDescent(planet: PlanetId, options: { location?: string; the
   st.setHovered(null)
   st.setPhase('descending')
   tintAtmosphere(planet, first)
-  // Two frames: the surface mounts and compiles its shaders before anything moves.
-  requestAnimationFrame(() => requestAnimationFrame(runDescent))
+  // The surface code (prefetched long before, normally) must be loaded; then two
+  // frames: the surface mounts and compiles its shaders before anything moves.
+  void loadSurfaceScene().then(() => requestAnimationFrame(() => requestAnimationFrame(runDescent)))
 }
 
 function switchToSurface() {
