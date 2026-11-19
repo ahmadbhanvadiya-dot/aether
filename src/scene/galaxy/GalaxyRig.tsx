@@ -7,6 +7,7 @@ import { PLANET_BY_ID, type PlanetId } from '../../data/planets'
 import { director, telemetry } from '../../state/director'
 import { galaxy } from '../../state/galaxy'
 import { useExperience } from '../../state/useExperience'
+import { approach, atmosphereFx, bezier, cruise, DURATION, smooth01, travelFx } from '../motion'
 import { baseFov } from '../Warp'
 
 const baseFovFor = (aspect: number) => baseFov('galaxy', aspect)
@@ -46,6 +47,21 @@ export const galaxyCam = {
   obsInit: false,
   /** Called once when a travel lands (used to chain Observatory → descent). */
   onArrive: null as null | (() => void),
+  /** Travel path: the departure control point (relative to `from`) and whether we left moving. */
+  departCtl: new Vector3(),
+  momentum: false,
+  travelLength: 1,
+  /** Camera velocity (units/s), measured every frame for momentum and parallax. */
+  vel: new Vector3(),
+  prev: new Vector3(),
+  hasPrev: false,
+  /** 0 → 1 after arriving: orbit auto-rotation eases in rather than starting at full speed. */
+  settle: 1,
+  /** Entry path around the world: start direction, sweep axis and angle, start distance. */
+  n0: new Vector3(0, 0, 1),
+  axis: new Vector3(0, 1, 0),
+  sweep: 0,
+  d0: 10,
 }
 
 /** Live handles so module functions (the Observatory director) can start a travel. */
@@ -67,10 +83,18 @@ export function beginObservatory() {
 /**
  * Starts a camera travel from wherever the camera is: to a world's focus view,
  * or (null) back to the overview. Used by focus changes and by the Observatory.
+ *
+ * The path is a cubic Bézier that leaves along the camera's current motion
+ * (or, from rest, toward the destination after a slow turn) and arrives along
+ * the final orbit direction, so the camera settles into orbit instead of
+ * stopping on a point. Interrupting a travel starts the next one at the
+ * current velocity.
  */
 export function startGalaxyTravel(focus: PlanetId | null) {
   const { camera, controls } = rig
   if (!camera || !controls) return
+  // Entry and climb own the camera until they finish.
+  if (galaxyCam.mode === 'descent' || galaxyCam.mode === 'ascent') return
   const aspect = rig.width / rig.height
   if (galaxyCam.mode === 'free') {
     galaxyCam.home.copy(camera.position)
@@ -82,18 +106,40 @@ export function startGalaxyTravel(focus: PlanetId | null) {
   if (focus) focusOffset(focus, aspect, rig.width, galaxyCam.offset)
 
   const reduced = useExperience.getState().reducedMotion
-  const homePos = galaxyCam.hasHome ? galaxyCam.home : new Vector3().copy(HOME_DIR).multiplyScalar(homeDistance(aspect))
-  const travelDistance = galaxyCam.from.distanceTo(
-    focus ? new Vector3().copy(galaxy.positions[focus]).add(galaxyCam.offset) : homePos,
-  )
+  travelDest(focus, aspect, destPos, destTarget)
+  const length = Math.max(0.001, galaxyCam.from.distanceTo(destPos))
+  let duration = reduced ? 0.7 : DURATION.approach(length)
+  galaxyCam.travelLength = length
+
+  // Leave along the current motion when a travel is interrupted; otherwise
+  // turn toward the destination first, lifting slightly off the orbital plane.
+  const speed = galaxyCam.vel.length()
+  galaxyCam.momentum = !reduced && galaxyCam.mode === 'travel' && speed > (length / duration) * 0.15
+  if (galaxyCam.momentum) {
+    // Fast and close: a shorter leg keeps the current speed instead of braking hard.
+    duration = MathUtils.clamp((1.8 * length) / speed, 1.6, duration)
+    galaxyCam.departCtl.copy(galaxyCam.vel).multiplyScalar(duration / 3)
+    if (galaxyCam.departCtl.length() > length * 0.6) galaxyCam.departCtl.setLength(length * 0.6)
+  } else {
+    camera.getWorldDirection(side)
+    galaxyCam.departCtl
+      .subVectors(destPos, galaxyCam.from)
+      .normalize()
+      .lerp(side, 0.45)
+      .addScaledVector(UP, 0.18)
+      .normalize()
+      .multiplyScalar(length * 0.3)
+  }
+
   galaxyCam.mode = 'travel'
   galaxyCam.t = 0
+  galaxyCam.settle = 0
   controls.enabled = false
   gsap.killTweensOf(galaxyCam)
   gsap.to(galaxyCam, {
     t: 1,
-    duration: reduced ? 0.7 : MathUtils.clamp(1.5 + travelDistance / 45, 1.8, 3.4),
-    ease: reduced ? 'power1.inOut' : 'power3.inOut',
+    duration,
+    ease: 'none',
     onComplete: () => {
       galaxyCam.mode = focus ? 'focus' : 'free'
       if (focus) galaxyCam.last.copy(galaxy.positions[focus])
@@ -104,7 +150,26 @@ export function startGalaxyTravel(focus: PlanetId | null) {
       done?.()
     },
   })
-  gsap.to(director, { panelShift: focus ? 1 : 0, duration: reduced ? 0.5 : 1.6, ease: 'power3.inOut' })
+  // The frame slides clear of the panel during the deceleration, not the departure.
+  gsap.killTweensOf(director, 'panelShift')
+  gsap.to(director, {
+    panelShift: focus ? 1 : 0,
+    duration: reduced ? 0.5 : duration * 0.55,
+    delay: reduced ? 0 : duration * 0.4,
+    ease: 'power2.inOut',
+  })
+}
+
+/** Where a travel ends: a world's live focus pose, or the overview. */
+function travelDest(focus: PlanetId | null, aspect: number, outPos: Vector3, outTarget: Vector3) {
+  if (focus) {
+    outTarget.copy(galaxy.positions[focus])
+    outPos.copy(outTarget).add(galaxyCam.offset)
+  } else {
+    outTarget.set(0, 0, 0)
+    if (galaxyCam.hasHome) outPos.copy(galaxyCam.home)
+    else outPos.copy(HOME_DIR).multiplyScalar(homeDistance(aspect))
+  }
 }
 
 /** Height above Elys at which Orion's orbit (and rings) fill the dial. */
@@ -123,6 +188,27 @@ export function beginGalaxyDescent() {
   gsap.killTweensOf(galaxyCam)
   galaxyCam.mode = 'descent'
   galaxyCam.diveInit = false
+  galaxyCam.settle = 0
+}
+
+/**
+ * The entry path around a world, from a camera offset `rel` (camera minus
+ * world centre): it sweeps toward the day side (never past local noon) while
+ * dropping to the top of the atmosphere, so the camera arrives gliding over a
+ * sunlit horizon. Descent runs it 0 → 1, the climb back runs it 1 → 0.
+ */
+function initDive(rel: Vector3, planet: PlanetId) {
+  const P = galaxy.positions[planet]
+  galaxyCam.d0 = rel.length()
+  galaxyCam.n0.copy(rel).normalize()
+  const toStar = side.copy(P).multiplyScalar(-1).normalize()
+  const angle = Math.acos(MathUtils.clamp(galaxyCam.n0.dot(toStar), -1, 1))
+  galaxyCam.axis.crossVectors(galaxyCam.n0, toStar)
+  if (galaxyCam.axis.lengthSq() < 1e-6) galaxyCam.axis.crossVectors(galaxyCam.n0, UP)
+  galaxyCam.axis.normalize()
+  galaxyCam.sweep = Math.min(0.55, angle * 0.8)
+  galaxyCam.dive.copy(rel)
+  galaxyCam.diveInit = true
 }
 
 /** Phase 3: climbing back out to the focus view, driven by director.descent 1 → 0. */
@@ -132,10 +218,11 @@ export function beginGalaxyAscent() {
   const f = galaxyCam.focus
   if (f) {
     focusOffset(f, window.innerWidth / window.innerHeight, window.innerWidth, galaxyCam.offset)
-    galaxyCam.dive.copy(galaxyCam.offset)
-    galaxyCam.diveInit = true
+    initDive(galaxyCam.offset, f)
   }
   galaxyCam.mode = 'ascent'
+  galaxyCam.settle = 0
+  galaxyCam.hasPrev = false
 }
 
 /** Where the focus camera sits relative to a world (sunlit, gibbous view). */
@@ -164,8 +251,7 @@ export function primeGalaxyFocus(planet: PlanetId) {
   const aspect = window.innerWidth / window.innerHeight
   galaxyCam.focus = planet
   focusOffset(planet, aspect, window.innerWidth, galaxyCam.offset)
-  galaxyCam.dive.copy(galaxyCam.offset)
-  galaxyCam.diveInit = true
+  initDive(galaxyCam.offset, planet)
   galaxyCam.hasHome = false
 }
 
@@ -184,6 +270,18 @@ const destPos = new Vector3()
 const destTarget = new Vector3()
 const side = new Vector3()
 const projected = new Vector3()
+const p1 = new Vector3()
+const p2 = new Vector3()
+const n = new Vector3()
+const tangent = new Vector3()
+const lookDir = new Vector3()
+const centreDir = new Vector3()
+/**
+ * How far below the visible horizon the camera looks during entry (rad). The
+ * horizon itself dips below the local horizontal with altitude, so the view
+ * follows the real limb down and the horizon holds a steady place in frame.
+ */
+const ENTRY_BELOW_HORIZON = 0.14
 const km = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 })
 
 export function GalaxyRig() {
@@ -245,15 +343,18 @@ export function GalaxyRig() {
       galaxyCam.focus = focus
       return
     }
+    if (galaxyCam.mode === 'descent' || galaxyCam.mode === 'ascent') return
     if (galaxyCam.focus === focus && galaxyCam.mode !== 'travel') return
     startGalaxyTravel(focus)
   }, [focus, camera, controls, size.width, size.height])
 
-  useFrame(() => {
+  useFrame((_, delta) => {
     if (director.space !== 'galaxy') {
       controls.enabled = false
+      galaxyCam.hasPrev = false
       return
     }
+    const dt = Math.min(Math.max(delta, 1 / 240), 1 / 20)
     const aspect = size.width / size.height
     const { motionPaused, reducedMotion, hovered, phase: currentPhase } = useExperience.getState()
 
@@ -285,23 +386,26 @@ export function GalaxyRig() {
       }
       case 'travel': {
         const f = galaxyCam.focus
+        travelDest(f, aspect, destPos, destTarget)
+        const t = galaxyCam.t
+        const L = galaxyCam.travelLength
+        // One clock, two curves: the view turns onto the destination early,
+        // while the position gathers speed slowly and decelerates for longer.
+        const e = galaxyCam.momentum ? cruise(t) : approach(t)
+        const aim = galaxyCam.momentum ? smooth01(Math.min(1, t / 0.3)) : MathUtils.smootherstep(t, 0, 0.34)
+        p1.copy(galaxyCam.from).add(galaxyCam.departCtl)
         if (f) {
-          destTarget.copy(galaxy.positions[f])
-          destPos.copy(destTarget).add(galaxyCam.offset)
+          // Arrive moving inward along the final orbit direction.
+          p2.copy(galaxyCam.offset).normalize().multiplyScalar(L * 0.28).add(destPos).addScaledVector(UP, L * 0.05)
         } else {
-          destTarget.set(0, 0, 0)
-          if (galaxyCam.hasHome) destPos.copy(galaxyCam.home)
-          else destPos.copy(HOME_DIR).multiplyScalar(homeDistance(aspect))
+          p2.subVectors(destPos, galaxyCam.from).normalize().multiplyScalar(-L * 0.28).add(destPos).addScaledVector(UP, L * 0.08)
         }
-        const e = galaxyCam.t
-        tmpPos.lerpVectors(galaxyCam.from, destPos, e)
-        // Arc over the orbital plane instead of cutting straight through it.
-        tmpPos.y += Math.sin(Math.PI * e) * galaxyCam.from.distanceTo(destPos) * 0.14
-        tmpTarget.lerpVectors(galaxyCam.fromTarget, destTarget, e)
+        bezier(tmpPos, galaxyCam.from, p1, p2, destPos, e)
+        tmpTarget.lerpVectors(galaxyCam.fromTarget, destTarget, aim)
         camera.position.copy(tmpPos)
         controls.target.copy(tmpTarget)
         // Leaving the Observatory's zenith view: settle the horizon back upright.
-        camera.up.lerp(UP, Math.min(1, 0.06 + e * 0.5)).normalize()
+        camera.up.lerp(UP, Math.min(1, 0.06 + t * 0.6)).normalize()
         camera.lookAt(tmpTarget)
         break
       }
@@ -317,7 +421,7 @@ export function GalaxyRig() {
         const P = galaxy.positions[sel]
         const theta = Math.atan2(P.z, P.x)
         destPos.set(Math.sin(theta), 0, -Math.cos(theta))
-        const turn = motionPaused || reducedMotion ? 1 : 0.05
+        const turn = motionPaused || reducedMotion ? 1 : 1 - Math.exp(-3 * dt)
         galaxyCam.obsUp.lerp(destPos, turn).normalize()
         const k = director.observatory
         const H = zenithHeight(baseFovFor(aspect), size.width, size.height)
@@ -340,8 +444,9 @@ export function GalaxyRig() {
         const data = PLANET_BY_ID[f]
         controls.minDistance = data.radius * (data.rings ? 2.9 : 1.7)
         controls.maxDistance = data.radius * 16
+        galaxyCam.settle = MathUtils.damp(galaxyCam.settle, 1, 0.9, dt)
         controls.autoRotate = !motionPaused && !reducedMotion
-        controls.autoRotateSpeed = 0.35
+        controls.autoRotateSpeed = 0.35 * galaxyCam.settle
         controls.update()
         break
       }
@@ -352,23 +457,31 @@ export function GalaxyRig() {
         controls.enabled = false
         const P = galaxy.positions[f]
         const data = PLANET_BY_ID[f]
-        if (!galaxyCam.diveInit) {
-          galaxyCam.dive.subVectors(camera.position, P)
-          galaxyCam.diveInit = true
-        }
+        if (!galaxyCam.diveInit) initDive(tmpPos.subVectors(camera.position, P), f)
         const k = director.descent
-        const dirV = tmpPos.copy(galaxyCam.dive).normalize()
-        const dist = MathUtils.lerp(galaxyCam.dive.length(), data.radius * 1.012, k)
-        camera.position.copy(P).addScaledVector(dirV, dist)
-        // Near the atmosphere the view tips from the planet's centre to its horizon.
-        side.crossVectors(dirV, UP).normalize()
-        destTarget.copy(P).addScaledVector(dirV, data.radius).addScaledVector(side, data.radius * 2.5)
-        tmpTarget.copy(P).lerp(destTarget, MathUtils.smoothstep(k, 0.55, 1))
-        camera.lookAt(tmpTarget)
+        // Position: sweep toward the day side while dropping to the air.
+        n.copy(galaxyCam.n0).applyAxisAngle(galaxyCam.axis, galaxyCam.sweep * smooth01(k))
+        const dist = MathUtils.lerp(galaxyCam.d0, data.radius * 1.012, k)
+        camera.position.copy(P).addScaledVector(n, dist)
+        // View: from the world's centre to the horizon ahead (the direction of
+        // the sweep), and the camera's up turns to the local vertical, so the
+        // horizon levels out as the air thickens.
+        tangent.crossVectors(galaxyCam.axis, n).normalize()
+        const dip = Math.acos(Math.min(1, data.radius / dist))
+        const down = dip + ENTRY_BELOW_HORIZON
+        lookDir.copy(tangent).multiplyScalar(Math.cos(down)).addScaledVector(n, -Math.sin(down))
+        centreDir.subVectors(P, camera.position).normalize()
+        centreDir.lerp(lookDir, MathUtils.smootherstep(k, 0.32, 0.94)).normalize()
+        camera.up.copy(UP).lerp(n, MathUtils.smoothstep(k, 0.22, 0.86)).normalize()
+        camera.lookAt(tmpTarget.copy(camera.position).add(centreDir))
         controls.target.copy(P)
+        atmosphereFx.up.copy(n)
+        atmosphereFx.dip = dip
         if (galaxyCam.mode === 'ascent' && currentPhase === 'galaxy' && k <= 0.001) {
           galaxyCam.mode = 'focus'
           galaxyCam.last.copy(P)
+          camera.up.copy(UP)
+          camera.lookAt(P)
           controls.enabled = true
         }
         break
@@ -376,12 +489,26 @@ export function GalaxyRig() {
       case 'free': {
         controls.minDistance = 16
         controls.maxDistance = 220
+        galaxyCam.settle = MathUtils.damp(galaxyCam.settle, 1, 0.9, dt)
         controls.autoRotate = !motionPaused && !reducedMotion
-        controls.autoRotateSpeed = 0.18
+        controls.autoRotateSpeed = 0.18 * galaxyCam.settle
         controls.update()
         break
       }
     }
+
+    // ---- Velocity: momentum for interrupted travels, speed for parallax ------
+    if (galaxyCam.hasPrev) {
+      tmpPos.subVectors(camera.position, galaxyCam.prev).divideScalar(dt)
+      galaxyCam.vel.lerp(tmpPos, 1 - Math.exp(-12 * dt))
+    } else galaxyCam.vel.set(0, 0, 0)
+    galaxyCam.prev.copy(camera.position)
+    galaxyCam.hasPrev = true
+    const moving = galaxyCam.mode === 'travel' || galaxyCam.mode === 'descent' || galaxyCam.mode === 'ascent'
+    const cruiseSpeed = galaxyCam.mode === 'travel' ? (galaxyCam.travelLength / DURATION.approach(galaxyCam.travelLength)) * 1.5 : 6
+    const speedTarget = moving && !reducedMotion ? Math.min(1, galaxyCam.vel.length() / Math.max(cruiseSpeed, 0.01)) : 0
+    travelFx.speed = MathUtils.damp(travelFx.speed, speedTarget, 3, dt)
+    director.fovKick = MathUtils.damp(director.fovKick, galaxyCam.mode === 'travel' ? travelFx.speed * 4.5 : 0, 3, dt)
 
     // ---- Observatory chart: projected origin and worlds ---------------------
     if (galaxyCam.mode === 'observatory') {

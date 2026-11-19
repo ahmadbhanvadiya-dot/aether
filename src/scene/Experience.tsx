@@ -5,11 +5,13 @@ import { BlendFunction, ToneMappingMode, type BloomEffect } from 'postprocessing
 import { useEffect, useRef, useState, type RefObject } from 'react'
 import { director, pointer } from '../state/director'
 import { quality, useExperience } from '../state/useExperience'
+import { Atmosphere } from './Atmosphere'
 import { CameraRig } from './CameraRig'
 import { Nebula } from './Nebula'
 import { Planet } from './Planet'
 import { GalaxyRig } from './galaxy/GalaxyRig'
 import { GalaxySystem } from './galaxy/GalaxySystem'
+import { SpaceDust } from './galaxy/SpaceDust'
 import { ThumbnailBaker } from './galaxy/Thumbnails'
 import { Ithra } from './Ithra'
 import { SurfaceRig } from './surface/SurfaceRig'
@@ -34,11 +36,20 @@ function Clock() {
 const MAX_DPR = quality.tier === 'high' ? 1.75 : 1.5
 
 
-/** Daylit skies are bright: only the sun and true emitters should bloom there. */
+/**
+ * Daylit skies are bright: only the sun and true emitters should bloom there.
+ * The threshold follows the atmosphere's density, so entering the air raises it
+ * gradually (the haze never blooms into a flash) and the space switch is seamless.
+ */
 function BloomControl({ bloom }: { bloom: RefObject<BloomEffect | null> }) {
-  useFrame(() => {
+  const current = useRef(0.42)
+  useFrame((_, delta) => {
     const effect = bloom.current
-    if (effect) effect.luminanceMaterial.threshold = director.space === 'surface' ? 0.82 : 0.42
+    if (!effect) return
+    const base = director.space === 'surface' ? 0.82 : 0.42
+    const target = base + (0.82 - base) * Math.min(1, director.atmo * 1.4)
+    current.current += (target - current.current) * (1 - Math.exp(-6 * Math.min(delta, 0.05)))
+    effect.luminanceMaterial.threshold = current.current
   })
   return null
 }
@@ -118,11 +129,13 @@ export function Experience() {
       </Space>
       <Space space="galaxy">
         <GalaxySystem />
+        <SpaceDust />
       </Space>
       <Space space="surface">
         <SurfaceSpace />
       </Space>
       <WarpStreaks />
+      <Atmosphere />
       <CameraRig />
       <GalaxyRig />
       <SurfaceRig />

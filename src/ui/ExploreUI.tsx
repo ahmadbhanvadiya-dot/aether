@@ -123,8 +123,6 @@ export function ExploreUI() {
 
   return (
     <>
-      <div className="atmo-veil" data-atmo-veil aria-hidden />
-
       {/* Location title: shown on landing and after each flight. */}
       <div className="title-card" data-title-card aria-hidden>
         {loc && (
