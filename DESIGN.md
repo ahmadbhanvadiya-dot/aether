@@ -1,9 +1,8 @@
 # AETHER — Design System
 
 **The source of truth for AETHER.** Every value below was read from the source code on
-2026‑11‑19. Phases 1–5 are live at <https://ahmadbhanvadiya-dot.github.io/aether/> (merge
-commit `9bff7ae`); Phase 6, interactive exploration (§9), is in the working tree and not yet
-deployed. Product context lives in `PRODUCT.md`. When code and this document disagree, fix one of them in the same change.
+2026‑11‑19. Phases 1–6 are live at <https://ahmadbhanvadiya-dot.github.io/aether/> (merge
+commit `b9dad38`); the first Phase 7 pass (§10) is in the working tree and not yet deployed. Product context lives in `PRODUCT.md`. When code and this document disagree, fix one of them in the same change.
 
 Status labels used throughout:
 
@@ -23,11 +22,12 @@ Status labels used throughout:
 7. [Phase 4 — The Observatory](#7-phase-4--the-observatory) (Implemented)
 8. [Phase 5 — The journey: camera choreography](#8-phase-5--the-journey-camera-choreography) (Implemented)
 9. [Phase 6 — Interactive exploration](#9-phase-6--interactive-exploration) (Implemented)
-10. [Technical architecture](#10-technical-architecture) (Implemented)
-11. [Rules for future work](#11-rules-for-future-work) (Planned)
-12. [Known limitations](#12-known-limitations)
-13. [Decision log](#13-decision-log)
-14. [Roadmap](#14-roadmap)
+10. [Phase 7 — Polish and hardening](#10-phase-7--polish-and-hardening) (In progress)
+11. [Technical architecture](#11-technical-architecture) (Implemented)
+12. [Rules for future work](#12-rules-for-future-work) (Planned)
+13. [Known limitations](#13-known-limitations)
+14. [Decision log](#14-decision-log)
+15. [Roadmap](#15-roadmap)
 
 ---
 
@@ -375,7 +375,7 @@ limited to 0.15 … π − 0.15. Auto‑rotate is off when motion is paused or r
 
 ## 4. The six worlds
 
-**Status: Implemented.** All six share one pipeline (§10) and differ through a *kind* recipe
+**Status: Implemented.** All six share one pipeline (§11) and differ through a *kind* recipe
 in the bake and surface shaders (`scene/galaxy/shaders.ts`), plus per‑world data.
 
 | World | Kind | Accent | Atmosphere day / night | Shell | Clouds | Rings |
@@ -1046,7 +1046,7 @@ reduced‑motion descent and ascent, and the Observatory → Explore chain into 
 
 ## 9. Phase 6 — Interactive exploration
 
-**Status: Implemented** (working tree; not yet deployed). AETHER rewards looking: every
+**Status: Implemented** (deployed, merge commit `b9dad38`). AETHER rewards looking: every
 location holds things to find, a scanner to study them, archives that keep them, and a few
 that hide.
 
@@ -1199,7 +1199,78 @@ reflecting the finds; Revisit from the archive back to the object; the full flow
 
 ---
 
-## 10. Technical architecture
+## 10. Phase 7 — Polish and hardening
+
+**Status: In progress** (first pass implemented in the working tree; real‑device testing
+remains with the owner). No new features: accessibility, load, visual gaps, and first‑time
+guidance.
+
+### Accessibility pass
+
+Audited the surface view's accessibility tree and tab order; fixed:
+
+| Found | Fix |
+|-------|-----|
+| Hidden layers (galaxy world index, Return to Vael, the whole galaxy UI on surfaces, the exploration UI elsewhere) were invisible but still announced | `inert` on each hidden layer: out of the tab order and the accessibility tree |
+| "Here" list buttons had no reliable name | Explicit `aria-label`s: "NAME, CATEGORY. Show record" / "Unidentified object. Scan" |
+| Every target exposed twice (spatial marker + list) | Markers are pointer‑only (`aria-hidden`, `tabIndex=-1`); the list is the one keyboard and screen‑reader route |
+| A scan was silent to screen readers | An `sr-only` `role="status"` line: "Scanning unidentified object…"; the record then announces itself |
+| Archive switcher used tab roles without arrow‑key behaviour | Pressed‑state buttons in a labelled group; the archive is a labelled region |
+
+Surface tab order is now: Return to orbit → Here list → locations → HUD.
+
+### Load (`vite.config.ts`, `scene/surface/lazy.ts`)
+
+| | Before | After |
+|---|---|---|
+| Files | one 1,603 kB script | entry + 4 library groups + 2 on‑demand chunks |
+| App code (changes every release) | 463 kB gzipped (everything) | 58 kB gzipped |
+| Libraries (long‑cached, parallel) | — | three 193 · r3f 102 · react 64 · gsap 31 kB gzipped |
+| On demand | — | surface scene 12 kB, Observatory UI 5 kB (gzipped) |
+
+- Total first‑visit bytes barely change (three.js dominates); the gains are parallel
+  downloads and caching: a release now invalidates ~58 kB instead of ~463 kB.
+- The surface scene is prefetched when the first scene is ready (idle callback), and every
+  descent awaits the same memoised import before its two warm‑up frames, so no descent
+  waits on the network. The Observatory UI mounts lazily after first paint.
+- `chunkSizeWarningLimit: 800` acknowledges three.js as one unsplittable group.
+
+### Visual gaps closed
+
+- **Glints behind terrain**: each glint samples the terrain along the eye‑to‑object line
+  every third frame (13 samples, ends skipped) and fades out (damped) when the ground is in
+  the way; its marker stops taking clicks; the Here list still reaches it.
+- **Placement sweep**: a script tested all 42 points of interest and hidden discoveries
+  from their own location's pose; five were behind terrain (the low curtain, the fallen
+  column, the balanced stone, the watcher's ring, the second arch) and were moved to
+  clear positions. A second check confirms no two targets at a location are within
+  0.12 rad of each other in the arrival view.
+- **Orion's ring shadow on the planet** (`RINGS` define, ringed worlds only): from each
+  surface point the ray to Elys meets the ring plane (normal = the spin axis, already in
+  `uModelRot`); the rings' own band and gap density there removes up to 78% of direct light
+  and specular. With Elys 11.6° above the ring plane the shadow is a band ~5 – 17° below the
+  equator, behind the rings from the default sunlit view (as it should be) and visible from
+  the far side of the ring plane. Verified by toggling it on a fixed frame.
+- Not done: surface (terrain) shadows — needs shadow maps or a height‑field ray march; left
+  for later.
+
+### First‑scan guidance
+
+A quiet line above the location strip — "Lights mark things worth scanning. Select one to
+scan it." and how to look around (drag; Shift + arrows on keyboards) with a hint that some
+things hide. Shown on surfaces 4.5 s after landing (after the title card), hidden while
+scanning, while a record or notice is open, dismissible for the visit, and gone for good
+after the first discovery anywhere — derived from progress, nothing new stored. Verified
+with a cleared progress record (restored afterwards).
+
+### Still open (needs the owner)
+
+Real phone and tablet testing (touch drag, tapping glints, hold‑to‑reveal by looking, haze
+transitions, frame rate on the low tier) and a real screen reader (VoiceOver / NVDA).
+
+---
+
+## 11. Technical architecture
 
 **Status: Implemented.** React 19 · Vite 8 · TypeScript · three 0.187 · @react-three/fiber 9 ·
 @react-three/drei 10 (PerformanceMonitor only) · @react-three/postprocessing 3 · GSAP 3
@@ -1252,7 +1323,8 @@ src/
       shaders.ts           sky, terrain, water, clouds, motes, rain, landmark, plume, signal
       SurfaceScene.tsx     SurfaceSpace → sky, terrain, water, clouds, weather, landmarks, signal
       SurfaceRig.tsx       surface camera: landing, free look, flights; readout; signal projection
-      ScanTargets.tsx      glints, hidden-object gaze, scan beam/rings, target projections (Phase 6)
+      ScanTargets.tsx      glints, terrain occlusion, hidden-object gaze, scan beam/rings, projections (Phase 6, 7)
+      lazy.ts              memoised on-demand import of the surface scene (Phase 7)
   ui/
     TitleScreen.tsx        prelude, arrival, warp out/back, letterbox, veil; mounts Hud + GalaxyUI
     Wordmark.tsx           AETHER letters
@@ -1397,7 +1469,7 @@ Measured on an RTX 3050 laptop (forced frames): Vael ≈ 5.3 ms at a 2000×1125 
 
 ---
 
-## 11. Rules for future work
+## 12. Rules for future work
 
 These are rules, not features. The global rules apply to all future work. The Phase 3
 and Phase 4 subsections record how the shipped implementation follows them.
@@ -1480,17 +1552,17 @@ and Phase 4 subsections record how the shipped implementation follows them.
 
 ---
 
-## 12. Known limitations
+## 13. Known limitations
 
 | Item | Status |
 |------|--------|
 | Not tested on a real phone (touch drag, pinch, tap on worlds); narrow layouts were checked in a desktop browser only | Open |
 | When the page is throttled (window not visible), GSAP's lag smoothing stretches transitions; they complete when the page is visible again | By design (GSAP default) |
-| Orion's rings receive the planet's shadow but cast none onto the planet | Open |
+| Orion's rings receive the planet's shadow but cast none onto the planet | Resolved in Phase 7 (ring shadow band, physically placed) |
 | Moons listed in facts are not rendered in orbit (they appear only as discs in surface skies) | Open |
 | Worlds do not shadow or eclipse each other | Open |
 | Hide interface fades over 200ms for both button and `H` | Accepted |
-| Single 1.5 MB JS chunk (~440 KB gzipped) | Open — candidate for Phase 5 |
+| Single 1.5 MB JS chunk (~440 KB gzipped) | Resolved in Phase 7: app 58 kB + cached library groups + on‑demand surface and Observatory chunks; three.js (193 kB gzipped) remains the floor |
 | Surfaces: no shadows; landmarks and terrain are lit by sun and sky only | Open |
 | Surfaces: far terrain "swims" slightly as the polar grid follows the camera (hidden by fog) | Accepted |
 | Surfaces: notifications replace rather than queue | Accepted |
@@ -1506,15 +1578,16 @@ and Phase 4 subsections record how the shipped implementation follows them.
 | Journey: the entry sweeps toward the day side; a world whose focus view is near local noon barely sweeps | Accepted |
 | Journey: near dust is subtle by design and reads only in motion | Accepted |
 | Journey: timings verified on forced frames in a desktop browser; not yet felt on a real phone or a 120 Hz display | Open |
-| Scanner: glints are drawn without depth test (always readable), so one behind a ridge still shows | Accepted |
+| Scanner: glints are drawn without depth test but fade when the terrain hides them (Phase 7); the signal beacon is depth‑tested as before | Resolved |
 | Scanner: on narrow portrait phones the horizontal view is ~±0.3 rad, so points of interest at ±0.3 – 0.55 start just off screen; the "Here" list turns the view to them | Accepted |
 | Scanner: "noticed" hidden discoveries reset on each descent until scanned (by design: noticing is part of exploring) | By design |
 | Scanner: new descriptions are placed by bearing and distance only; they are not modelled in the terrain (a "cliff" is a marked point, not new geometry) | Open |
-| Scanner: not tested on a real touch device or with a screen reader | Open |
+| Scanner: not tested on a real touch device or with a screen reader (code‑level audit done in Phase 7) | Open |
+| On 4:3 desktop windows the left points of interest (bearing −0.3) can sit under the location panel's text; their markers stay on top and clickable | Accepted |
 
 ---
 
-## 13. Decision log
+## 14. Decision log
 
 Superseded Phase 1 decisions, kept so nobody reintroduces them by accident.
 
@@ -1546,10 +1619,15 @@ Superseded Phase 1 decisions, kept so nobody reintroduces them by accident.
 | 18 location findings as the whole collection | A 60‑entry catalogue in the same `discovered` map; signals keep their ids | No second database, no migration |
 | Observatory "Discoveries" (all worlds at once) | Per‑world Archives synced to the dial, with categories and Revisit | 60 entries need a planet archive, not one long list |
 | Hidden discoveries marked like the others | Invisible until gazed at for 1.4 s, with a faint shimmer as the cue and a lead in the Observatory | Rewarding to find without a checklist |
+| Scan markers and the Here list both in the tab order | Markers pointer‑only; the list is the keyboard and screen‑reader route | One announcement per target, fewer tab stops |
+| Hidden layers kept in the DOM with `tabIndex=-1` | `inert` hidden layers | They were still announced |
+| One bundle | Library groups + on‑demand surface and Observatory | Releases invalidate 58 kB, not 463 kB |
+| Placements chosen by eye | Placements checked by a terrain line‑of‑sight sweep | Five finds were behind hills |
+| First‑time help as a stored "seen" flag | Derived: shown until the first discovery | No new state |
 
 ---
 
-## 14. Roadmap
+## 15. Roadmap
 
 | Phase | Name | Status | Scope |
 |-------|------|--------|-------|
@@ -1559,4 +1637,4 @@ Superseded Phase 1 decisions, kept so nobody reintroduces them by accident.
 | 4 | Observatory | **Complete** | Planisphere dial from the zenith, world record and ledger, six‑world archive, discovery collection with redacted unfound entries, timeline with new‑since‑last‑visit, baked portraits, persisted progress v2, navigation between galaxy, surfaces and Observatory |
 | 5 | Journey choreography | **Complete** | Approach, entry, exploration drift and flights, return to orbit as one continuous move (§8) |
 | 6 | Interactive Exploration | **Complete** (not yet deployed) | Scanner, 36 points of interest and 6 hidden discoveries in five categories, scan animation and records, planet archives, Observatory integration, Revisit (§9) |
-| 7 | Final Polish | Planned | Real‑device testing, code splitting, ring shadows on Orion, surface shadows, performance tuning |
+| 7 | Polish and hardening | **In progress** | Done: accessibility pass, bundle split and on‑demand loading, glint occlusion and placement sweep, Orion ring shadow, first‑scan guidance (§10). Open: real‑device and screen‑reader testing, surface shadows, low‑tier tuning from device measurements |

@@ -199,8 +199,13 @@ export function World({ data, seed }: { data: PlanetData; seed: number }) {
         KIND: KIND_IDS[data.kind],
         BUMP: BUMP[data.kind].toFixed(3),
         HAZE: HAZE[data.kind].toFixed(2),
+        ...(data.rings ? { RINGS: 1 } : {}),
       },
       uniforms: {
+        // Rings cast their shadow on the planet (ringed worlds only; see ringShadow).
+        uCenter: { value: new Vector3() },
+        uRingInner: { value: data.rings ? data.rings.inner * data.radius : 0 },
+        uRingOuter: { value: data.rings ? data.rings.outer * data.radius : 0 },
         uSunPos: { value: sunPos },
         uSunColor: { value: palette.sun },
         uTerrain: { value: terrain },
@@ -305,6 +310,7 @@ export function World({ data, seed }: { data: PlanetData; seed: number }) {
     materials.surface.uniforms.uTime.value = t
     if (materials.clouds) materials.clouds.uniforms.uTime.value = t
     materials.atmosphere.uniforms.uCenter.value.copy(center)
+    materials.surface.uniforms.uCenter.value.copy(center)
     if (materials.rings) materials.rings.uniforms.uCenter.value.copy(center)
 
     // Orbit paths: quiet in overview, bright on hover, dim behind a focused world.

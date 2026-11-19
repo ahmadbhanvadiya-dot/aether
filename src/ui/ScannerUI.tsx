@@ -55,7 +55,6 @@ function Marker({ d, found, active }: { d: DiscoveryData; found: boolean; active
         const show = t.on && !active
         node.style.opacity = show ? '1' : '0'
         node.style.pointerEvents = show ? 'auto' : 'none'
-        node.tabIndex = show ? 0 : -1
         node.dataset.side = t.x > window.innerWidth - 260 ? 'left' : 'right'
       }
       raf = requestAnimationFrame(tick)
@@ -75,7 +74,10 @@ function Marker({ d, found, active }: { d: DiscoveryData; found: boolean; active
       data-discovery={d.id}
       style={{ opacity: 0 }}
       onClick={() => startScan(d.id)}
-      aria-label={found ? `${d.name}, ${CATEGORIES[d.category].label}. Show record` : `${name}. Scan`}
+      // Pointer-only: keyboard and screen readers use the location panel's "Here" list,
+      // which reaches every target (on screen or not) without announcing each twice.
+      tabIndex={-1}
+      aria-hidden
     >
       <span className="scan-marker-reticle" aria-hidden />
       <span className="scan-marker-label" aria-hidden>
@@ -224,6 +226,9 @@ export function ScannerUI() {
         ))}
       </div>
       <ScanRing />
+      <p className="sr-only" role="status">
+        {scanning ? `Scanning ${unknownName(DISCOVERY_BY_ID[scanning]).toLowerCase()}…` : ''}
+      </p>
       <DiscoveryCard />
     </>
   )

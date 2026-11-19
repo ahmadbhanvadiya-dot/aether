@@ -1,13 +1,14 @@
 import { useGSAP } from '@gsap/react'
 import gsap from 'gsap'
 import { CustomEase } from 'gsap/CustomEase'
-import { useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { director } from '../state/director'
 import { enterGalaxyIntro } from '../scene/galaxy/GalaxyRig'
 import { debugShot, useExperience } from '../state/useExperience'
 import { GalaxyUI } from './GalaxyUI'
 import { ExploreUI } from './ExploreUI'
-import { ObservatoryUI } from './ObservatoryUI'
+// The Observatory's interface loads after the first paint (it is needed minutes later).
+const ObservatoryUI = lazy(() => import('./ObservatoryUI').then((m) => ({ default: m.ObservatoryUI })))
 import { closeObservatory, openObservatory } from './observatoryDirector'
 import { jumpToLocation } from './exploreDirector'
 import type { PlanetId } from '../data/planets'
@@ -316,7 +317,9 @@ export function TitleScreen() {
 
       <GalaxyUI onReturnToVael={returnToVael} />
       <ExploreUI />
-      <ObservatoryUI />
+      <Suspense fallback={null}>
+        <ObservatoryUI />
+      </Suspense>
 
       <div className="pointer-events-auto">
         <Hud />

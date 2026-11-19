@@ -114,7 +114,7 @@ const POIS: Record<string, Entry[]> = {
       category: 'atmosphere',
       description:
         'On Halvard the aurora descends below the summit. Its lower edge ripples across the snowfield like a hem in the wind.',
-      placement: { bearing: 0.45, distance: 420, elev: 0.26 },
+      placement: { bearing: -0.2, distance: 420, elev: 0.3 },
     },
   ],
   'aurelis-sounding-lagoon': [
@@ -161,7 +161,7 @@ const POIS: Record<string, Entry[]> = {
       category: 'geology',
       description:
         'One column has broken and fallen. Inside, the crystal is hollow and ringed like a tree: three hundred thousand rings.',
-      placement: { bearing: -0.34, distance: 110, rise: 2 },
+      placement: { bearing: -0.3, distance: 80, rise: 8 },
     },
     {
       key: 'starward-stair',
@@ -224,7 +224,7 @@ const POIS: Record<string, Entry[]> = {
       category: 'geology',
       description:
         'A boulder the size of a house rests on a point no wider than a hand. The wind has been shaping it for a million years.',
-      placement: { bearing: 0.5, distance: 130, rise: 10 },
+      placement: { bearing: 0.42, distance: 130, rise: 18 },
     },
   ],
   'solara-salt-mirror': [
@@ -421,7 +421,7 @@ const SECRETS: Record<PlanetId, Entry & { location: string }> = {
     description:
       'A circle of standing ice behind the summit. Each block is aligned to a star that is no longer in the sky.',
     lead: 'Climbers say the ridge is not the highest thing on Halvard. Look back the way you came.',
-    placement: { bearing: Math.PI, distance: 120, rise: 4 },
+    placement: { bearing: Math.PI, distance: 120, rise: 6 },
   },
   nyx: {
     key: 'unlit-eye',
@@ -441,7 +441,7 @@ const SECRETS: Record<PlanetId, Entry & { location: string }> = {
     description:
       'A twin of the great arch, buried to its keystone behind the canyon wall. Its glyphs are a mirror image of the first.',
     lead: 'Every gate is built to face another.',
-    placement: { bearing: Math.PI, distance: 140, rise: 2 },
+    placement: { bearing: Math.PI, distance: 140, rise: 11 },
   },
   vesper: {
     key: 'ghost-moon',

@@ -2,7 +2,7 @@ import { PerformanceMonitor } from '@react-three/drei'
 import { Canvas, useFrame } from '@react-three/fiber'
 import { Bloom, EffectComposer, Noise, ToneMapping, Vignette } from '@react-three/postprocessing'
 import { BlendFunction, ToneMappingMode, type BloomEffect } from 'postprocessing'
-import { useEffect, useRef, useState, type RefObject } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState, type RefObject } from 'react'
 import { director, pointer } from '../state/director'
 import { quality, useExperience } from '../state/useExperience'
 import { Atmosphere } from './Atmosphere'
@@ -15,9 +15,35 @@ import { SpaceDust } from './galaxy/SpaceDust'
 import { ThumbnailBaker } from './galaxy/Thumbnails'
 import { Ithra } from './Ithra'
 import { SurfaceRig } from './surface/SurfaceRig'
-import { SurfaceSpace } from './surface/SurfaceScene'
+import { loadSurfaceScene } from './surface/lazy'
 import { Precompile, Projection, Space, WarpStreaks } from './Warp'
 import { DistantGalaxies, Dust, ShootingStars, Starfield } from './Starfield'
+
+const SurfaceScene = lazy(loadSurfaceScene)
+
+/** The world being explored, mounted from descent start to ascent end; its code loads on demand. */
+function SurfaceSpace() {
+  const exploring = useExperience((s) => s.exploring)
+  if (!exploring) return null
+  return (
+    <Suspense fallback={null}>
+      <SurfaceScene key={exploring} planet={exploring} />
+    </Suspense>
+  )
+}
+
+/** Fetches the surface code in the background once the first scene is up, so descents never wait. */
+function PrefetchSurface() {
+  const ready = useExperience((s) => s.sceneReady)
+  useEffect(() => {
+    if (!ready) return
+    const idle = (window as { requestIdleCallback?: (cb: () => void) => number }).requestIdleCallback
+    const start = () => void loadSurfaceScene()
+    if (idle) idle(start)
+    else setTimeout(start, 1500)
+  }, [ready])
+  return null
+}
 
 /** Advances the scene clock and reports readiness after the first frames. */
 function Clock() {
@@ -116,6 +142,7 @@ export function Experience() {
         flipflops={3}
       />
       <Clock />
+      <PrefetchSurface />
       <Nebula />
       <Space space={['vael', 'galaxy']}>
         <Starfield />

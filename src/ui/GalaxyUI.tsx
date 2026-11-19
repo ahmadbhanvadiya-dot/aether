@@ -62,7 +62,7 @@ function WorldIndex({ visible }: { visible: boolean }) {
   const setFocus = useExperience((s) => s.setFocus)
 
   return (
-    <nav className="world-index ui-hideable" data-visible={visible || undefined} aria-label="Worlds of the Aether system">
+    <nav className="world-index ui-hideable" data-visible={visible || undefined} inert={!visible} aria-label="Worlds of the Aether system">
       <ol>
         {PLANETS.map((p) => (
           <li key={p.id}>
@@ -200,7 +200,7 @@ export function GalaxyUI({ onReturnToVael }: { onReturnToVael: () => void }) {
   useGalaxyKeys(inGalaxy)
 
   return (
-    <div className="galaxy-ui" data-visible={inGalaxy || undefined}>
+    <div className="galaxy-ui" data-visible={inGalaxy || undefined} inert={!inGalaxy}>
       <HoverLabel />
 
       <button
@@ -212,6 +212,7 @@ export function GalaxyUI({ onReturnToVael }: { onReturnToVael: () => void }) {
         }}
         onClick={onReturnToVael}
         tabIndex={inGalaxy && !focus ? 0 : -1}
+        inert={!inGalaxy || focus !== null}
         data-hidden={!inGalaxy || focus !== null || undefined}
       >
         <Undo2 size={15} strokeWidth={1.5} aria-hidden />
