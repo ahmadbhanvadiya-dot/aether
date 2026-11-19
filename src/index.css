@@ -612,15 +612,6 @@ body {
 
 /* ---------- Phase 3: exploration ---------- */
 
-/* The world's atmosphere filling the frame during descent and ascent. */
-.atmo-veil {
-  position: absolute;
-  inset: 0;
-  z-index: 15;
-  opacity: 0;
-  pointer-events: none;
-}
-
 /* Explore action in the world panel. */
 .world-explore {
   display: flex;

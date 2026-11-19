@@ -1,8 +1,8 @@
 # AETHER — Design System
 
 **The source of truth for AETHER.** Every value below was read from the source code on
-2026‑11‑18. Phases 1–3 are live at <https://ahmadbhanvadiya-dot.github.io/aether/> (merge
-commit `29131fa`); Phase 4 (the Observatory) is implemented in the working tree and not yet
+2026‑11‑19. Phases 1–4 are live at <https://ahmadbhanvadiya-dot.github.io/aether/> (merge
+commit `f34cd14`); the journey choreography (§8) is in the working tree and not yet
 deployed. Product context lives in `PRODUCT.md`. When code and this document disagree, fix one of them in the same change.
 
 Status labels used throughout:
@@ -21,11 +21,12 @@ Status labels used throughout:
 5. [Interaction](#5-interaction) (Implemented)
 6. [Phase 3 — Planet exploration](#6-phase-3--planet-exploration) (Implemented)
 7. [Phase 4 — The Observatory](#7-phase-4--the-observatory) (Implemented)
-8. [Technical architecture](#8-technical-architecture) (Implemented)
-9. [Rules for future work](#9-rules-for-future-work) (Planned)
-10. [Known limitations](#10-known-limitations)
-11. [Decision log](#11-decision-log)
-12. [Roadmap](#12-roadmap)
+8. [The journey — camera choreography](#8-the-journey--camera-choreography) (Implemented)
+9. [Technical architecture](#9-technical-architecture) (Implemented)
+10. [Rules for future work](#10-rules-for-future-work) (Planned)
+11. [Known limitations](#11-known-limitations)
+12. [Decision log](#12-decision-log)
+13. [Roadmap](#13-roadmap)
 
 ---
 
@@ -131,7 +132,8 @@ the visitor has control the rest of the time (letterbox open).
 |-------|-------|-----|
 | `uiOut` / `--ease-out-ui` | `cubic-bezier(0.23, 1, 0.32, 1)` | Every UI entrance and exit |
 | `power4.out` | GSAP | Long camera approaches (arrival, galaxy intro) |
-| `power3.inOut` | GSAP | Camera travel between poses; sun swing |
+| `power3.inOut` | GSAP | Sun swing; Phase 1 – 2 sequences |
+| `approach` · `cruise` · `entry` · `glide` · `climb` | `scene/motion.ts` | Every camera move of the journey (§8) |
 | `power2.in` / `power3.in` | GSAP | Only for the camera *accelerating into* a warp — never on UI |
 | `ease` 180–300ms | CSS | Hover / color changes |
 
@@ -158,8 +160,9 @@ Implemented:
   (`director.time`), so orbits, spins, clouds, Ithra, twinkle phases, Nyx's pulse, Vesper's
   lightning and shooting stars stop; auto‑rotate and pointer drift stop. User‑initiated
   transitions (warp, travel) still complete.
-- Phase 3 reduced motion: descent, ascent and travel between locations become short veil
-  crossfades (about 1.2s); lightning flashes are off; signal pings hold still; motes drop to 40%.
+- Phase 3 reduced motion: descent, ascent and travel between locations become short
+  crossfades through the in‑scene haze (about 1.2s); lightning flashes are off; signal pings
+  hold still; motes drop to 40%. No FOV breathing, near dust, bank or surface drift (§8).
 - Phase 4 reduced motion: no letterbox; the rise to the dial takes 0.6s and the dial snaps to
   the selected world; reveals and new timeline entries fade only.
 - Every interactive 3D object has a DOM equivalent: the world index (buttons, keyboard
@@ -371,7 +374,7 @@ limited to 0.15 … π − 0.15. Auto‑rotate is off when motion is paused or r
 
 ## 4. The six worlds
 
-**Status: Implemented.** All six share one pipeline (§8) and differ through a *kind* recipe
+**Status: Implemented.** All six share one pipeline (§9) and differ through a *kind* recipe
 in the bake and surface shaders (`scene/galaxy/shaders.ts`), plus per‑world data.
 
 | World | Kind | Accent | Atmosphere day / night | Shell | Clouds | Rings |
@@ -526,13 +529,12 @@ color `#BFD8FF`. Drawn only while `warp > 0.005`.
   `normalize(0.62·toStar + 0.72·side + 0.3·up) × radius × 4.6` (5.6 with rings; × 1.5 on
   narrow screens) — a sunlit gibbous view. The destination is recomputed every frame, so the
   camera lands on a world that keeps orbiting.
-- Path: straight interpolation plus an arc over the orbital plane
-  (`sin(π·t) × 0.14 × distance`); the look‑at target interpolates alongside.
-- Duration: `clamp(1.5 + distance / 45, 1.8, 3.4)` s, `power3.inOut`.
+- Path, aim, timing and momentum: see §8 (a Bézier that aims first, then accelerates and
+  decelerates into orbit; `clamp(2.3 + d/38, 2.7, 4.6)` s).
 - On arrival, the camera follows the world (it adds the world's movement every frame), and
   OrbitControls orbit around it.
 - The frame shifts so the world clears the panel: a view offset of 17% of the width
-  (landscape) or 26% of the height (narrow), tweened over 1.6s.
+  (landscape) or 26% of the height (narrow), tweened during the travel's deceleration.
 
 ### Planet navigation and return
 
@@ -577,25 +579,11 @@ galaxy focus ──Explore──▶ descent ──▶ surface (location A) ─�
 
 ### Descent (`ui/exploreDirector.ts → startDescent`)
 
-On click, the surface mounts and compiles (two animation frames), then, from `t = 0`:
-
-| t (s) | Beat |
-|-------|------|
-| 0 – 0.9 | Letterbox closes; the panel shift returns to centre (1.2s). |
-| 0.2 – 3.6 | Galaxy camera dives from its focus pose to 1.012 × radius (`director.descent`, `power2.in`); near the end the view tips from the planet's centre to its horizon. |
-| 0.3 | Wind sound (6s, sweeping up). |
-| 2.6 – 3.6 | The world's atmosphere color fills the frame (`.atmo-veil`, a radial gradient of its day color). |
-| **3.65** | **Space switches to `surface`.** The surface camera starts 380 units up and 140 back, pitched down 0.75 rad. |
-| 3.8 – 5.6 | Veil clears. |
-| 3.65 – 8.85 | Landing (`director.landing`, `power3.out`): the camera falls through the cloud layer to eye height and turns toward the signal. |
-| 6.4 | Title card: location name + region (1.1s in, 3.6s hold, 0.8s out). |
-| 7.4 – 8.7 | Letterbox opens. Phase becomes `surface` when the timeline ends. |
-
-The ascent (`startAscent`) mirrors it: letterbox closes, the camera climbs (`landing 1 → 0`,
-2.8s, `power2.in`), wind sweeps down, the veil fills at 2.0s, **switch at 2.95s** with the
-galaxy camera at the atmosphere, then it pulls back out to the focus pose (3.4s, `power3.out`);
-the panel shift returns at 4.8s, the letterbox opens at 5.2s, the phase becomes `galaxy` and
-the surface unmounts.
+On click, the surface mounts and compiles (two animation frames); then the entry, the space
+switch inside the atmosphere haze and the landing glide run as one move (timings in §8).
+Return to orbit (`startAscent`) climbs from wherever the camera is, switches inside the
+haze and pulls back to the world's focus view; the phase becomes `galaxy` and the surface
+unmounts.
 
 ### Surface environments
 
@@ -672,12 +660,12 @@ ring latitude).
 - **Location strip** (bottom centre, above the HUD lines): the three locations, each with a hollow
   ring (unfound) or a filled glowing dot (found) in the world's accent. Selecting one flies there.
 - **Keyboard**: `←` / `→` fly to the previous / next location.
-- **Flight** (`travelTo`): from the current view to the destination over
-  `clamp(3.2 + distance / 420, 4, 7)` s, `power3.inOut`, arcing up `50 + 0.12 × distance` units
-  and never closer than 6 units to the ground. The whole environment (sun, sky, fog, weather,
-  clouds) blends along the way; a low swell plays; the title card shows on arrival (2.4s hold).
+- **Flight** (`travelTo`): a Bézier from the current view to the destination over
+  `clamp(3.8 + distance / 360, 4.4, 7.6)` s, facing the direction of travel and clearing the
+  ground between (§8). The whole environment (sun, sky, fog, weather, clouds) blends along the
+  way; a low swell plays; the title card shows on arrival (2.4s hold).
 - **Look around**: drag (mouse or one finger) turns the view; the mouse position adds a slight
-  parallax; a gentle breathing bob runs unless motion is paused or reduced.
+  parallax; a slow ambient drift runs unless motion is paused or reduced (§8).
 
 ### Discovery
 
@@ -738,7 +726,7 @@ Aurelis (Glass Shelf) 5.9 ms, Thalassa (Long Storm, the heaviest: water, rain, f
 
 ## 7. Phase 4 — The Observatory
 
-**Status: Implemented** (working tree; not yet deployed). The record of everything the
+**Status: Implemented** (deployed, merge commit `f34cd14`). The record of everything the
 visitor has found. Product context (purpose, audience, constraints) is in `PRODUCT.md`.
 
 ### The one idea: the planisphere
@@ -893,7 +881,166 @@ phone, and the reduced‑motion timings.
 
 ---
 
-## 8. Technical architecture
+## 8. The journey — camera choreography
+
+**Status: Implemented** (working tree; not yet deployed). Supersedes the Phase 2 and 3
+camera timings: galaxy travel, descent, landing, location flights and the climb back out
+were rebuilt as one continuous move. The rigs, director values and spaces are the same
+(no new camera controller); the curves, paths and the hand‑over between spaces are new.
+
+```
+Galaxy ──approach──▶ orbit ──entry──▶ [haze: space switch] ──landing glide──▶ location
+                       ▲                                                       │ flights
+                       └──pull‑back◀── [haze: space switch] ◀──climb◀──────────┘
+```
+
+### What was wrong before
+
+- The approach was a zoom: position and look‑at shared one `power3.inOut`, so the world slid
+  across the frame instead of being found, then approached. Far stars move with the camera,
+  so nothing near the lens gave a sense of speed, and re‑targeting started from rest.
+- Entry hid behind a curtain: a flat CSS gradient went fully opaque while the scene swapped.
+  The orbital camera looked straight down (no horizon), the surface camera started with a
+  top‑down drop, and bloom snapped between spaces — two shots joined by a fade.
+- Surfaces were almost static (a 0.012‑unit breathe).
+- Flights could crab sideways (heading interpolated independently of the path) and kinked
+  where a hard ground clamp kicked in.
+- Leaving mid‑flight snapped the camera to the destination; several rates were per frame.
+
+### Principles
+
+1. **One clock, several curves.** Tweens drive a linear clock (`galaxyCam.t`,
+   `surfaceCam.t`); the rigs shape it each frame, so orientation and position can follow
+   different curves from the same time (aim first, then accelerate).
+2. **Paths, not lerps.** Every move is a cubic Bézier or an orbit sweep whose end tangents
+   match the motion before and after it.
+3. **Continuity across the switch.** At the space switch both sides share horizon height,
+   direction of travel, speed and haze colour; the switch happens inside a haze that is
+   still sky, never a flat curtain.
+4. **Momentum.** Every rig measures its velocity; a redirected move leaves at that velocity.
+5. **Arrivals ease in.** Auto‑rotation, surface drift and pointer parallax ramp from zero
+   after every arrival, so nothing starts at full strength.
+
+### Eases and durations (`scene/motion.ts`)
+
+| Name | Curve | Use |
+|------|-------|-----|
+| `approach` | `M0,0 C0.46,0 0.14,1 1,1` | Starts at rest: gentle acceleration, cruise, long deceleration (galaxy travel, flights) |
+| `cruise` | `M0,0 C0.3,0.3 0.16,1 1,1` | Starts at unit speed (matches incoming velocity), then settles (redirected moves) |
+| `entry` | `M0,0 C0.42,0 0.36,0.86 1,1` | Orbit → top of the atmosphere |
+| `glide` | `M0,0 C0.24,0.52 0.3,1 1,1` | Arrives moving, decelerates to rest (landing, pull‑back) |
+| `climb` | `M0,0 C0.5,0 0.72,0.42 1,1` | Lifts off slowly, leaves fast (hands speed to the pull‑back) |
+
+| Move | Duration |
+|------|----------|
+| Galaxy approach | `clamp(2.3 + d/38, 2.7, 4.6)` s (redirected: down to `1.8·d/speed`, min 1.6 s) |
+| Entry (orbit → air) | 4.4 s |
+| Landing glide | 6.2 s |
+| Surface flight | `clamp(3.8 + d/360, 4.4, 7.6)` s (redirected: down to `1.5·d/speed`, min 2.4 s) |
+| Climb | 3.2 s |
+| Pull‑back to orbit | 4.4 s |
+| Reduced motion | haze in 0.5 s, out 0.7 s (flights 0.4 / 0.6 s) |
+
+### 1 · Planet approach (`GalaxyRig`, mode `travel`)
+
+- **Aim first.** The look‑at target moves from the old target to the world over the first
+  34% of the clock (`smootherstep`), while the position, on `approach`, has barely begun.
+- **Path.** Bézier from the current pose: the departure control leaves toward the
+  destination blended with the current view, lifted off the orbital plane; the arrival
+  control sits outward along the final orbit direction, so the camera arrives moving inward
+  and decelerates into orbit. Controls are recomputed per frame against the live world.
+- **Scale and speed.** Field of view widens by up to 4.5° with speed (`director.fovKick`,
+  damped) and narrows again on arrival. **Near dust** (`SpaceDust`: 720 / 360 motes in a
+  64‑unit box wrapped around the camera, additive, invisible at rest) streams past during
+  travel, so far stars (fixed), the system (mid) and dust (near) move at three rates.
+- **Arrival.** The frame slides clear of the panel during the deceleration (from 40% of the
+  travel); OrbitControls auto‑rotation then eases in over ~3 s (`galaxyCam.settle`).
+- **Redirect** (another world, or back, mid‑flight): the new leg leaves at the measured
+  velocity on `cruise` — verified continuous (23 → 27 units/s across a redirect).
+
+### 2 · Atmospheric entry (galaxy `descent` → surface `landing`)
+
+| t (s) | Beat |
+|-------|------|
+| 0 – 0.9 | Letterbox closes; panel shift returns to centre (1.4 s). |
+| 0.15 – 4.55 | **Entry** (`director.descent`, `entry`): the camera sweeps around the world toward the day side (up to 0.55 rad, never past local noon) while dropping from its orbit distance to 1.012 × radius. The view turns from the world's centre to the horizon ahead (`smootherstep` 0.32 – 0.94), looking 0.14 rad below the *visible* limb at every altitude (the limb's dip, `acos(R/r)`, is followed), and the camera's up turns to the local vertical — the horizon levels as the air thickens. |
+| 0.4 | Wind (7 s). |
+| 2.65 – 4.55 | Haze thickens to 1.15 (`power2.in`); cloud wisps start streaming. |
+| **4.55** | **Space switch, inside the haze.** The surface camera begins 640 back and ~546 above the location, pitched 0.14 rad down — the same horizon height as the orbital view. |
+| 4.55 – 10.75 | **Landing glide** (`director.landing`, `glide`): forward and down through the location's cloud layer, yaw settling 0.22 rad, pitch easing to the location's view, never closer than 14 units to the ground. |
+| 4.6 – 7.6 | Haze thins (`power2.out`): the place appears through mist, then clears. |
+| 8.35 / 9.15 | Title card; letterbox opens. Phase becomes `surface` at the end. |
+
+### 3 · Exploration
+
+- **Drift** (`free`): slow, incommensurate swells — lateral ±2 units (periods ~57 s and
+  ~23 s), vertical ±0.6, fore‑aft ±1; yaw ±0.02 rad, pitch ±0.009 — from the scene clock, so
+  Pause motion stops it. It eases in after every arrival (`surfaceCam.drift`) together with
+  pointer parallax. Off for reduced motion.
+- **Flights** (`travel`): Bézier leaving along the current heading and arriving along the
+  destination heading (controls 32% / 42% of the distance), lifted so the midpoint clears
+  the highest ground under the line by 34 units (24 samples), with a floor clamp as a
+  backstop. The camera faces the path's heading — within ±5° while cruising, turning to the
+  destination's framing only in the last part (`smoothstep` 0.86 – 1, at most ~16° off the
+  path, at low speed). Up to 3° of bank into turns; field of view widens up to 3° at speed;
+  light and weather blend across 10 – 90% of the path.
+- **Redirect** mid‑flight: leaves at the current velocity on `cruise`.
+
+### 4 · Return to orbit (surface `climb` → galaxy `ascent`)
+
+| t (s) | Beat |
+|-------|------|
+| 0 – 3.2 | **Climb** (`surfaceCam.climb`, `climb`): from wherever the camera is — even mid‑flight, carrying that flight's velocity and bleeding it off (τ 0.8 s; verified 422 → 346 units/s, no jump) — rising and moving forward, the view settling onto the horizon (0.14 rad down). |
+| 1.5 – 3.2 | Haze thickens to 1.15. |
+| **3.2** | **Space switch.** The galaxy camera starts at 1.012 × radius on the entry path, looking at the horizon. |
+| 3.2 – 7.6 | **Pull‑back** (`director.descent 1 → 0`, `glide`): the entry path in reverse to a fresh sunlit focus view — the limb, then the whole world, is revealed as the view turns back to the centre; haze clears in 1.5 s. |
+| 6.0 / 6.4 | Panel shift returns; letterbox opens. Phase `galaxy`, focus and panel restored, camera upright. |
+
+### The atmosphere layer (`scene/Atmosphere.tsx`)
+
+A full‑screen quad drawn **inside** the scene (render order 1000, no depth), so bloom and ACES
+tone mapping grade it like everything else. Density `director.atmo` (0 – 1.15).
+
+- Colours: the world's limb in orbit (`atmosphere.day`, `atmosphere.night × 0.5`) blending
+  into the location's sky (`horizon`, `zenith`) as it thickens; on the surface, the sky.
+- Graded about the **true horizon line**: the camera's view direction flattened onto the
+  local vertical (the world's radial direction in orbit, +Y on surfaces), tilted by the
+  limb's dip, projected to the screen.
+- Above the horizon: horizon → zenith. Below: a cloud deck deepening with depth. A bright
+  scattering band at the horizon. Two cloud layers on perspective planes stream toward the
+  camera at different rates (parallax inside the haze), lit and shaded.
+- Thicker toward the horizon than overhead; at 1.15 it is opaque everywhere, but still sky.
+- Bloom's threshold follows the haze (0.42 → 0.82), damped, so the bright haze never blooms
+  into a flash and the switch is seamless.
+
+### Interruption and cleanup
+
+- Galaxy travel: `gsap.killTweensOf(galaxyCam)` and `panelShift` before each leg; redirect
+  carries momentum. Travel requests are ignored while `descent` / `ascent` own the camera.
+- Entry / climb: one timeline per director; any new one kills the old and stops the haze
+  tweens (`settleHaze`). The climb starts from the current pose.
+- Flights: the old tween is killed; the new leg starts from the current pose and velocity.
+- All per‑frame rates use `delta` (clamped 1/240 – 1/20 s): `damp` for speed, drift,
+  settle and bank; the Observatory dial turn is now `1 − e^(−3·dt)`.
+
+### Reduced motion
+
+No camera travel at all for entry, climb or flights: the haze (no wisp motion) crossfades in
+0.5 s, the switch happens, and it clears in 0.7 s; flights dip through the destination's sky
+in 0.4 / 0.6 s. Galaxy travel stays 0.7 s `power1.inOut`. No FOV breathing, dust, bank or
+drift. Verified for descent and ascent.
+
+### Verified
+
+Dev build, 1280×800, forced frames on a fixed virtual clock: approach speed profile (rest →
+cruise → long deceleration), redirect continuity, entry frames on Aurelis and Orion (limb,
+haze, switch, glide to the location), flights (heading error), climb from mid‑flight
+(real‑time velocity continuity), pull‑back restoring focus / panel / upright camera,
+reduced‑motion descent and ascent, and the Observatory → Explore chain into a descent.
+
+---
+
+## 9. Technical architecture
 
 **Status: Implemented.** React 19 · Vite 8 · TypeScript · three 0.187 · @react-three/fiber 9 ·
 @react-three/drei 10 (PerformanceMonitor only) · @react-three/postprocessing 3 · GSAP 3
@@ -921,6 +1068,8 @@ src/
     Experience.tsx         <Canvas>, pointer listeners, Clock, spaces, rigs, post stack
     CameraRig.tsx          Vael camera: framing, arrival, drift, dive, Ithra projection
     Warp.tsx               baseFov, Projection, WarpStreaks, Space, Precompile
+    motion.ts              journey eases, durations, Bézier helpers, atmosphereFx, travelFx (§8)
+    Atmosphere.tsx         in-scene haze for entry and climb (§8)
     Planet.tsx             Vael: terrain bake, surface, clouds, atmosphere
     Ithra.tsx              moon + dotted orbit
     Starfield.tsx          Starfield, Dust, DistantGalaxies, ShootingStars
@@ -934,6 +1083,7 @@ src/
       SpiralGalaxy.tsx     the surrounding galaxy
       GalaxyRig.tsx        OrbitControls, intro/outro/travel/focus/observatory, readouts, projections
       Thumbnails.tsx       portraits baked from the live world materials (Phase 4)
+      SpaceDust.tsx        near dust that streams past during travel (§8)
       shaders.ts           kind bake, world surface, clouds, atmosphere, rings, star, disc, warp
     surface/               (Phase 3)
       terrain.ts           height function in GLSL + TypeScript, polar grid
@@ -948,7 +1098,7 @@ src/
     Hud.tsx                corners, status/readout/hint, Pause motion, Hide interface
     OrbitLabel.tsx         Ithra's label
     GalaxyUI.tsx           hover label, world index, info panel (+ Explore), Return to Vael, keys
-    ExploreUI.tsx          veil, title card, location panel/strip, signal label, notice, keys
+    ExploreUI.tsx          title card, location panel/strip, signal label, notice, keys
     exploreDirector.ts     descent, ascent, travel, discovery timelines; ?shot=<location>
     ObservatoryUI.tsx      dial overlay, record, ledger, worlds, discoveries, timeline, keys (Phase 4)
     observatoryDirector.ts open / close / explore choreography (Phase 4)
@@ -976,7 +1126,8 @@ src/
   - `CameraRig` runs only when `director.space === 'vael'`.
   - `GalaxyRig` runs only in the galaxy; it owns a manually created three.js
     `OrbitControls`, enabled only in its `free` and `focus` modes.
-  - `SurfaceRig` runs only on surfaces (modes `landing`, `free`, `travel`, in `surfaceCam`).
+  - `SurfaceRig` runs only on surfaces (modes `landing`, `free`, `travel`, `climb`, in
+    `surfaceCam`).
 - `GalaxyRig` modes (`galaxyCam.mode`): `intro` (driven by `director.galaxyIntro`), `free`
   (OrbitControls around Elys), `travel` (tween `galaxyCam.t`), `focus` (follow + orbit a
   world), `outro` (recede during Return to Vael), `descent` / `ascent` (Phase 3: dive to and
@@ -986,7 +1137,8 @@ src/
   travel.
 - `Projection` owns FOV, clip planes and view offset: base FOV per space (Vael 34°/44°,
   galaxy 46°/60°, surface 55°/68°, portrait below 0.8 aspect) + `warp × 32°`; near/far
-  0.05/1200 in space and 0.3/6000 on surfaces; view offset from `director.panelShift`.
+  0.05/1200 in space and 0.3/6000 on surfaces; view offset from `director.panelShift`;
+  `director.fovKick` (speed breathing, §8) is added on top.
 - Framing math always uses the base FOV, so the warp's FOV kick never moves the camera.
 
 ### State management
@@ -997,11 +1149,12 @@ src/
 | `useExploration` | Zustand + `persist` (localStorage `aether-exploration`, v2) | `discovered` (id → timestamp), `visited` (world → first landing), `observatorySeenAt`, `soundOn`, `discover(id)` (true only the first time), `markVisited`, `markObservatorySeen`, `toggleSound` |
 | `state/progress.ts` | Pure functions | Every derived figure (§7); never stored |
 | `useThumbs` | Zustand | Baked portrait data URLs |
-| `director` | Mutable object (GSAP writes, `useFrame` reads) | `arrival`, `sun`, `sky`, `dive`, `letterbox`*, `hud`, `space` (`vael · galaxy · surface`), `warp`, `galaxyIntro`, `panelShift`, `descent`, `landing`, `observatory`, `time` |
+| `director` | Mutable object (GSAP writes, `useFrame` reads) | `arrival`, `sun`, `sky`, `dive`, `letterbox`*, `hud`, `space` (`vael · galaxy · surface`), `warp`, `galaxyIntro`, `panelShift`, `descent`, `landing`, `observatory`, `atmo` (haze density, §8), `fovKick`, `time` |
 | `telemetry` | Mutable, read in `requestAnimationFrame` by DOM | `altitudeKm`, `readout`, `ithra {x,y,visible}`, `hover {x,y,visible,radiusPx}`, `signal {x,y,visible}`, `chart {ox,oy,active,worlds}` (Phase 4) |
 | `surface`, `surfaceCam`, `signalFx` | Mutable (surface modules) | current world's height function, poses, envs, blended env; surface camera; signal bloom |
 | `labels`, `galaxy.positions` | Mutable vectors | Ithra's and the six worlds' live world positions |
-| `galaxyCam` | Mutable (GalaxyRig module) | camera mode, travel progress and poses |
+| `galaxyCam` | Mutable (GalaxyRig module) | camera mode, travel clock, path controls, measured velocity, settle ramp, entry path (start direction, sweep axis/angle) |
+| `atmosphereFx`, `travelFx` | Mutable (`scene/motion.ts`) | haze colours, local up, limb dip, wisp flow; travel speed for dust |
 
 \* `director.letterbox` is declared but unused; the letterbox is tweened directly on the DOM.
 
@@ -1036,7 +1189,8 @@ colors. Locations are `LOCATIONS` entries (fields in §6).
 - **GSAP tweens** in `GalaxyRig` drive travel progress and `panelShift`.
 - **`exploreDirector`** (a plain module, not a component) owns the Phase 3 timelines (descent,
   ascent, travel, discovery bloom, title card) so the 3D signal, the panels and the keyboard
-  can all call it. It reaches the letterbox and veils through `data-*` selectors.
+  can all call it. It reaches the letterbox through `data-*` selectors; the atmosphere is
+  in‑scene (`director.atmo`), not DOM.
 - **`observatoryDirector`** (plain module) owns the Phase 4 timelines and reuses the Phase 3
   ascent and descent, so every route between galaxy, surface and Observatory is one chain.
 - **`useFrame`** reads `director` and writes uniforms and transforms; never `setState`.
@@ -1080,7 +1234,7 @@ Measured on an RTX 3050 laptop (forced frames): Vael ≈ 5.3 ms at a 2000×1125 
 
 ---
 
-## 9. Rules for future work
+## 10. Rules for future work
 
 These are rules, not features. The global rules apply to all future work. The Phase 3
 and Phase 4 subsections record how the shipped implementation follows them.
@@ -1100,13 +1254,17 @@ and Phase 4 subsections record how the shipped implementation follows them.
 7. **Copy is plain and true.** Facts are written as label + value; readouts are computed
    from the scene.
 8. **New colors are world accents** following the accent rule in §1, or don't ship.
+9. **Camera moves use `scene/motion.ts`:** a linear clock shaped per frame by its eases,
+   a path whose end tangents match the motion around it, momentum when interrupted, and a
+   reduced‑motion haze crossfade. Never hide a cut behind a flat colour.
 
 ### Planet exploration (Phase 3 — implemented, see §6)
 
 - Followed: entered from the focused world's panel; camera‑directed descent with the letterbox
   closed; exit returns to the same world's focus view with the panel open; four HUD corners;
   the readout is a true altitude.
-- Differences from the original rule: the atmosphere crossing is a color veil (the world's
+- Differences from the original rule (the colour veil described next was replaced by the
+  in‑scene haze in §8): the atmosphere crossing was a color veil (the world's
   atmosphere color), not the closest‑approach shell; surfaces are live procedural terrain with
   their own recipes (palettes chosen to match each world's orbital look) rather than a lazy
   higher‑resolution bake of the orbital texture; the readout does not show local time.
@@ -1150,7 +1308,7 @@ and Phase 4 subsections record how the shipped implementation follows them.
 
 ---
 
-## 10. Known limitations
+## 11. Known limitations
 
 | Item | Status |
 |------|--------|
@@ -1172,10 +1330,14 @@ and Phase 4 subsections record how the shipped implementation follows them.
 | Observatory: on small phones the inner orbits are tight; labels can overlap each other at some orbital phases (they stay legible on their backing) | Open |
 | Observatory: the narrow dial position is solved once at opening; rotating the phone while it is open keeps the old offset until reopened | Open |
 | Observatory: not tested on a real phone or with a screen reader | Open |
+| Journey: orbital and surface terrain are not the same data; continuity is in horizon, motion, speed and colour, and the switch happens inside the haze | By design |
+| Journey: the entry sweeps toward the day side; a world whose focus view is near local noon barely sweeps | Accepted |
+| Journey: near dust is subtle by design and reads only in motion | Accepted |
+| Journey: timings verified on forced frames in a desktop browser; not yet felt on a real phone or a 120 Hz display | Open |
 
 ---
 
-## 11. Decision log
+## 12. Decision log
 
 Superseded Phase 1 decisions, kept so nobody reintroduces them by accident.
 
@@ -1196,15 +1358,23 @@ Superseded Phase 1 decisions, kept so nobody reintroduces them by accident.
 | Observatory as a full‑frame screen over a dimmed scene (Phase 4 rule) | The galaxy seen from the zenith as a turning planisphere | One continuous world; the record is anchored to the real system |
 | Narrow dial at a fixed 7% view offset | Offset solved from the layout at opening; dial radius shared with CSS (`--obs-dial`) | The fixed offset put Orion's label on the header links |
 | Timeline marked every entry new on a first visit, animating at open | Nothing is new on a first visit; new entries wait until the timeline is in view | "Since your last visit" must be true, and the motion must be seen |
+| Galaxy travel: lerp + sine arc, one `power3.inOut` for position and aim | Bézier on a linear clock; aim first, `approach` for position; momentum on redirect | Read as travel, not a zoom; redirects never brake |
+| Radial dive, straight down at the planet | Sweep to the day side, view following the limb's dip, up turning to local vertical | A horizon to carry across the switch |
+| CSS `.atmo-veil` radial gradient, fully opaque at the switch | In‑scene haze graded about the true horizon, with streaming cloud layers; bloom threshold follows it | No curtain; the switch happens inside the sky |
+| Landing: top‑down drop from 380 up | Glide from 640 back / 546 up, through the clouds, horizon at the hand‑over height | Same horizon and motion on both sides of the switch |
+| Ascent = landing in reverse from the location pose | Climb from the current pose, carrying flight velocity | Leaving mid‑flight jumped to the destination |
+| Flights: lerp + sine arc, heading interpolated independently | Bézier along start/end headings, facing the path; clearance sampled under the line | No crabbing, no clamp kinks |
+| Surface breathe 0.012 units | Layered slow drift that eases in after arrivals | Alive without motion sickness |
 
 ---
 
-## 12. Roadmap
+## 13. Roadmap
 
 | Phase | Name | Status | Scope |
 |-------|------|--------|-------|
 | 1 | Arrival | **Complete** | Prelude, letterboxed arrival at Vael, Ithra, deep‑field sky, Pause motion, Hide interface, touch drag |
 | 2 | Galaxy | **Complete** | Warp, Elys, six worlds, spiral galaxy, hover/select/travel, info panel, world index, keyboard navigation, Return to Vael, GitHub Pages deploy |
 | 3 | Planet Exploration | **Complete** | Descent and ascent, six surface environments, 18 locations, flights between them, signals and discovery, notifications, persisted progress, synthesized sound with controls |
-| 4 | Observatory | **Complete** (not yet deployed) | Planisphere dial from the zenith, world record and ledger, six‑world archive, discovery collection with redacted unfound entries, timeline with new‑since‑last‑visit, baked portraits, persisted progress v2, navigation between galaxy, surfaces and Observatory |
+| 4 | Observatory | **Complete** | Planisphere dial from the zenith, world record and ledger, six‑world archive, discovery collection with redacted unfound entries, timeline with new‑since‑last‑visit, baked portraits, persisted progress v2, navigation between galaxy, surfaces and Observatory |
+| — | Journey choreography | **Complete** (not yet deployed) | Approach, entry, exploration drift and flights, return to orbit as one continuous move (§8) |
 | 5 | Final Polish | Planned | Real‑device testing, code splitting, ring shadows on Orion, surface shadows, performance tuning |

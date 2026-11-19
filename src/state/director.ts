@@ -47,6 +47,10 @@ export const director = {
   landing: 0,
   /** Observatory: 0 → galaxy view, 1 → zenith dial above Elys */
   observatory: 0,
+  /** Atmospheric haze density during entry and climb (both spaces): 0 → clear, 1 → inside the air */
+  atmo: 0,
+  /** Field-of-view breathing with travel speed, in degrees (rigs write it, damped). */
+  fovKick: 0,
   /** Scene clock that stops when motion is paused */
   time: 0,
 }

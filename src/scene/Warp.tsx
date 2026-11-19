@@ -31,7 +31,7 @@ export function Projection() {
 
   useFrame(() => {
     const aspect = size.width / size.height
-    camera.fov = baseFov(director.space, aspect) + director.warp * 32
+    camera.fov = baseFov(director.space, aspect) + director.warp * 32 + director.fovKick
     // Surfaces reach the horizon; space scenes don't need the depth range.
     const surface = director.space === 'surface'
     camera.near = surface ? 0.3 : 0.05

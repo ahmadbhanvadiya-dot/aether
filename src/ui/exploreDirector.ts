@@ -3,7 +3,8 @@ import { sound } from '../audio/sound'
 import { LOCATION_BY_ID, locationsFor } from '../data/locations'
 import { PLANET_BY_ID, type PlanetId } from '../data/planets'
 import { beginGalaxyAscent, beginGalaxyDescent, primeGalaxyFocus } from '../scene/galaxy/GalaxyRig'
-import { beginTravel, surfaceCam } from '../scene/surface/SurfaceRig'
+import { atmosphereFx, climb, DURATION, entry, glide } from '../scene/motion'
+import { beginClimb, beginTravel, surfaceCam } from '../scene/surface/SurfaceRig'
 import { prepareSurface, surface } from '../scene/surface/world'
 import { director } from '../state/director'
 import { discoveredCount, TOTAL_LOCATIONS, useExploration } from '../state/exploration'
@@ -13,7 +14,17 @@ import { useExperience } from '../state/useExperience'
  * Phase 3 choreography: descent from orbit, travel between locations,
  * discovery, and the ascent back to orbit. A plain module (not a component)
  * so the 3D signal, the panel and keyboard shortcuts can all call it.
+ *
+ * Entry and climb are one continuous move across two spaces: the galaxy rig
+ * glides into the top of the atmosphere while the in-scene haze thickens
+ * (director.atmo), the spaces switch inside the haze, and the surface rig
+ * carries on gliding down through the clouds as it thins. Every timeline is
+ * killed before another starts, and every camera move starts from the pose
+ * the camera actually has, so interruptions never jump.
  */
+
+/** Haze density reached at the space switch: past 1 so the layer is fully opaque there. */
+const HANDOVER = 1.15
 
 /** Signal bloom, tweened on discovery and read by the 3D signal each frame. */
 export const signalFx = { bloom: 0 }
@@ -22,18 +33,32 @@ let timeline: gsap.core.Timeline | null = null
 let travelTween: gsap.core.Tween | null = null
 
 const bars = () => document.querySelectorAll<HTMLElement>('[data-letterbox]')
-const veil = () => document.querySelector<HTMLElement>('[data-atmo-veil]')
 const titleCard = () => document.querySelector<HTMLElement>('[data-title-card]')
 
 function reduced() {
   return useExperience.getState().reducedMotion
 }
 
-function paintVeil(planet: PlanetId) {
-  const v = veil()
-  if (!v) return
-  const c = PLANET_BY_ID[planet].atmosphere.day
-  v.style.background = `radial-gradient(120% 100% at 50% 60%, ${c} 0%, ${c}cc 35%, #070c22 100%)`
+/**
+ * The haze's colours for a world and location: the planet's limb as seen
+ * from orbit, deepening into the location's own sky (horizon and zenith), so
+ * the colours on both sides of the space switch are the same.
+ */
+function tintAtmosphere(planet: PlanetId, locationId: string) {
+  const p = PLANET_BY_ID[planet]
+  atmosphereFx.orbitLow.set(p.atmosphere.day)
+  atmosphereFx.orbitHigh.set(p.atmosphere.night).multiplyScalar(0.5)
+  const env = surface.envs[locationId]
+  if (env) {
+    atmosphereFx.skyLow.copy(env.horizon)
+    atmosphereFx.skyHigh.copy(env.zenith)
+  }
+}
+
+/** Stops the haze wherever it is (a killed timeline must not leave it hanging). */
+function settleHaze() {
+  gsap.killTweensOf(director, 'atmo')
+  gsap.killTweensOf(atmosphereFx, 'flow')
 }
 
 /** The location name card: rises in, holds, fades. Rare, so it gets time. */
@@ -63,11 +88,12 @@ export function startDescent(planet: PlanetId) {
   if (st.phase !== 'galaxy' || st.focus !== planet) return
   sound.unlock()
   prepareSurface(planet)
-  st.setLocation(firstLocationFor(planet))
+  const first = firstLocationFor(planet)
+  st.setLocation(first)
   st.setExploring(planet)
   st.setHovered(null)
   st.setPhase('descending')
-  paintVeil(planet)
+  tintAtmosphere(planet, first)
   // Two frames: the surface mounts and compiles its shaders before anything moves.
   requestAnimationFrame(() => requestAnimationFrame(runDescent))
 }
@@ -82,30 +108,40 @@ function switchToSurface() {
 
 function runDescent() {
   timeline?.kill()
+  settleHaze()
   beginGalaxyDescent()
   const { setPhase } = useExperience.getState()
   const tl = gsap.timeline({ onComplete: () => setPhase('surface') })
   timeline = tl
+  director.atmo = 0
+  atmosphereFx.flow = 0
 
   if (reduced()) {
-    tl.to(veil(), { opacity: 1, duration: 0.5, ease: 'power1.inOut' })
+    // No travel: the air gathers in place, the ground appears through it.
+    tl.to(director, { atmo: HANDOVER, duration: DURATION.reducedIn, ease: 'power1.inOut' })
       .call(switchToSurface)
       .set(director, { landing: 1, descent: 1, panelShift: 0 })
-      .to(veil(), { opacity: 0, duration: 0.7, ease: 'power1.inOut' })
+      .to(director, { atmo: 0, duration: DURATION.reducedOut, ease: 'power1.inOut' })
       .call(() => showTitleCard(3))
     return
   }
 
+  // Orbit → the top of the atmosphere (galaxy space).
+  const E = DURATION.entry
+  const at = 0.15 + E // the space switch, inside the haze
   tl.to(bars(), { scaleY: 1, duration: 0.9, ease: 'uiOut' }, 0)
-    .to(director, { panelShift: 0, duration: 1.2, ease: 'power3.inOut' }, 0)
-    .to(director, { descent: 1, duration: 3.4, ease: 'power2.in' }, 0.2)
-    .call(() => sound.wind(6, 'down'), undefined, 0.3)
-    .to(veil(), { opacity: 1, duration: 1.0, ease: 'power2.in' }, 2.6)
-    .call(switchToSurface, undefined, 3.65)
-    .to(veil(), { opacity: 0, duration: 1.8, ease: 'power2.out' }, 3.8)
-    .to(director, { landing: 1, duration: 5.2, ease: 'power3.out' }, 3.65)
-    .call(() => showTitleCard(), undefined, 6.4)
-    .to(bars(), { scaleY: 0, duration: 1.3, ease: 'uiOut' }, 7.4)
+    .to(director, { panelShift: 0, duration: 1.4, ease: 'power2.inOut' }, 0)
+    .to(director, { descent: 1, duration: E, ease: entry }, 0.15)
+    .call(() => sound.wind(7, 'down'), undefined, 0.4)
+    .to(director, { atmo: HANDOVER, duration: 1.9, ease: 'power2.in' }, at - 1.9)
+    .to(atmosphereFx, { flow: 1.3, duration: 2.2, ease: 'power1.in' }, at - 2.2)
+    // The switch, then the glide down through the location's sky and clouds.
+    .call(switchToSurface, undefined, at)
+    .to(director, { landing: 1, duration: DURATION.landing, ease: glide }, at)
+    .to(director, { atmo: 0, duration: 3.0, ease: 'power2.out' }, at + 0.05)
+    .to(atmosphereFx, { flow: 0.2, duration: 3.2, ease: 'power1.out' }, at)
+    .call(() => showTitleCard(), undefined, at + DURATION.landing - 2.4)
+    .to(bars(), { scaleY: 0, duration: 1.3, ease: 'uiOut' }, at + DURATION.landing - 1.6)
 }
 
 // ---------------------------------------------------------------------------
@@ -125,13 +161,15 @@ export function startAscent(then?: () => void) {
   sound.unlock()
   travelTween?.kill()
   timeline?.kill()
-  surfaceCam.mode = 'landing'
+  settleHaze()
+  // Climb from wherever the camera is, even mid-flight between locations.
+  beginClimb()
   st.setSignalHovered(false)
   st.setPhase('ascending')
   const card = titleCard()
   if (card) gsap.to(card, { opacity: 0, duration: 0.3 })
   const planet = st.exploring!
-  paintVeil(planet)
+  tintAtmosphere(planet, st.location!)
 
   const finish = () => {
     const s = useExperience.getState()
@@ -144,22 +182,27 @@ export function startAscent(then?: () => void) {
   timeline = tl
 
   if (reduced()) {
-    tl.to(veil(), { opacity: 1, duration: 0.5, ease: 'power1.inOut' })
+    tl.to(director, { atmo: HANDOVER, duration: DURATION.reducedIn, ease: 'power1.inOut' })
       .call(switchToGalaxy)
       .set(director, { descent: 0, landing: 0, panelShift: 1 })
-      .to(veil(), { opacity: 0, duration: 0.7, ease: 'power1.inOut' })
+      .to(director, { atmo: 0, duration: DURATION.reducedOut, ease: 'power1.inOut' })
     return
   }
 
+  const C = DURATION.climb
   tl.to(bars(), { scaleY: 1, duration: 0.9, ease: 'uiOut' }, 0)
-    .to(director, { landing: 0, duration: 2.8, ease: 'power2.in' }, 0.1)
-    .call(() => sound.wind(5, 'up'), undefined, 0.2)
-    .to(veil(), { opacity: 1, duration: 0.9, ease: 'power2.in' }, 2.0)
-    .call(switchToGalaxy, undefined, 2.95)
-    .to(veil(), { opacity: 0, duration: 1.5, ease: 'power2.out' }, 3.05)
-    .to(director, { descent: 0, duration: 3.4, ease: 'power3.out' }, 2.95)
-    .to(director, { panelShift: 1, duration: 1.4, ease: 'power3.inOut' }, 4.8)
-    .to(bars(), { scaleY: 0, duration: 1.3, ease: 'uiOut' }, 5.2)
+    .to(surfaceCam, { climb: 1, duration: C, ease: climb }, 0)
+    .to(surfaceCam, { climbClock: C, duration: C, ease: 'none' }, 0)
+    .call(() => sound.wind(6, 'up'), undefined, 0.2)
+    .to(director, { atmo: HANDOVER, duration: 1.7, ease: 'power2.in' }, C - 1.7)
+    .to(atmosphereFx, { flow: 1.3, duration: 1.8, ease: 'power1.in' }, C - 1.8)
+    // The switch, then the pull-back that reveals the limb and the whole world.
+    .call(switchToGalaxy, undefined, C)
+    .to(director, { descent: 0, duration: DURATION.pullBack, ease: glide }, C)
+    .to(director, { atmo: 0, duration: 1.5, ease: 'power2.out' }, C + 0.05)
+    .to(atmosphereFx, { flow: 0, duration: 2.2, ease: 'power1.out' }, C)
+    .to(director, { panelShift: 1, duration: 1.6, ease: 'power2.inOut' }, C + DURATION.pullBack - 1.6)
+    .to(bars(), { scaleY: 0, duration: 1.3, ease: 'uiOut' }, C + DURATION.pullBack - 1.2)
 }
 
 // ---------------------------------------------------------------------------
@@ -177,12 +220,12 @@ export function travelTo(id: string) {
   st.setSignalHovered(false)
 
   if (reduced()) {
-    // A quick dip through the sky color instead of a flight.
-    const v = veil()
-    const sky = '#' + surface.envs[id].horizon.getHexString()
-    if (v) v.style.background = sky
-    travelTween = gsap.to(v, {
-      opacity: 1,
+    // A quick dip through the destination's sky instead of a flight.
+    settleHaze()
+    tintAtmosphere(st.exploring!, id)
+    atmosphereFx.flow = 0
+    travelTween = gsap.to(director, {
+      atmo: HANDOVER,
       duration: 0.4,
       ease: 'power1.inOut',
       onComplete: () => {
@@ -190,22 +233,21 @@ export function travelTo(id: string) {
         surfaceCam.lookYaw = 0
         surfaceCam.lookPitch = 0
         surfaceCam.mode = 'free'
-        gsap.to(v, { opacity: 0, duration: 0.6, ease: 'power1.inOut' })
+        travelTween = gsap.to(director, { atmo: 0, duration: 0.6, ease: 'power1.inOut' })
         showTitleCard(2.4)
       },
     })
     return
   }
 
-  beginTravel()
+  const distance = surfaceCam.current.pos.distanceTo(target.pos)
+  const duration = beginTravel(target, DURATION.flight(distance))
   st.setLocation(id)
-  const distance = surfaceCam.from.pos.distanceTo(target.pos)
-  const duration = Math.min(7, Math.max(4, 3.2 + distance / 420))
   sound.swell(duration)
   travelTween = gsap.to(surfaceCam, {
     t: 1,
     duration,
-    ease: 'power3.inOut',
+    ease: 'none',
     onComplete: () => {
       surfaceCam.mode = 'free'
       showTitleCard(2.4)
@@ -264,6 +306,8 @@ export function jumpToLocation(id: string) {
   st.setLocation(id)
   st.setExploring(loc.planet)
   useExploration.getState().markVisited(loc.planet)
+  director.atmo = 0
   surfaceCam.mode = 'free'
+  surfaceCam.drift = 0
   st.setPhase('surface')
 }
