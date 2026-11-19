@@ -25,7 +25,9 @@ import type { PlanetId } from '../../data/planets'
 import { director } from '../../state/director'
 import { useExploration } from '../../state/exploration'
 import { quality, useExperience } from '../../state/useExperience'
-import { discoverCurrent, signalFx } from '../../ui/exploreDirector'
+import { signalFx } from '../../ui/exploreDirector'
+import { startScan } from '../../ui/scanner'
+import { ScanTargets } from './ScanTargets'
 import { sound } from '../../audio/sound'
 import { applyEnv, createSurfaceUniforms, type SurfaceUniforms } from './env'
 import {
@@ -50,7 +52,6 @@ import {
   waterFragment,
   waterVertex,
 } from './shaders'
-import { surfaceCam } from './SurfaceRig'
 import { KIND_IDS, polarGrid, SHAPE_IDS } from './terrain'
 import { prepareSurface, surface } from './world'
 
@@ -123,6 +124,7 @@ function SurfaceScene({ planet }: { planet: PlanetId }) {
         <Landmark key={l.id} loc={l} uniforms={uniforms} defines={defines} settings={settings} />
       ))}
       <Signal settings={settings} />
+      <ScanTargets planet={planet} />
     </group>
   )
 }
@@ -647,8 +649,8 @@ function Signal({ settings }: { settings: SurfaceSettings }) {
   const onClick = (e: ThreeEvent<MouseEvent>) => {
     e.stopPropagation()
     if (e.delta > 6) return
-    if (useExperience.getState().phase !== 'surface' || surfaceCam.mode !== 'free') return
-    discoverCurrent()
+    const loc = useExperience.getState().location
+    if (loc) startScan(loc)
   }
 
   if (!location) return null

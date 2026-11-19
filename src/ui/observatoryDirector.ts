@@ -1,5 +1,6 @@
 import gsap from 'gsap'
 import { sound } from '../audio/sound'
+import { DISCOVERY_BY_ID } from '../data/discoveries'
 import type { PlanetId } from '../data/planets'
 import { beginObservatory, galaxyCam, startGalaxyTravel } from '../scene/galaxy/GalaxyRig'
 import { director } from '../state/director'
@@ -7,6 +8,7 @@ import { useExploration } from '../state/exploration'
 import { systemProgress } from '../state/progress'
 import { useExperience } from '../state/useExperience'
 import { startAscent, startDescent } from './exploreDirector'
+import { startScan } from './scanner'
 
 /**
  * Phase 4 choreography. Opening raises the galaxy camera to the zenith above
@@ -81,7 +83,17 @@ export function exploreFromObservatory(planet: PlanetId) {
   leave(planet)
 }
 
-function leave(planet: PlanetId | null) {
+/**
+ * Revisit an archived discovery: travel to its world, land at its location,
+ * then turn to it and reopen its record.
+ */
+export function revisitDiscovery(id: string) {
+  const d = DISCOVERY_BY_ID[id]
+  if (!d) return
+  leave(d.planet, { location: d.location, then: () => startScan(id) })
+}
+
+function leave(planet: PlanetId | null, landing: { location?: string; then?: () => void } = {}) {
   const st = useExperience.getState()
   if (st.phase !== 'observatory') return
   sound.unlock()
@@ -99,7 +111,7 @@ function leave(planet: PlanetId | null) {
   if (planet) {
     // Recorded while the Observatory still owns the camera, then flown to.
     st.setFocus(planet)
-    galaxyCam.onArrive = () => startDescent(planet)
+    galaxyCam.onArrive = () => startDescent(planet, landing)
   }
   startGalaxyTravel(planet)
 }

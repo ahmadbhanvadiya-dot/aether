@@ -1,15 +1,19 @@
-import { ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react'
+import { ArrowLeft, ChevronLeft, ChevronRight, CornerDownRight } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { locationsFor } from '../data/locations'
+import { CATEGORIES, CATEGORY_ORDER, discoveriesAt, type DiscoveryData } from '../data/discoveries'
+import { LOCATIONS } from '../data/locations'
 import { PLANET_BY_ID, PLANETS, type PlanetId } from '../data/planets'
 import { useThumbs } from '../scene/galaxy/Thumbnails'
 import { telemetry } from '../state/director'
 import { useExploration } from '../state/exploration'
 import { discoveryTimeline, formatWhen, systemProgress, type WorldProgress } from '../state/progress'
 import { quality, useExperience } from '../state/useExperience'
-import { closeObservatory, exploreFromObservatory, stepObserved } from './observatoryDirector'
+import { closeObservatory, exploreFromObservatory, revisitDiscovery, stepObserved } from './observatoryDirector'
+import { CATEGORY_ICON, unknownName } from './ScannerUI'
 
 const ORDER = PLANETS.map((p) => p.id)
+/** The location hint each signal shows on site before it is found (safe to show here too). */
+const LOCATION_HINTS: Record<string, string> = Object.fromEntries(LOCATIONS.map((l) => [l.id, l.hint]))
 const TICKS = 72
 
 // ---------------------------------------------------------------------------
@@ -24,13 +28,21 @@ function Chart({ progress }: { progress: WorldProgress[] }) {
   const observed = useExperience((s) => s.observed)
   const setObserved = useExperience((s) => s.setObserved)
   const setHovered = useExperience((s) => s.setHovered)
-  const discovered = useExploration((s) => s.discovered)
 
-  // Which of each world's three locations are found, in location order.
+  // One mark per location (hollow, partly or fully explored), then one per hidden find.
   const marks = useMemo(
-    () => Object.fromEntries(PLANETS.map((p) => [p.id, locationsFor(p.id).map((l) => !!discovered[l.id])])),
-    [discovered],
-  ) as Record<PlanetId, boolean[]>
+    () =>
+      Object.fromEntries(
+        progress.map((w) => [
+          w.planet.id,
+          [
+            ...w.locations.map((l) => (l.found === 0 ? 'none' : l.found >= l.total ? 'complete' : 'partial')),
+            ...Array.from({ length: w.hiddenFound }, () => 'hidden'),
+          ],
+        ]),
+      ),
+    [progress],
+  ) as Record<PlanetId, ('none' | 'partial' | 'complete' | 'hidden')[]>
 
   useEffect(() => {
     let raf = 0
@@ -120,13 +132,15 @@ function Chart({ progress }: { progress: WorldProgress[] }) {
         </g>
         <line data-reading className="obs-reading" />
         {ORDER.map((id) =>
-          marks[id].map((found, i) => (
+          marks[id].map((state, i) => (
             <circle
               key={`${id}-${i}`}
               data-mark={id}
-              r={2.6}
+              r={state === 'hidden' ? 2 : 2.6}
               className="obs-mark"
-              data-found={found || undefined}
+              data-found={state === 'complete' || undefined}
+              data-partial={state === 'partial' || undefined}
+              data-hidden={state === 'hidden' || undefined}
               style={{ ['--accent' as string]: PLANET_BY_ID[id].accent }}
             />
           )),
@@ -171,7 +185,6 @@ function visitedLine(w: WorldProgress) {
 
 /** The selected world's record, beside the dial. */
 function Reading({ world, active }: { world: WorldProgress; active: boolean }) {
-  const discovered = useExploration((s) => s.discovered)
   const p = world.planet
   return (
     <section className="obs-reading-panel" aria-live="polite" aria-label={`${p.name} record`}>
@@ -196,23 +209,31 @@ function Reading({ world, active }: { world: WorldProgress; active: boolean }) {
           <dd className="tabular-nums">{world.percent}%</dd>
         </div>
         <div>
-          <dt>Locations</dt>
+          <dt>Discoveries</dt>
           <dd className="tabular-nums">
-            {world.found} of {world.total} found
+            {world.found} of {world.total}
+            {world.hiddenFound > 0 && <span className="obs-hidden-count"> · {world.hiddenFound} hidden</span>}
           </dd>
         </div>
       </dl>
       <ol className="obs-reading-locations">
-        {locationsFor(p.id).map((l) => {
-          const at = discovered[l.id]
-          return (
-            <li key={l.id}>
-              <span className="signal-dot" data-found={at ? true : undefined} style={{ ['--accent' as string]: p.accent }} aria-hidden />
-              <span className="text-starlight/90">{l.name}</span>
-              <span className="ml-auto text-haze tabular-nums">{at ? formatWhen(at).date : 'Not found'}</span>
-            </li>
-          )
-        })}
+        {world.locations.map((l) => (
+          <li key={l.location.id}>
+            <span
+              className="signal-dot"
+              data-found={l.found >= l.total || undefined}
+              data-partial={(l.found > 0 && l.found < l.total) || undefined}
+              style={{ ['--accent' as string]: p.accent }}
+              aria-hidden
+            />
+            <span className="text-starlight/90">{l.location.name}</span>
+            <span className="ml-auto text-haze tabular-nums">
+              {l.found} of {l.total}
+              {l.hiddenFound > 0 && <span className="obs-hidden-count"> +{l.hiddenFound} hidden</span>}
+              {l.lastAt ? ` · ${formatWhen(l.lastAt).date}` : ''}
+            </span>
+          </li>
+        ))}
       </ol>
       <div className="obs-reading-actions">
         <button type="button" className="explore-button" onClick={() => exploreFromObservatory(p.id)} tabIndex={active ? 0 : -1}>
@@ -229,6 +250,63 @@ function Reading({ world, active }: { world: WorldProgress; active: boolean }) {
         </span>
       </div>
     </section>
+  )
+}
+
+/** One discovery in a planet archive: its record once found; only what is safe to know before. */
+function ArchiveEntry({ d, at, accent, active }: { d: DiscoveryData; at: number | undefined; accent: string; active: boolean }) {
+  const Icon = CATEGORY_ICON[d.category]
+  const when = at ? formatWhen(at) : null
+  const hidden = d.kind === 'secret'
+  return (
+    <li className="obs-entry" data-found={at ? true : undefined} data-hidden={hidden || undefined}>
+      {at ? (
+        <>
+          <p className="obs-entry-kind">
+            <Icon size={13} strokeWidth={1.5} aria-hidden />
+            {CATEGORIES[d.category].label}
+            {hidden && <span className="obs-entry-tag">Hidden</span>}
+          </p>
+          <p className="obs-entry-finding">{d.name}</p>
+          <p className="obs-entry-copy">{d.description}</p>
+          <p className="obs-entry-meta">
+            <span className="signal-dot" data-found style={{ ['--accent' as string]: accent }} aria-hidden />
+            Discovered <time dateTime={when!.iso}>{when!.date}, {when!.time}</time>
+          </p>
+          <button type="button" className="obs-entry-revisit quiet-button" onClick={() => revisitDiscovery(d.id)} tabIndex={active ? 0 : -1}>
+            <CornerDownRight size={13} strokeWidth={1.5} aria-hidden />
+            Revisit
+            <span className="sr-only"> {d.name}</span>
+          </button>
+        </>
+      ) : hidden ? (
+        <>
+          <p className="obs-entry-kind">Hidden discovery</p>
+          <p className="obs-entry-redacted" aria-label="Not yet known">
+            <span />
+          </p>
+          <p className="obs-entry-copy obs-entry-lead">{d.lead}</p>
+          <p className="obs-entry-meta">
+            <span className="signal-dot" style={{ ['--accent' as string]: 'var(--color-violet)' }} aria-hidden />
+            Not yet found
+          </p>
+        </>
+      ) : (
+        <>
+          <p className="obs-entry-kind">{unknownName(d)}</p>
+          <p className="obs-entry-redacted" aria-label="Not yet known">
+            <span />
+          </p>
+          <p className="obs-entry-copy">
+            {d.kind === 'signal' ? (LOCATION_HINTS[d.location] ?? 'A signal waits here.') : 'Seen from the location, not yet scanned.'}
+          </p>
+          <p className="obs-entry-meta">
+            <span className="signal-dot" style={{ ['--accent' as string]: accent }} aria-hidden />
+            Not yet discovered
+          </p>
+        </>
+      )}
+    </li>
   )
 }
 
@@ -303,7 +381,7 @@ export function ObservatoryUI() {
   const world = progress.worlds.find((w) => w.planet.id === observed)!
   const most = progress.mostExplored
   // New entries stagger among themselves.
-  const fresh = open ? timeline.filter((t) => t.at > visit.seenBefore).map((t) => t.location.id) : []
+  const fresh = open ? timeline.filter((t) => t.at > visit.seenBefore).map((t) => t.discovery.id) : []
   const scrollTo = (id: string) => scroller.current?.querySelector(`#${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 
   return (
@@ -347,12 +425,16 @@ export function ObservatoryUI() {
               </dd>
             </div>
             <div>
-              <dt>Locations discovered</dt>
-              <dd className="tabular-nums">{progress.found}</dd>
+              <dt>Discoveries</dt>
+              <dd className="tabular-nums">
+                {progress.found} of {progress.total}
+              </dd>
             </div>
             <div>
-              <dt>Discoveries available</dt>
-              <dd className="tabular-nums">{progress.total}</dd>
+              <dt>Hidden</dt>
+              <dd className="tabular-nums">
+                {progress.hiddenFound} of {progress.hiddenTotal}
+              </dd>
             </div>
             <div>
               <dt>Exploration</dt>
@@ -361,6 +443,10 @@ export function ObservatoryUI() {
             <div>
               <dt>Most explored</dt>
               <dd>{most.length === 0 ? 'None yet' : most.map((p) => p.name).join(', ') + (most.length > 1 ? ' (tied)' : '')}</dd>
+            </div>
+            <div>
+              <dt>Last discovery</dt>
+              <dd>{progress.last ? progress.last.discovery.name : 'None yet'}</dd>
             </div>
           </dl>
 
@@ -406,6 +492,7 @@ export function ObservatoryUI() {
                     <span className="obs-stat-label">Found</span>
                     <span className="tabular-nums">
                       {w.found} of {w.total}
+                      {w.hiddenFound > 0 && <span className="obs-hidden-count"> +{w.hiddenFound}</span>}
                     </span>
                   </span>
                 </button>
@@ -418,56 +505,68 @@ export function ObservatoryUI() {
           </ol>
         </section>
 
-        {/* The collection: every location, found or not. */}
+        {/* The planet archives: everything found on the selected world, and what remains. */}
         <section id="obs-discoveries" className="obs-section" aria-labelledby="obs-disc-title">
           <h2 id="obs-disc-title" className="obs-section-title">
-            Discoveries
+            Archives
           </h2>
           <p className="obs-section-note tabular-nums">
-            {progress.found} of {progress.total} found. Unfound signals keep their secrets until you reach them.
+            {progress.found} of {progress.total} discoveries, {progress.hiddenFound} of {progress.hiddenTotal} hidden. Unscanned
+            objects keep their secrets until you reach them.
           </p>
-          {progress.worlds.map((w) => (
-            <div key={w.planet.id} className="obs-collection-world">
-              <h3 className="obs-collection-name">
+          <dl className="obs-categories" aria-label="Discoveries by category">
+            {CATEGORY_ORDER.map((c) => {
+              const Icon = CATEGORY_ICON[c]
+              return (
+                <div key={c}>
+                  <dt>
+                    <Icon size={14} strokeWidth={1.5} aria-hidden />
+                    {CATEGORIES[c].plural}
+                  </dt>
+                  <dd className="tabular-nums">
+                    {progress.byCategory[c].found} of {progress.byCategory[c].total}
+                  </dd>
+                </div>
+              )
+            })}
+          </dl>
+          <div className="obs-archive-tabs" role="tablist" aria-label="Planet archive">
+            {progress.worlds.map((w) => (
+              <button
+                key={w.planet.id}
+                type="button"
+                role="tab"
+                className="obs-archive-tab"
+                aria-selected={w.planet.id === observed}
+                data-selected={w.planet.id === observed || undefined}
+                onClick={() => setObserved(w.planet.id)}
+                tabIndex={open ? 0 : -1}
+                style={{ ['--accent' as string]: w.planet.accent }}
+              >
                 {w.planet.name}
                 <span className="tabular-nums">
-                  {w.found} of {w.total}
+                  {w.found}/{w.total}
                 </span>
-              </h3>
-              <ul className="obs-collection">
-                {locationsFor(w.planet.id).map((l) => {
-                  const at = discovered[l.id]
-                  return (
-                    <li key={l.id} className="obs-entry" data-found={at ? true : undefined}>
-                      <p className="obs-entry-name">{l.name}</p>
-                      <p className="obs-entry-region">{l.region}</p>
-                      {at ? (
-                        <>
-                          <p className="obs-entry-finding">{l.finding}</p>
-                          <p className="obs-entry-copy">{l.lore}</p>
-                          <p className="obs-entry-meta">
-                            <span className="signal-dot" data-found style={{ ['--accent' as string]: w.planet.accent }} aria-hidden />
-                            Discovered <time dateTime={formatWhen(at).iso}>{formatWhen(at).date}, {formatWhen(at).time}</time>
-                          </p>
-                        </>
-                      ) : (
-                        <>
-                          <p className="obs-entry-redacted" aria-label="Finding not yet known">
-                            <span />
-                          </p>
-                          <p className="obs-entry-copy">{l.hint}</p>
-                          <p className="obs-entry-meta">
-                            <span className="signal-dot" style={{ ['--accent' as string]: w.planet.accent }} aria-hidden />
-                            Not yet discovered
-                          </p>
-                        </>
-                      )}
-                    </li>
-                  )
-                })}
-              </ul>
-            </div>
-          ))}
+              </button>
+            ))}
+          </div>
+          <div role="tabpanel" aria-label={`${world.planet.name} archive`}>
+            {world.locations.map((lp) => (
+              <div key={lp.location.id} className="obs-collection-world">
+                <h3 className="obs-collection-name">
+                  {lp.location.name}
+                  <span className="tabular-nums">
+                    {lp.found} of {lp.total}
+                  </span>
+                </h3>
+                <ul className="obs-collection">
+                  {discoveriesAt(lp.location.id).map((d) => (
+                    <ArchiveEntry key={d.id} d={d} at={discovered[d.id]} accent={world.planet.accent} active={open} />
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
         </section>
 
         {/* The timeline: discoveries in the order they were made. */}
@@ -477,7 +576,7 @@ export function ObservatoryUI() {
           </h2>
           {timeline.length === 0 ? (
             <div className="obs-empty">
-              <p>Nothing is recorded yet. Land on a world and find its signal; each discovery is written here with the moment it was made.</p>
+              <p>Nothing is recorded yet. Land on a world and scan what you find; each discovery is written here with the moment it was made.</p>
               <button type="button" className="explore-button" onClick={() => exploreFromObservatory(observed)} tabIndex={open ? 0 : -1}>
                 <span className="enter-glyph" style={{ background: PLANET_BY_ID[observed].accent }} aria-hidden />
                 Explore {PLANET_BY_ID[observed].name}
@@ -487,11 +586,11 @@ export function ObservatoryUI() {
             <ol ref={timelineEl} className="obs-timeline" data-inview={visit.timelineSeen || undefined}>
               {timeline.map((t) => {
                 const when = formatWhen(t.at)
-                const order = fresh.indexOf(t.location.id)
+                const order = fresh.indexOf(t.discovery.id)
                 const isNew = order >= 0
                 return (
                   <li
-                    key={t.location.id}
+                    key={t.discovery.id}
                     className="obs-event"
                     data-new={isNew || undefined}
                     style={{ ['--i' as string]: Math.max(order, 0), ['--accent' as string]: t.planet.accent }}
@@ -503,11 +602,13 @@ export function ObservatoryUI() {
                     <span className="obs-event-dot" aria-hidden />
                     <div className="obs-event-body">
                       <p className="obs-event-name">
-                        {t.location.name}
+                        {t.discovery.name}
                         {isNew && <span className="obs-event-new">New since your last visit</span>}
                       </p>
-                      <p className="obs-event-detail">{t.location.finding}</p>
-                      <p className="obs-event-region">{t.location.region}</p>
+                      <p className="obs-event-detail">{CATEGORIES[t.discovery.category].label}{t.discovery.kind === 'secret' && ' · Hidden'}</p>
+                      <p className="obs-event-region">
+                        {t.location.name}, {t.planet.name}
+                      </p>
                     </div>
                   </li>
                 )

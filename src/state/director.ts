@@ -72,6 +72,8 @@ export const telemetry = {
   hover: { x: 0, y: 0, visible: false, radiusPx: 0 },
   /** The surface signal's projected screen position. */
   signal: { x: 0, y: 0, visible: false },
+  /** Phase 6: scannable discoveries at the current location, projected (CSS px), with glint strength. */
+  targets: {} as Record<string, { x: number; y: number; on: boolean; alpha: number }>,
   /** Observatory chart: projected Elys and worlds (CSS px), and how far the dial view is in. */
   chart: {
     ox: 0,

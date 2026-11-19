@@ -1,8 +1,8 @@
 # AETHER — Design System
 
 **The source of truth for AETHER.** Every value below was read from the source code on
-2026‑11‑19. Phases 1–4 are live at <https://ahmadbhanvadiya-dot.github.io/aether/> (merge
-commit `f34cd14`); the journey choreography (§8) is in the working tree and not yet
+2026‑11‑19. Phases 1–5 are live at <https://ahmadbhanvadiya-dot.github.io/aether/> (merge
+commit `9bff7ae`); Phase 6, interactive exploration (§9), is in the working tree and not yet
 deployed. Product context lives in `PRODUCT.md`. When code and this document disagree, fix one of them in the same change.
 
 Status labels used throughout:
@@ -21,12 +21,13 @@ Status labels used throughout:
 5. [Interaction](#5-interaction) (Implemented)
 6. [Phase 3 — Planet exploration](#6-phase-3--planet-exploration) (Implemented)
 7. [Phase 4 — The Observatory](#7-phase-4--the-observatory) (Implemented)
-8. [The journey — camera choreography](#8-the-journey--camera-choreography) (Implemented)
-9. [Technical architecture](#9-technical-architecture) (Implemented)
-10. [Rules for future work](#10-rules-for-future-work) (Planned)
-11. [Known limitations](#11-known-limitations)
-12. [Decision log](#12-decision-log)
-13. [Roadmap](#13-roadmap)
+8. [Phase 5 — The journey: camera choreography](#8-phase-5--the-journey-camera-choreography) (Implemented)
+9. [Phase 6 — Interactive exploration](#9-phase-6--interactive-exploration) (Implemented)
+10. [Technical architecture](#10-technical-architecture) (Implemented)
+11. [Rules for future work](#11-rules-for-future-work) (Planned)
+12. [Known limitations](#12-known-limitations)
+13. [Decision log](#13-decision-log)
+14. [Roadmap](#14-roadmap)
 
 ---
 
@@ -100,7 +101,7 @@ per the Phase 1 brief, and the six world names, which are defined in caps in
 |--------|---------|
 | Top‑left | Eclipse mark (SVG). In galaxy overview, **Return to Vael** beside it. |
 | Top‑right | **Observatory** (Phase 4; galaxy and surfaces), **Pause motion**, **Sound** (Phase 3) and **Hide interface** buttons (labels hidden below `sm`; Sound's below `lg`). In the Observatory, top‑left shows **← Galaxy**. |
-| Bottom‑left | Status line (`aria-live`) + live readout; in the galaxy and on surfaces a third line, "N of 18 discoveries". |
+| Bottom‑left | Status line (`aria-live`) + live readout; in the galaxy and on surfaces a third line, "N of 54 discoveries" (+ ", N hidden"; Phase 6). |
 | Bottom‑right | One contextual hint. |
 
 Status and hint text by state (`ui/Hud.tsx`):
@@ -374,7 +375,7 @@ limited to 0.15 … π − 0.15. Auto‑rotate is off when motion is paused or r
 
 ## 4. The six worlds
 
-**Status: Implemented.** All six share one pipeline (§9) and differ through a *kind* recipe
+**Status: Implemented.** All six share one pipeline (§10) and differ through a *kind* recipe
 in the bake and surface shaders (`scene/galaxy/shaders.ts`), plus per‑world data.
 
 | World | Kind | Accent | Atmosphere day / night | Shell | Clouds | Rings |
@@ -674,6 +675,8 @@ ring latitude).
 - **Hover** shows a leader‑line label: "Unidentified signal" with "Select to investigate"
   (touch: "Tap to investigate", shown without hover); once found, the finding's name and
   "Discovered". Below 560px wide the label sits centred under the signal.
+- *Phase 6 (§9): selecting the signal now scans it through the scanner, and the record replaces
+  the notification below; the hover label is now the shared scan marker.*
 - **Select** (ignored after a drag of more than 6px or during a flight). On first discovery:
   chime; the signal blooms (rings × 4, core flare, 1.6s); the beam goes out; the location's lore
   replaces its hint (300ms `reveal-in`); its dots fill; a notification appears. Selecting an
@@ -688,9 +691,9 @@ ring latitude).
   (location id → timestamp) and `soundOn`; Phase 4 (version 2) adds `visited` and
   `observatorySeenAt` (see §7). Storage errors (private browsing, blocked storage)
   are caught; progress then lasts for the session.
-- Per world: the world panel shows "Three signals unexplored" or "N of 3 signals found"; the
-  location panel shows "N of 3 signals found on WORLD".
-- Total: the HUD's third line, "N of 18 discoveries", in the galaxy and on surfaces.
+- Phase 6: the same `discovered` map holds every catalogued discovery (§9); counts are
+  derived by `state/progress.ts`. World panel: "9 discoveries await" or "N of 9 discoveries";
+  location panel: "N of 9 discoveries on WORLD"; HUD: "N of 54 discoveries" (+ hidden).
 
 ### Sound (`audio/sound.ts`)
 
@@ -802,9 +805,9 @@ the dial.
   teaser; facts as a 3‑column `<dl>` with hairlines — First landed (date or "Not yet"),
   Explored %, Locations "N of 3 found"; the three locations, each with its discovery date or
   "Not found"; **Explore NAME**; previous / next chevrons.
-- **Ledger** (`<dl>`, same grammar): Worlds visited "N of 6", Locations discovered,
-  Discoveries available (18), Exploration %, Most explored ("None yet", one name, or several
-  names + "(tied)").
+- **Ledger** (`<dl>`, same grammar): Worlds visited "N of 6", Discoveries "N of 54", Hidden
+  "N of 6", Exploration %, Most explored ("None yet", one name, or several names + "(tied)"),
+  Last discovery (Phase 6; §9).
 
 ### The archive (scrolls under the dial)
 
@@ -815,7 +818,8 @@ viewport height).
   teaser, Visited date, Explored %, Found "N of 3" — plus a separate **Explore** button. A
   row click selects the world and scrolls back to the dial. The selected row is tinted
   across its full width.
-- **Discoveries**: all 18, grouped by world in a 3‑column grid (1 column narrow). Found:
+- **Discoveries** — *replaced in Phase 6 by per‑world Archives (§9); the rules below still
+  hold for what an unfound entry may show.* All 18, grouped by world in a 3‑column grid (1 column narrow). Found:
   name, region, finding (Italiana), lore, accent dot + "Discovered" + date and time.
   **Not found: name, region, a hatched redaction bar where the finding would be, and the
   same hint the surface shows before discovery** — nothing a visitor could not already see
@@ -881,9 +885,9 @@ phone, and the reduced‑motion timings.
 
 ---
 
-## 8. The journey — camera choreography
+## 8. Phase 5 — The journey: camera choreography
 
-**Status: Implemented** (working tree; not yet deployed). Supersedes the Phase 2 and 3
+**Status: Implemented** (deployed, merge commit `9bff7ae`). Supersedes the Phase 2 and 3
 camera timings: galaxy travel, descent, landing, location flights and the climb back out
 were rebuilt as one continuous move. The rigs, director values and spaces are the same
 (no new camera controller); the curves, paths and the hand‑over between spaces are new.
@@ -1040,7 +1044,162 @@ reduced‑motion descent and ascent, and the Observatory → Explore chain into 
 
 ---
 
-## 9. Technical architecture
+## 9. Phase 6 — Interactive exploration
+
+**Status: Implemented** (working tree; not yet deployed). AETHER rewards looking: every
+location holds things to find, a scanner to study them, archives that keep them, and a few
+that hide.
+
+### Architecture: one catalogue, one store
+
+```
+data/discoveries.ts   static catalogue (60): id, kind, planet, location, name, category,
+                      description, placement, lead (hidden ones)
+        │
+state/exploration.ts  the only progress: discovered[id] = timestamp   (persisted, v2, unchanged)
+        │  discover(id): true only the first time, and only for catalogued ids
+state/progress.ts     every derived number: per location, per world, system, by category,
+                      timeline, last discovery
+        │
+HUD · world panel · location panel · scanner · Observatory (dial, record, ledger, archives, timeline)
+```
+
+- **No second database.** Phase 3 signals were already stored as `discovered[locationId]`;
+  the catalogue keeps those ids, so progress saved before Phase 6 counts unchanged (verified
+  with old‑format keys) and no migration is needed. Unknown stored ids are ignored.
+- **UI state only:** `useExperience.scanning` (the target being scanned), `card` (the open
+  record) and `cardAt`, and `detected` (hidden discoveries noticed this visit; reset on each
+  descent — noticing is part of exploring, the find itself is what persists).
+- Per‑frame values live in `scanFx` (`scene/motion.ts`: ring progress, beam, pulse, zoom) and
+  `telemetry.targets` (each scannable object's screen position and glint strength).
+
+### The catalogue (`data/discoveries.ts`)
+
+| Kind | Count | Where | Counts toward completion |
+|------|-------|-------|--------------------------|
+| `signal` | 18 | Each location's Phase 3 signal (id = location id; name = its finding, description = its lore) | Yes |
+| `poi` | 36 | Two per location, placed around the view you arrive with | Yes |
+| `secret` | 6 | One per world, away from the arrival view (behind you, or in the sky) | No — counted separately as *hidden* |
+
+54 discoveries are expected (9 per world, 3 per location); 6 are hidden extras. Categories:
+
+| Category | Label | Visible | Icon (lucide) |
+|----------|-------|---------|---------------|
+| `geology` | Geological formations | 12 | Mountain |
+| `structure` | Ancient structures | 8 | Landmark |
+| `atmosphere` | Atmospheric phenomena | 12 | Wind |
+| `life` | Unusual lifeforms | 14 | Leaf |
+| `anomaly` | Celestial anomalies | 8 | Sparkle |
+
+**Placement** is relative to the location's camera pose, so every object is framed by the
+view it belongs to: a bearing from the pose heading (points of interest within ±0.55 rad,
+left side kept to −0.34 so nothing sits under the location panel on desktop), a distance
+(45 – 1,400 units) and either `rise` above the ground/sea/cloud deck or `elev` into the sky.
+`prepareSurface` resolves them to `surface.targets[id]`.
+
+**Hidden discoveries** and their leads (shown in the Observatory before they are found):
+
+| World | Location | Discovery | Where |
+|-------|----------|-----------|-------|
+| AURELIS | Halvard Ridge | The watcher's ring | Directly behind, below the summit |
+| NYX | The Quiet Caldera | The unlit eye | Behind‑left, high in the sky |
+| SOLARA | Rustgate Canyon | The second arch | Directly behind |
+| VESPER | The Rose Terraces | The ghost moon | Directly behind, low in the sky |
+| THALASSA | Ember Atoll | The breathing sea | Behind‑right, on the water |
+| ORION | Polar Lanterns | The retrograde moonlet | Behind‑left, high in the sky |
+
+### Finding (`scene/surface/ScanTargets.tsx`)
+
+- **Glints**: camera‑facing, additive, 44px on screen at any distance: a bright core (bright
+  enough to catch the surface bloom as a small sparkle), a soft halo and, until found, a
+  thin ring that breathes. Found objects keep a steady, dimmer point.
+- **Nearby**: full strength at the location you are at; from elsewhere they fade in only
+  within 600 – 1,500 units (glimpses during flights), at 45%. Strength rises toward the
+  centre of the view (40% at the edge → 100% at centre). They thin with the atmosphere haze.
+- **Hidden**: nothing shows until the view nears one. Within 0.45 rad a faint shimmer
+  appears (the "warmer" cue); holding the view within 0.2 rad for 1.4 s (dwell decays when
+  you look away) *notices* it: a soft two‑note shimmer, a notice ("Something hidden is
+  here"), and the object becomes a normal scannable target.
+
+### Scanning (`ui/scanner.ts`, `ui/ScannerUI.tsx`)
+
+- **Select**: every scannable object at the current location is a real `<button>` positioned
+  at its projected point each frame (44px hit area; hover/focus shows a reticle with four
+  ticks and a leader label — "Unidentified object", "Unidentified signal", "Hidden object", or
+  the name and category once found). The location panel lists the same objects ("Here"), so
+  keyboard and touch can reach any target, on screen or not; the 3D signal still works too.
+- **Scan** (2.4 s; one at a time):
+
+| t (s) | Beat |
+|-------|------|
+| 0 | The view turns to the object (look damping slowed to 2.4); a quiet scan tone (sine rising a fourth, 7 Hz tremolo). |
+| 0 – 1.3 | Field of view narrows 6° (`scanFx.zoom`). |
+| 0.2 – 1.1 | A beam rises at the object (ground objects; sky objects get rings only). |
+| 0 – 2.4 | The **scanning interface**: 60 graduations turning slowly, a 1.5px arc filling (`power1.inOut`), a dashed inner ring, "Scanning N%"; two rings sweep out from the object in the scene. |
+| **2.4** | `discover(id)` writes the timestamp (persisted). Only on success: chime, signal bloom (signals), record opens. |
+| 2.4 – 4.0 | Completion: the ring closes, swells to 1.35× and fades; a bright ring expands from the object; beam and zoom ease back; the readout shows the category. |
+
+- **The record** (`DiscoveryCard`): type on a right scrim (narrow: a bottom sheet; the
+  location panel steps aside) — category icon + label (+ "Hidden discovery"), name (Italiana),
+  description, Where / Recorded (or "In the archive since") / Status ("New discovery" or
+  "Catalogued"), "Saved to the WORLD archive · N of 9 found on WORLD", Close. Children reveal
+  in an 80ms stagger.
+- **Already found**: selecting it turns the view to it and reopens its record — no second
+  scan, nothing written.
+- **Cancel**: `Esc` during a scan stops it (tone fades in 0.12 s, ring drains); nothing is
+  saved. `Esc` with a record open closes it; otherwise `Esc` returns to orbit as before.
+- **Leaving** (flight, climb, new descent) clears scanner state (`resetScanner`).
+- **Keyboard look** (new): `Shift` + arrows turn the view (0.15 rad / 0.08 rad steps), so
+  hidden discoveries are findable without a pointer.
+
+### Planet archives and the Observatory (§7, updated)
+
+- **Dial**: each world's three location marks show hollow (nothing found), half‑filled
+  (partly) or filled (all three found); a smaller violet mark follows for each hidden find.
+  Labels show the world's percentage of its 9.
+- **Record**: Discoveries "N of 9 · N hidden"; each location "N of 3 (+ hidden)" with the date
+  of its latest find.
+- **Ledger**: Worlds visited, Discoveries "N of 54", Hidden "N of 6", Exploration %, Most
+  explored, Last discovery.
+- **Archives** (replaces "Discoveries"): totals; discoveries by category (five columns; two
+  on narrow); one archive per world, selected with text tabs synced to the dial; grouped by
+  location. A found entry shows category, name, description, discovery date and time, and
+  **Revisit**. An unfound one shows only what is safe: "Unidentified object/signal", a
+  redaction bar, the signal's on‑site hint (or "Seen from the location, not yet scanned"),
+  "Not yet discovered". An unfound hidden discovery shows its **lead** in italics and
+  "Not yet found".
+- **Revisit**: travels to the world, descends to that location, waits for the camera to
+  hand over to free look, turns to the object and reopens its record.
+- **Timeline**: discovery name, category (+ "Hidden"), location and world; "new since your
+  last visit" works per discovery.
+- HUD: "N of 54 discoveries" (+ ", N hidden"); world panel: "9 discoveries await" or "N of 9
+  discoveries"; location panel: "N of 9 discoveries on WORLD"; location strip dots: hollow,
+  partial or complete.
+
+### Accessibility and reduced motion
+
+- Every target is a button with an `aria-label` ("…. Scan" or "name, category. Show record");
+  hidden ones off screen leave the tab order. The "Here" list is the non‑spatial route.
+- The record is `aria-live="polite"`; categories also have text, never icon‑only meaning.
+- Reduced motion: no camera turn animation (instant aim), no zoom, no beam; the ring fills in
+  1.2 s and fades; reveals are fade‑only; the tick ring does not turn.
+- Sound respects the Sound setting (`sound.ready()` returns nothing when off).
+
+### Verified
+
+Dev build (1280×800, 1024×640, 375×812; forced frames): glints and markers on screen;
+scanning the folded strata (camera turn, zoom 55° → 49°, beam, ring to 100%, record, saved
+to localStorage with its timestamp); a hidden discovery found by turning around with
+`Shift`+arrows (shimmer, notice, list entry, scan, "1 hidden" in HUD and panel); `Esc`
+cancelling a scan with nothing saved; repeats and unknown ids refused by `discover`;
+old‑format progress counted; the Observatory dial, record, ledger, archive and timeline
+reflecting the finds; Revisit from the archive back to the object; the full flow on Solara
+(Explore → find → scan two → Observatory archive and "new" timeline entries); a sky target
+(mirage towers); reduced‑motion scan; phone layout.
+
+---
+
+## 10. Technical architecture
 
 **Status: Implemented.** React 19 · Vite 8 · TypeScript · three 0.187 · @react-three/fiber 9 ·
 @react-three/drei 10 (PerformanceMonitor only) · @react-three/postprocessing 3 · GSAP 3
@@ -1058,12 +1217,13 @@ src/
   data/
     planets.ts             PLANETS (six worlds), PLANET_BY_ID, ORDINALS, types
     locations.ts           LOCATIONS (18), SURFACES (per-world surface recipe), types (Phase 3)
+    discoveries.ts         the catalogue: 60 discoveries, categories, placements, leads (Phase 6)
   state/
     useExperience.ts       Zustand store; quality tier; debugShot (?shot=)
     director.ts            palette; director (tweened values); telemetry; labels; Vael sun
     galaxy.ts              live world positions
     exploration.ts         persisted progress: discoveries, first landings, Observatory mark, sound (v2)
-    progress.ts            pure derivations: world/system progress, timeline, dates (Phase 4)
+    progress.ts            pure derivations: location/world/system progress, categories, timeline, dates
   scene/
     Experience.tsx         <Canvas>, pointer listeners, Clock, spaces, rigs, post stack
     CameraRig.tsx          Vael camera: framing, arrival, drift, dive, Ithra projection
@@ -1092,6 +1252,7 @@ src/
       shaders.ts           sky, terrain, water, clouds, motes, rain, landmark, plume, signal
       SurfaceScene.tsx     SurfaceSpace → sky, terrain, water, clouds, weather, landmarks, signal
       SurfaceRig.tsx       surface camera: landing, free look, flights; readout; signal projection
+      ScanTargets.tsx      glints, hidden-object gaze, scan beam/rings, target projections (Phase 6)
   ui/
     TitleScreen.tsx        prelude, arrival, warp out/back, letterbox, veil; mounts Hud + GalaxyUI
     Wordmark.tsx           AETHER letters
@@ -1101,7 +1262,9 @@ src/
     ExploreUI.tsx          title card, location panel/strip, signal label, notice, keys
     exploreDirector.ts     descent, ascent, travel, discovery timelines; ?shot=<location>
     ObservatoryUI.tsx      dial overlay, record, ledger, worlds, discoveries, timeline, keys (Phase 4)
-    observatoryDirector.ts open / close / explore choreography (Phase 4)
+    observatoryDirector.ts open / close / explore / revisit choreography (Phase 4, 6)
+    scanner.ts             scan, cancel, record, notice hidden; aims the surface camera (Phase 6)
+    ScannerUI.tsx          scan markers, scanning interface, discovery record (Phase 6)
 ```
 
 ### Scene management
@@ -1145,16 +1308,16 @@ src/
 
 | Store | Kind | Contents |
 |-------|------|----------|
-| `useExperience` | Zustand (React renders) | `phase` (`boot · arriving · orbit · warping · galaxy · returning · descending · surface · ascending · observatory`), `observed` (the Observatory's selected world), `sceneReady`, `motionPaused`, `reducedMotion`, `cinema`, `focus`, `hovered`, `exploring`, `location`, `signalHovered`, `notice`, actions `setPhase`, `setSceneReady`, `toggleMotion`, `toggleCinema`, `setFocus`, `stepFocus`, `setHovered`, `setExploring`, `setLocation`, `setSignalHovered`, `setNotice` |
-| `useExploration` | Zustand + `persist` (localStorage `aether-exploration`, v2) | `discovered` (id → timestamp), `visited` (world → first landing), `observatorySeenAt`, `soundOn`, `discover(id)` (true only the first time), `markVisited`, `markObservatorySeen`, `toggleSound` |
+| `useExperience` | Zustand (React renders) | `phase` (`boot · arriving · orbit · warping · galaxy · returning · descending · surface · ascending · observatory`), `observed` (the Observatory's selected world), `scanning`, `card`, `cardAt`, `detected` (Phase 6), `sceneReady`, `motionPaused`, `reducedMotion`, `cinema`, `focus`, `hovered`, `exploring`, `location`, `signalHovered`, `notice`, actions `setPhase`, `setSceneReady`, `toggleMotion`, `toggleCinema`, `setFocus`, `stepFocus`, `setHovered`, `setExploring`, `setLocation`, `setSignalHovered`, `setNotice` |
+| `useExploration` | Zustand + `persist` (localStorage `aether-exploration`, v2) | `discovered` (catalogued discovery id → timestamp; Phase 6), `visited` (world → first landing), `observatorySeenAt`, `soundOn`, `discover(id)` (true only the first time), `markVisited`, `markObservatorySeen`, `toggleSound` |
 | `state/progress.ts` | Pure functions | Every derived figure (§7); never stored |
 | `useThumbs` | Zustand | Baked portrait data URLs |
 | `director` | Mutable object (GSAP writes, `useFrame` reads) | `arrival`, `sun`, `sky`, `dive`, `letterbox`*, `hud`, `space` (`vael · galaxy · surface`), `warp`, `galaxyIntro`, `panelShift`, `descent`, `landing`, `observatory`, `atmo` (haze density, §8), `fovKick`, `time` |
-| `telemetry` | Mutable, read in `requestAnimationFrame` by DOM | `altitudeKm`, `readout`, `ithra {x,y,visible}`, `hover {x,y,visible,radiusPx}`, `signal {x,y,visible}`, `chart {ox,oy,active,worlds}` (Phase 4) |
+| `telemetry` | Mutable, read in `requestAnimationFrame` by DOM | `altitudeKm`, `readout`, `ithra {x,y,visible}`, `hover {x,y,visible,radiusPx}`, `signal {x,y,visible}`, `chart {ox,oy,active,worlds}` (Phase 4), `targets {id: {x,y,on,alpha}}` (Phase 6) |
 | `surface`, `surfaceCam`, `signalFx` | Mutable (surface modules) | current world's height function, poses, envs, blended env; surface camera; signal bloom |
 | `labels`, `galaxy.positions` | Mutable vectors | Ithra's and the six worlds' live world positions |
 | `galaxyCam` | Mutable (GalaxyRig module) | camera mode, travel clock, path controls, measured velocity, settle ramp, entry path (start direction, sweep axis/angle) |
-| `atmosphereFx`, `travelFx` | Mutable (`scene/motion.ts`) | haze colours, local up, limb dip, wisp flow; travel speed for dust |
+| `atmosphereFx`, `travelFx`, `scanFx`, `signalFx` | Mutable (`scene/motion.ts`) | haze colours, local up, limb dip, wisp flow; travel speed for dust; scan ring/beam/pulse/zoom; signal bloom |
 
 \* `director.letterbox` is declared but unused; the letterbox is tweened directly on the DOM.
 
@@ -1234,7 +1397,7 @@ Measured on an RTX 3050 laptop (forced frames): Vael ≈ 5.3 ms at a 2000×1125 
 
 ---
 
-## 10. Rules for future work
+## 11. Rules for future work
 
 These are rules, not features. The global rules apply to all future work. The Phase 3
 and Phase 4 subsections record how the shipped implementation follows them.
@@ -1297,6 +1460,15 @@ and Phase 4 subsections record how the shipped implementation follows them.
   number. Statistics stay label + value lines — no tiles, rings or charts that restate a
   number. Unfound content may show only what the surface shows before discovery.
 
+### Discoveries (Phase 6 — implemented, see §9)
+
+- A new discovery is one catalogue entry: unique id (`location.key`), category, placement
+  relative to its location's pose, and a lead if hidden. Never store anything per discovery
+  outside `discovered[id]`; never store a derived count.
+- An unfound entry may show only what the place itself shows before a scan.
+- Hidden discoveries stay optional: never part of a completion percentage.
+- Keep left‑side points of interest at bearing ≥ −0.34 so the location panel never covers them.
+
 ### Adding a world
 
 1. Add a `PLANETS` entry. Orbit radius must keep ≥ 4.5 units clearance to its neighbours,
@@ -1308,7 +1480,7 @@ and Phase 4 subsections record how the shipped implementation follows them.
 
 ---
 
-## 11. Known limitations
+## 12. Known limitations
 
 | Item | Status |
 |------|--------|
@@ -1334,10 +1506,15 @@ and Phase 4 subsections record how the shipped implementation follows them.
 | Journey: the entry sweeps toward the day side; a world whose focus view is near local noon barely sweeps | Accepted |
 | Journey: near dust is subtle by design and reads only in motion | Accepted |
 | Journey: timings verified on forced frames in a desktop browser; not yet felt on a real phone or a 120 Hz display | Open |
+| Scanner: glints are drawn without depth test (always readable), so one behind a ridge still shows | Accepted |
+| Scanner: on narrow portrait phones the horizontal view is ~±0.3 rad, so points of interest at ±0.3 – 0.55 start just off screen; the "Here" list turns the view to them | Accepted |
+| Scanner: "noticed" hidden discoveries reset on each descent until scanned (by design: noticing is part of exploring) | By design |
+| Scanner: new descriptions are placed by bearing and distance only; they are not modelled in the terrain (a "cliff" is a marked point, not new geometry) | Open |
+| Scanner: not tested on a real touch device or with a screen reader | Open |
 
 ---
 
-## 12. Decision log
+## 13. Decision log
 
 Superseded Phase 1 decisions, kept so nobody reintroduces them by accident.
 
@@ -1365,10 +1542,14 @@ Superseded Phase 1 decisions, kept so nobody reintroduces them by accident.
 | Ascent = landing in reverse from the location pose | Climb from the current pose, carrying flight velocity | Leaving mid‑flight jumped to the destination |
 | Flights: lerp + sine arc, heading interpolated independently | Bézier along start/end headings, facing the path; clearance sampled under the line | No crabbing, no clamp kinks |
 | Surface breathe 0.012 units | Layered slow drift that eases in after arrivals | Alive without motion sickness |
+| Click the signal → instant discovery + notification | Every find goes through one scanner (2.4 s scan, record), saved only on completion | Discoveries feel earned; one interaction to learn |
+| 18 location findings as the whole collection | A 60‑entry catalogue in the same `discovered` map; signals keep their ids | No second database, no migration |
+| Observatory "Discoveries" (all worlds at once) | Per‑world Archives synced to the dial, with categories and Revisit | 60 entries need a planet archive, not one long list |
+| Hidden discoveries marked like the others | Invisible until gazed at for 1.4 s, with a faint shimmer as the cue and a lead in the Observatory | Rewarding to find without a checklist |
 
 ---
 
-## 13. Roadmap
+## 14. Roadmap
 
 | Phase | Name | Status | Scope |
 |-------|------|--------|-------|
@@ -1376,5 +1557,6 @@ Superseded Phase 1 decisions, kept so nobody reintroduces them by accident.
 | 2 | Galaxy | **Complete** | Warp, Elys, six worlds, spiral galaxy, hover/select/travel, info panel, world index, keyboard navigation, Return to Vael, GitHub Pages deploy |
 | 3 | Planet Exploration | **Complete** | Descent and ascent, six surface environments, 18 locations, flights between them, signals and discovery, notifications, persisted progress, synthesized sound with controls |
 | 4 | Observatory | **Complete** | Planisphere dial from the zenith, world record and ledger, six‑world archive, discovery collection with redacted unfound entries, timeline with new‑since‑last‑visit, baked portraits, persisted progress v2, navigation between galaxy, surfaces and Observatory |
-| — | Journey choreography | **Complete** (not yet deployed) | Approach, entry, exploration drift and flights, return to orbit as one continuous move (§8) |
-| 5 | Final Polish | Planned | Real‑device testing, code splitting, ring shadows on Orion, surface shadows, performance tuning |
+| 5 | Journey choreography | **Complete** | Approach, entry, exploration drift and flights, return to orbit as one continuous move (§8) |
+| 6 | Interactive Exploration | **Complete** (not yet deployed) | Scanner, 36 points of interest and 6 hidden discoveries in five categories, scan animation and records, planet archives, Observatory integration, Revisit (§9) |
+| 7 | Final Polish | Planned | Real‑device testing, code splitting, ring shadows on Orion, surface shadows, performance tuning |

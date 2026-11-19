@@ -1,63 +1,18 @@
 import { Orbit } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { sound } from '../audio/sound'
+import { CATEGORIES } from '../data/discoveries'
 import { LOCATION_BY_ID, locationsFor } from '../data/locations'
 import { PLANET_BY_ID } from '../data/planets'
-import { telemetry } from '../state/director'
-import { discoveredCount, useExploration } from '../state/exploration'
-import { quality, useExperience } from '../state/useExperience'
+import { surfaceCam } from '../scene/surface/SurfaceRig'
+import { useExploration } from '../state/exploration'
+import { locationProgress, worldProgress } from '../state/progress'
+import { useExperience } from '../state/useExperience'
 import { startAscent, stepLocation, travelTo } from './exploreDirector'
+import { cancelScan, closeCard, startScan } from './scanner'
+import { CATEGORY_ICON, ScannerUI, unknownName, useScannable } from './ScannerUI'
 
-/** Leader-line label on the surface signal. */
-function SignalLabel({ found, finding }: { found: boolean; finding: string }) {
-  const el = useRef<HTMLDivElement>(null)
-  const hovered = useExperience((s) => s.signalHovered)
-  // Touch has no hover: undiscovered signals keep a quiet label instead.
-  const show = hovered || (quality.coarse && !found)
-
-  useEffect(() => {
-    let raf = 0
-    let side: string | null = null
-    const tick = () => {
-      const node = el.current
-      if (node) {
-        const sg = telemetry.signal
-        // Narrow screens: centre the label under the signal. Otherwise flip
-        // to the left whenever it would run off the right edge.
-        const narrow = window.innerWidth < 560
-        const right = sg.x < window.innerWidth - 250
-        const x = narrow ? sg.x : right ? sg.x + 14 : sg.x - 14
-        const y = narrow ? sg.y + 22 : sg.y - 14
-        node.style.transform = `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0)`
-        node.style.opacity = sg.visible && show ? '1' : '0'
-        const next = narrow ? 'below' : right ? 'right' : 'left'
-        if (next !== side) {
-          node.dataset.side = next
-          side = next
-        }
-      }
-      raf = requestAnimationFrame(tick)
-    }
-    raf = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(raf)
-  }, [show])
-
-  return (
-    <div ref={el} className="orbit-label world-label" data-side="right" aria-hidden style={{ opacity: 0 }}>
-      <span className="orbit-label-leader" />
-      <span className="orbit-label-text">
-        <span className="font-display text-[1.2rem] leading-none tracking-[0.08em] text-starlight">
-          {found ? finding : 'Unidentified signal'}
-        </span>
-        <span className="text-[0.8125rem] text-haze">
-          {found ? 'Discovered' : quality.coarse ? 'Tap to investigate' : 'Select to investigate'}
-        </span>
-      </span>
-    </div>
-  )
-}
-
-/** One discovery at a time, bottom-left above the status line. */
+/** One notice at a time, bottom-left above the status line (hidden discoveries noticed). */
 function DiscoveryNotice() {
   const notice = useExperience((s) => s.notice)
   const setNotice = useExperience((s) => s.setNotice)
@@ -80,13 +35,53 @@ function DiscoveryNotice() {
         <>
           <span className="flex items-center gap-2.5 text-[0.8125rem] text-haze">
             <span className="discovery-dot" aria-hidden />
-            Discovered
+            Detected
           </span>
           <span className="text-[0.95rem] text-starlight">{notice.title}</span>
-          <span className="text-[0.8125rem] text-haze tabular-nums">{notice.detail}</span>
+          <span className="text-[0.8125rem] text-haze">{notice.detail}</span>
         </>
       )}
     </div>
+  )
+}
+
+/** What can be scanned here: the keyboard and touch route to every target, on screen or not. */
+function ScanList({ location, onSurface }: { location: string; onSurface: boolean }) {
+  const discovered = useExploration((s) => s.discovered)
+  const scanning = useExperience((s) => s.scanning)
+  const targets = useScannable(location)
+  const accent = PLANET_BY_ID[LOCATION_BY_ID[location].planet].accent
+  return (
+    <ul className="scan-list" aria-label="Here">
+      {targets.map((d) => {
+        const found = !!discovered[d.id]
+        const Icon = CATEGORY_ICON[d.category]
+        return (
+          <li key={d.id}>
+            <button
+              type="button"
+              className="scan-list-item"
+              data-found={found || undefined}
+              data-active={scanning === d.id || undefined}
+              onClick={() => startScan(d.id)}
+              tabIndex={onSurface ? 0 : -1}
+              style={{ ['--accent' as string]: accent }}
+            >
+              <span className="signal-dot" data-found={found || undefined} aria-hidden />
+              <span className="scan-list-name">{found ? d.name : unknownName(d)}</span>
+              {found ? (
+                <span className="scan-list-kind" title={CATEGORIES[d.category].label}>
+                  <Icon size={13} strokeWidth={1.5} aria-hidden />
+                  <span className="sr-only">{CATEGORIES[d.category].label}</span>
+                </span>
+              ) : (
+                <span className="scan-list-kind">{scanning === d.id ? 'Scanning' : 'Scan'}</span>
+              )}
+            </button>
+          </li>
+        )
+      })}
+    </ul>
   )
 }
 
@@ -95,9 +90,12 @@ export function ExploreUI() {
   const exploring = useExperience((s) => s.exploring)
   const location = useExperience((s) => s.location)
   const discovered = useExploration((s) => s.discovered)
+  const visited = useExploration((s) => s.visited)
   const onSurface = phase === 'surface'
+  const card = useExperience((s) => s.card)
 
-  // Surface keys: ← / → travel, Esc returns to orbit. M toggles sound anywhere.
+  // Surface keys: Esc cancels a scan, closes a card, else returns to orbit;
+  // ← / → travel; Shift + arrows look around. M toggles sound anywhere.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return
@@ -106,9 +104,25 @@ export function ExploreUI() {
         useExploration.getState().toggleSound()
         return
       }
-      if (useExperience.getState().phase !== 'surface') return
-      if (e.key === 'Escape') startAscent()
-      else if (e.key === 'ArrowRight') stepLocation(1)
+      const st = useExperience.getState()
+      if (st.phase !== 'surface') return
+      if (e.key === 'Escape') {
+        if (st.scanning) cancelScan()
+        else if (st.card) closeCard()
+        else startAscent()
+        return
+      }
+      if (e.shiftKey && e.key.startsWith('Arrow')) {
+        if (surfaceCam.mode !== 'free' || st.scanning) return
+        e.preventDefault()
+        if (e.key === 'ArrowLeft') surfaceCam.lookYaw -= 0.15
+        if (e.key === 'ArrowRight') surfaceCam.lookYaw += 0.15
+        if (e.key === 'ArrowUp') surfaceCam.lookPitch = Math.min(0.5, surfaceCam.lookPitch + 0.08)
+        if (e.key === 'ArrowDown') surfaceCam.lookPitch = Math.max(-0.55, surfaceCam.lookPitch - 0.08)
+        return
+      }
+      if (st.scanning) return
+      if (e.key === 'ArrowRight') stepLocation(1)
       else if (e.key === 'ArrowLeft') stepLocation(-1)
     }
     window.addEventListener('keydown', onKey)
@@ -117,9 +131,9 @@ export function ExploreUI() {
 
   const loc = location ? LOCATION_BY_ID[location] : null
   const locs = exploring ? locationsFor(exploring) : []
-  const found = loc ? !!discovered[loc.id] : false
   const world = exploring ? PLANET_BY_ID[exploring] : null
-  const count = exploring ? discoveredCount(discovered, exploring) : 0
+  const signalFound = loc ? !!discovered[loc.id] : false
+  const progress = world ? worldProgress(world, discovered, visited) : null
 
   return (
     <>
@@ -133,7 +147,7 @@ export function ExploreUI() {
         )}
       </div>
 
-      <div className="explore-ui" data-visible={onSurface || undefined}>
+      <div className="explore-ui" data-visible={onSurface || undefined} data-card={card ? true : undefined}>
         <button
           type="button"
           className="quiet-button ui-hideable pointer-events-auto absolute px-3"
@@ -144,60 +158,61 @@ export function ExploreUI() {
           onClick={() => startAscent()}
           tabIndex={onSurface ? 0 : -1}
           title="Return to orbit (Esc)"
+          aria-label="Return to orbit"
         >
           <Orbit size={15} strokeWidth={1.5} aria-hidden />
-          Return to orbit
+          <span className="max-[479px]:hidden">Return to orbit</span>
         </button>
 
-        {loc && world && (
+        {loc && world && progress && (
           <aside className="location-panel ui-hideable" aria-live="polite">
             <p className="text-[0.8125rem] text-haze">{loc.region}</p>
             <h2 className="location-name">{loc.name}</h2>
-            <p className="flex items-center gap-2.5 text-[0.9rem] text-starlight/85">
-              <span
-                className="signal-dot"
-                data-found={found || undefined}
-                style={{ ['--accent' as string]: world.accent }}
-                aria-hidden
-              />
-              {found ? loc.finding : 'Unexplored signal'}
+            <p className="location-copy" key={`${loc.id}-${signalFound}`}>
+              {signalFound ? loc.lore : loc.hint}
             </p>
-            <p className="location-copy" key={`${loc.id}-${found}`}>
-              {found ? loc.lore : loc.hint}
-            </p>
+            <ScanList location={loc.id} onSurface={onSurface} />
             <p className="text-[0.8125rem] text-haze tabular-nums">
-              {count} of 3 signals found on {world.name}
+              {progress.found} of {progress.total} discoveries on {world.name}
+              {progress.hiddenFound > 0 && `, ${progress.hiddenFound} hidden`}
             </p>
           </aside>
         )}
 
         <nav className="location-strip ui-hideable" aria-label={world ? `Locations on ${world.name}` : 'Locations'}>
           <ol>
-            {locs.map((l) => (
-              <li key={l.id}>
-                <button
-                  type="button"
-                  className="world-index-item"
-                  data-active={l.id === location || undefined}
-                  aria-current={l.id === location ? 'location' : undefined}
-                  tabIndex={onSurface ? 0 : -1}
-                  onClick={() => travelTo(l.id)}
-                >
-                  <span
-                    className="signal-dot"
-                    data-found={discovered[l.id] ? true : undefined}
-                    style={{ ['--accent' as string]: world?.accent }}
-                    aria-hidden
-                  />
-                  {l.name}
-                  <span className="sr-only">{discovered[l.id] ? ', discovered' : ', not yet discovered'}</span>
-                </button>
-              </li>
-            ))}
+            {locs.map((l) => {
+              const p = locationProgress(l, discovered)
+              const state = p.found === 0 ? undefined : p.found >= p.total ? 'complete' : 'partial'
+              return (
+                <li key={l.id}>
+                  <button
+                    type="button"
+                    className="world-index-item"
+                    data-active={l.id === location || undefined}
+                    aria-current={l.id === location ? 'location' : undefined}
+                    tabIndex={onSurface ? 0 : -1}
+                    onClick={() => travelTo(l.id)}
+                  >
+                    <span
+                      className="signal-dot"
+                      data-found={state === 'complete' || undefined}
+                      data-partial={state === 'partial' || undefined}
+                      style={{ ['--accent' as string]: world?.accent }}
+                      aria-hidden
+                    />
+                    {l.name}
+                    <span className="sr-only">
+                      , {p.found} of {p.total} discoveries found
+                    </span>
+                  </button>
+                </li>
+              )
+            })}
           </ol>
         </nav>
 
-        {loc && <SignalLabel found={found} finding={loc.finding} />}
+        <ScannerUI />
         <DiscoveryNotice />
       </div>
     </>
