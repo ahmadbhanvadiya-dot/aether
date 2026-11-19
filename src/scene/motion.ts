@@ -110,3 +110,20 @@ export const travelFx = {
   /** 0 → at rest, 1 → full cruise. Damped. */
   speed: 0,
 }
+
+/** Phase 6 scanner effects, tweened by ui/scanner and read by the scene and the DOM each frame. */
+export const scanFx = {
+  /** The discovery the effects belong to (stays set while the completion plays out). */
+  target: null as string | null,
+  /** Ring fill, 0 → 1. */
+  progress: 0,
+  /** Beam height at the target, 0 → 1. */
+  beam: 0,
+  /** Completion pulse, 0 → 1 (expanding ring in the scene and on screen). */
+  pulse: 0,
+  /** Field-of-view narrowing while scanning, in degrees. */
+  zoom: 0,
+}
+
+/** Signal bloom, tweened on discovery and read by the 3D signal each frame. */
+export const signalFx = { bloom: 0 }

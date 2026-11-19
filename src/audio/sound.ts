@@ -74,6 +74,65 @@ class SoundEngine {
     })
   }
 
+  /**
+   * Phase 6: the scan. A quiet sine rising a fourth with a soft tremolo, for
+   * `duration` seconds. Returns a function that fades it out early (cancel).
+   */
+  scan(duration: number): () => void {
+    const r = this.ready()
+    if (!r) return () => {}
+    const { ctx, out } = r
+    const t = ctx.currentTime
+    const osc = ctx.createOscillator()
+    osc.type = 'sine'
+    osc.frequency.setValueAtTime(392, t)
+    osc.frequency.exponentialRampToValueAtTime(523.25, t + duration)
+    const lfo = ctx.createOscillator()
+    lfo.frequency.value = 7
+    const depth = ctx.createGain()
+    depth.gain.value = 0.008
+    const g = ctx.createGain()
+    g.gain.setValueAtTime(0, t)
+    g.gain.linearRampToValueAtTime(0.022, t + 0.25)
+    g.gain.setValueAtTime(0.022, t + duration - 0.15)
+    g.gain.linearRampToValueAtTime(0, t + duration)
+    lfo.connect(depth).connect(g.gain)
+    osc.connect(g).connect(out)
+    osc.start(t)
+    lfo.start(t)
+    osc.stop(t + duration + 0.05)
+    lfo.stop(t + duration + 0.05)
+    return () => {
+      const now = ctx.currentTime
+      g.gain.cancelScheduledValues(now)
+      g.gain.setValueAtTime(g.gain.value, now)
+      g.gain.linearRampToValueAtTime(0, now + 0.12)
+      osc.stop(now + 0.15)
+      lfo.stop(now + 0.15)
+    }
+  }
+
+  /** Phase 6: a hidden discovery noticed. Two faint high notes. */
+  shimmer() {
+    const r = this.ready()
+    if (!r) return
+    const { ctx, out } = r
+    const t = ctx.currentTime
+    ;[1174.66, 1567.98].forEach((f, i) => {
+      const osc = ctx.createOscillator()
+      osc.type = 'sine'
+      osc.frequency.value = f
+      const g = ctx.createGain()
+      const start = t + i * 0.14
+      g.gain.setValueAtTime(0, start)
+      g.gain.linearRampToValueAtTime(0.018, start + 0.02)
+      g.gain.exponentialRampToValueAtTime(0.0001, start + 1.2)
+      osc.connect(g).connect(out)
+      osc.start(start)
+      osc.stop(start + 1.25)
+    })
+  }
+
   /** Filtered noise sweeping up (descent) or down (ascent). */
   wind(duration: number, direction: 'down' | 'up') {
     const r = this.ready()

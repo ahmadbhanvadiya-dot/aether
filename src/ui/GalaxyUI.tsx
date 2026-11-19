@@ -2,7 +2,7 @@ import { ChevronLeft, ChevronRight, Orbit, Undo2 } from 'lucide-react'
 import { useEffect, useRef } from 'react'
 import { ORDINALS, PLANET_BY_ID, PLANETS, type PlanetId } from '../data/planets'
 import { telemetry } from '../state/director'
-import { discoveredCount, useExploration } from '../state/exploration'
+import { discoveredCount, PER_WORLD, useExploration } from '../state/exploration'
 import { useExperience } from '../state/useExperience'
 import { startDescent } from './exploreDirector'
 
@@ -136,7 +136,7 @@ function InfoPanel({ focus }: { focus: PlanetId | null }) {
               Explore {data.name}
             </button>
             <span className="text-[0.8125rem] text-haze tabular-nums">
-              {found === 0 ? 'Three signals unexplored' : `${found} of 3 signals found`}
+              {found === 0 ? `${PER_WORLD} discoveries await` : `${found} of ${PER_WORLD} discoveries`}
             </span>
           </div>
           <div className="world-panel-actions">

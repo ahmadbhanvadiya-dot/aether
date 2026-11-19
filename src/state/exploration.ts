@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware'
-import { LOCATION_BY_ID, LOCATIONS, TOTAL_LOCATIONS } from '../data/locations'
+import { DISCOVERY_BY_ID, HIDDEN, TOTAL_DISCOVERIES, VISIBLE } from '../data/discoveries'
+import { LOCATION_BY_ID } from '../data/locations'
 import type { PlanetId } from '../data/planets'
 
 /**
@@ -43,7 +44,7 @@ interface ExplorationState {
   /** When the Observatory was last opened (0 = never). Newer discoveries animate in. */
   observatorySeenAt: number
   soundOn: boolean
-  /** Marks a location discovered. Returns true only the first time. */
+  /** Records a catalogued discovery. Returns true only the first time (never for unknown ids). */
   discover: (id: string) => boolean
   /** Records the first landing on a world. */
   markVisited: (planet: PlanetId) => void
@@ -61,7 +62,8 @@ export const useExploration = create<ExplorationState>()(
       observatorySeenAt: 0,
       soundOn: true,
       discover: (id) => {
-        if (get().discovered[id]) return false
+        // Only catalogued discoveries, and each only once.
+        if (!DISCOVERY_BY_ID[id] || get().discovered[id]) return false
         set((s) => ({ discovered: { ...s.discovered, [id]: Date.now() } }))
         return true
       },
@@ -108,8 +110,16 @@ export const useExploration = create<ExplorationState>()(
   ),
 )
 
+/** Visible discoveries found (on one world, or everywhere). Hidden ones are counted by `hiddenCount`. */
 export function discoveredCount(discovered: Record<string, number>, planet?: PlanetId) {
-  return LOCATIONS.filter((l) => (!planet || l.planet === planet) && discovered[l.id]).length
+  return VISIBLE.filter((d) => (!planet || d.planet === planet) && discovered[d.id]).length
 }
 
-export { TOTAL_LOCATIONS }
+export function hiddenCount(discovered: Record<string, number>, planet?: PlanetId) {
+  return HIDDEN.filter((d) => (!planet || d.planet === planet) && discovered[d.id]).length
+}
+
+/** Visible discoveries per world (the same on every world). */
+export const PER_WORLD = VISIBLE.length / 6
+
+export { TOTAL_DISCOVERIES }

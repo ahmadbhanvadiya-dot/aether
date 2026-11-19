@@ -3,7 +3,7 @@ import { useEffect } from 'react'
 import { MathUtils, PerspectiveCamera, Vector3 } from 'three'
 import { director, pointer, telemetry } from '../../state/director'
 import { quality, useExperience } from '../../state/useExperience'
-import { approach, atmosphereFx, bezier, bezierTangent, cruise, lerpAngle, travelFx } from '../motion'
+import { approach, atmosphereFx, bezier, bezierTangent, cruise, lerpAngle, scanFx, travelFx } from '../motion'
 import { cloneEnv, lerpEnv, type EnvState } from './env'
 import { forward, surface, type Pose } from './world'
 
@@ -41,6 +41,8 @@ export const surfaceCam = {
   /** The visitor's own look offsets (drag), relative to the location pose. */
   lookYaw: 0,
   lookPitch: 0,
+  /** How quickly the view follows lookYaw / lookPitch (slower while the scanner aims). */
+  lookRate: 8,
   /** Ambient drift amount, 0 → 1. Eases in after every arrival, so it never jumps. */
   drift: 0,
   /** What the camera actually shows this frame. */
@@ -50,6 +52,8 @@ export const surfaceCam = {
   prev: new Vector3(),
   hasPrev: false,
   roll: 0,
+  /** Field-of-view widening from flight speed (degrees, damped). */
+  speedKick: 0,
 }
 
 /**
@@ -256,8 +260,8 @@ export function SurfaceRig() {
         const allow = live && !quality.coarse
         smooth.px = MathUtils.damp(smooth.px, allow ? pointer.x : 0, 2.2, dt)
         smooth.py = MathUtils.damp(smooth.py, allow ? pointer.y : 0, 2.2, dt)
-        smooth.yaw = MathUtils.damp(smooth.yaw, surfaceCam.lookYaw, 8, dt)
-        smooth.pitch = MathUtils.damp(smooth.pitch, surfaceCam.lookPitch, 8, dt)
+        smooth.yaw = MathUtils.damp(smooth.yaw, surfaceCam.lookYaw, surfaceCam.lookRate, dt)
+        smooth.pitch = MathUtils.damp(smooth.pitch, surfaceCam.lookPitch, surfaceCam.lookRate, dt)
         // Ambient drift: slow, incommensurate swells in position and view, so
         // the world feels alive. Eases in after arriving; stops when paused.
         surfaceCam.drift = MathUtils.damp(surfaceCam.drift, live ? 1 : 0, 0.55, dt)
@@ -289,7 +293,9 @@ export function SurfaceRig() {
     surfaceCam.hasPrev = true
     const flying = surfaceCam.mode === 'travel' && live
     travelFx.speed = MathUtils.damp(travelFx.speed, flying ? Math.min(1, surfaceCam.vel.length() / 160) : 0, 3, dt)
-    director.fovKick = MathUtils.damp(director.fovKick, flying ? travelFx.speed * 3 : 0, 3, dt)
+    // Speed widens the view in flight; a scan narrows it (scanFx.zoom is already eased).
+    surfaceCam.speedKick = MathUtils.damp(surfaceCam.speedKick, flying ? travelFx.speed * 3 : 0, 3, dt)
+    director.fovKick = surfaceCam.speedKick - scanFx.zoom
     surfaceCam.roll = MathUtils.damp(surfaceCam.roll, rollTarget, 3, dt)
 
     camera.position.copy(c.pos)

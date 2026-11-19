@@ -47,6 +47,13 @@ interface ExperienceState {
   notice: Notice | null
   /** The world selected on the Observatory dial. */
   observed: PlanetId
+  /** Phase 6 scanner: the discovery being scanned, the one whose card is open. */
+  scanning: string | null
+  card: string | null
+  /** When the current card opened (ms), to tell a fresh discovery from a revisit. */
+  cardAt: number
+  /** Hidden discoveries noticed this visit (looked at long enough); scannable once noticed. */
+  detected: Record<string, true>
   setPhase: (phase: Phase) => void
   setSceneReady: () => void
   toggleMotion: () => void
@@ -59,6 +66,9 @@ interface ExperienceState {
   setSignalHovered: (v: boolean) => void
   setNotice: (n: Notice | null) => void
   setObserved: (id: PlanetId) => void
+  setScanning: (id: string | null) => void
+  setCard: (id: string | null) => void
+  detect: (id: string) => void
 }
 
 export interface Notice {
@@ -83,6 +93,10 @@ export const useExperience = create<ExperienceState>((set) => ({
   signalHovered: false,
   notice: null,
   observed: 'aurelis',
+  scanning: null,
+  card: null,
+  cardAt: 0,
+  detected: {},
   setPhase: (phase) => set({ phase }),
   setSceneReady: () => set({ sceneReady: true }),
   toggleMotion: () => set((s) => ({ motionPaused: !s.motionPaused })),
@@ -100,6 +114,9 @@ export const useExperience = create<ExperienceState>((set) => ({
   setSignalHovered: (signalHovered) => set({ signalHovered }),
   setNotice: (notice) => set({ notice }),
   setObserved: (observed) => set({ observed }),
+  setScanning: (scanning) => set({ scanning }),
+  setCard: (card) => set(card ? { card, cardAt: Date.now() } : { card }),
+  detect: (id) => set((s) => (s.detected[id] ? s : { detected: { ...s.detected, [id]: true } })),
 }))
 
 /**

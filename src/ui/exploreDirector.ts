@@ -3,12 +3,14 @@ import { sound } from '../audio/sound'
 import { LOCATION_BY_ID, locationsFor } from '../data/locations'
 import { PLANET_BY_ID, type PlanetId } from '../data/planets'
 import { beginGalaxyAscent, beginGalaxyDescent, primeGalaxyFocus } from '../scene/galaxy/GalaxyRig'
-import { atmosphereFx, climb, DURATION, entry, glide } from '../scene/motion'
+import { atmosphereFx, climb, DURATION, entry, glide, signalFx } from '../scene/motion'
 import { beginClimb, beginTravel, surfaceCam } from '../scene/surface/SurfaceRig'
 import { prepareSurface, surface } from '../scene/surface/world'
 import { director } from '../state/director'
-import { discoveredCount, TOTAL_LOCATIONS, useExploration } from '../state/exploration'
+import { useExploration } from '../state/exploration'
+import { locationProgress } from '../state/progress'
 import { useExperience } from '../state/useExperience'
+import { resetScanner } from './scanner'
 
 /**
  * Phase 3 choreography: descent from orbit, travel between locations,
@@ -26,8 +28,11 @@ import { useExperience } from '../state/useExperience'
 /** Haze density reached at the space switch: past 1 so the layer is fully opaque there. */
 const HANDOVER = 1.15
 
-/** Signal bloom, tweened on discovery and read by the 3D signal each frame. */
-export const signalFx = { bloom: 0 }
+/** Signal bloom (lives in scene/motion; re-exported for the scene). */
+export { signalFx }
+
+/** Runs once the current descent has landed (e.g. Revisit: open a discovery). */
+let afterLanding: (() => void) | null = null
 
 let timeline: gsap.core.Timeline | null = null
 let travelTween: gsap.core.Tween | null = null
@@ -73,22 +78,35 @@ export function showTitleCard(hold = 3.6) {
     .to(card, { opacity: 0, y: r ? 0 : -6, duration: 0.8, ease: 'uiOut' }, `+=${hold}`)
 }
 
+/** The first location with something still to find (else the first). */
 function firstLocationFor(planet: PlanetId) {
   const locs = locationsFor(planet)
   const found = useExploration.getState().discovered
-  return (locs.find((l) => !found[l.id]) ?? locs[0]).id
+  return (locs.find((l) => {
+    const p = locationProgress(l, found)
+    return p.found < p.total
+  }) ?? locs[0]).id
 }
 
 // ---------------------------------------------------------------------------
 // Descent
 // ---------------------------------------------------------------------------
 
-export function startDescent(planet: PlanetId) {
+/**
+ * Descends to `planet`. Lands at `options.location` when given (Revisit), else
+ * the first location with something left to find; `options.then` runs after landing.
+ */
+export function startDescent(planet: PlanetId, options: { location?: string; then?: () => void } = {}) {
   const st = useExperience.getState()
   if (st.phase !== 'galaxy' || st.focus !== planet) return
   sound.unlock()
   prepareSurface(planet)
-  const first = firstLocationFor(planet)
+  resetScanner()
+  // Hidden discoveries must be found again on each visit until they are scanned.
+  useExperience.setState({ detected: {} })
+  afterLanding = options.then ?? null
+  const first =
+    options.location && LOCATION_BY_ID[options.location]?.planet === planet ? options.location : firstLocationFor(planet)
   st.setLocation(first)
   st.setExploring(planet)
   st.setHovered(null)
@@ -111,7 +129,20 @@ function runDescent() {
   settleHaze()
   beginGalaxyDescent()
   const { setPhase } = useExperience.getState()
-  const tl = gsap.timeline({ onComplete: () => setPhase('surface') })
+  const tl = gsap.timeline({
+    onComplete: () => {
+      setPhase('surface')
+      const then = afterLanding
+      afterLanding = null
+      // The surface camera hands over to free look on its next frame; wait for it.
+      let tries = 0
+      const run = () => {
+        if (surfaceCam.mode === 'free' || tries++ > 30) then?.()
+        else requestAnimationFrame(run)
+      }
+      if (then) requestAnimationFrame(run)
+    },
+  })
   timeline = tl
   director.atmo = 0
   atmosphereFx.flow = 0
@@ -162,6 +193,7 @@ export function startAscent(then?: () => void) {
   travelTween?.kill()
   timeline?.kill()
   settleHaze()
+  resetScanner()
   // Climb from wherever the camera is, even mid-flight between locations.
   beginClimb()
   st.setSignalHovered(false)
@@ -217,6 +249,7 @@ export function travelTo(id: string) {
   if (!target) return
   sound.unlock()
   travelTween?.kill()
+  resetScanner()
   st.setSignalHovered(false)
 
   if (reduced()) {
@@ -264,33 +297,6 @@ export function stepLocation(direction: 1 | -1) {
 }
 
 // ---------------------------------------------------------------------------
-// Discovery
-// ---------------------------------------------------------------------------
-
-export function discoverCurrent() {
-  const { location, exploring, setNotice } = useExperience.getState()
-  if (!location || !exploring) return
-  sound.unlock()
-  const isNew = useExploration.getState().discover(location)
-  const r = reduced()
-  gsap.killTweensOf(signalFx)
-  if (!isNew) {
-    // Already found: a small acknowledgement, nothing more.
-    gsap.fromTo(signalFx, { bloom: 0.25 }, { bloom: 0, duration: 0.6, ease: 'power2.out' })
-    return
-  }
-  sound.chime()
-  gsap.fromTo(signalFx, { bloom: r ? 0.4 : 1 }, { bloom: 0, duration: r ? 0.8 : 1.6, ease: 'power2.out' })
-  const loc = LOCATION_BY_ID[location]
-  const found = useExploration.getState().discovered
-  setNotice({
-    id: `${location}-${Date.now()}`,
-    title: loc.finding,
-    detail: `${discoveredCount(found, exploring)} of 3 on ${PLANET_BY_ID[exploring].name}, ${discoveredCount(found)} of ${TOTAL_LOCATIONS} in all`,
-  })
-}
-
-// ---------------------------------------------------------------------------
 // Review shortcut: ?shot=<location id> starts on a surface, as if descended.
 // ---------------------------------------------------------------------------
 
@@ -299,6 +305,7 @@ export function jumpToLocation(id: string) {
   if (!loc) return
   const st = useExperience.getState()
   prepareSurface(loc.planet)
+  resetScanner()
   director.space = 'surface'
   Object.assign(director, { landing: 1, descent: 1, panelShift: 0 })
   st.setFocus(loc.planet)

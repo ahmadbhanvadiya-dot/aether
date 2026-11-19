@@ -4,7 +4,7 @@ import { telemetry } from '../state/director'
 import { sound } from '../audio/sound'
 import { openObservatory } from './observatoryDirector'
 import { PLANET_BY_ID } from '../data/planets'
-import { discoveredCount, TOTAL_LOCATIONS, useExploration } from '../state/exploration'
+import { discoveredCount, hiddenCount, TOTAL_DISCOVERIES, useExploration } from '../state/exploration'
 import { quality, useExperience, type Phase } from '../state/useExperience'
 
 const STATUS: Record<Phase, string> = {
@@ -92,10 +92,12 @@ export function Hud() {
         : 'Select a world on the dial'
       : onSurface
       ? signalFound
-        ? 'Drag to look around'
+        ? quality.coarse
+          ? 'Drag to look around, tap a light to scan'
+          : 'Drag to look around, select a light to scan'
         : quality.coarse
-          ? 'Drag to look around, tap the signal'
-          : 'Drag to look around, select the signal'
+          ? 'Drag to look around, tap the signal to scan'
+          : 'Drag to look around, select the signal to scan'
       : phase === 'descending' || phase === 'ascending'
         ? ''
         : inGalaxy
@@ -199,7 +201,8 @@ export function Hud() {
         <Readout />
         {showTotal && (
           <span className="tabular-nums">
-            {discoveredCount(discovered)} of {TOTAL_LOCATIONS} discoveries
+            {discoveredCount(discovered)} of {TOTAL_DISCOVERIES} discoveries
+            {hiddenCount(discovered) > 0 && <>, {hiddenCount(discovered)} hidden</>}
           </span>
         )}
       </div>

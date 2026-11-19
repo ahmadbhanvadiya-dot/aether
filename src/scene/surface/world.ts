@@ -1,4 +1,5 @@
 import { Vector3 } from 'three'
+import { discoveriesFor } from '../../data/discoveries'
 import { locationsFor, SURFACES, type LocationData, type SurfaceSettings } from '../../data/locations'
 import type { PlanetId } from '../../data/planets'
 import { cloneEnv, envFromLocation, type EnvState } from './env'
@@ -25,6 +26,8 @@ export const surface = {
   poses: {} as Record<string, Pose>,
   landmarkBase: {} as Record<string, Vector3>,
   signals: {} as Record<string, Vector3>,
+  /** Phase 6: every discovery's world position on this surface (signals included). */
+  targets: {} as Record<string, Vector3>,
   envs: {} as Record<string, EnvState>,
   /** The blended environment currently applied. */
   env: null as EnvState | null,
@@ -77,6 +80,25 @@ export function prepareSurface(planet: PlanetId) {
     envs[loc.id].ringYaw = yaw
   }
 
+  // Discoveries sit relative to their location's view: a bearing from its
+  // heading, a distance, and a height above the ground or an angle into the sky.
+  const targets: Record<string, Vector3> = {}
+  for (const d of discoveriesFor(planet)) {
+    if (d.kind === 'signal' || !d.placement) {
+      targets[d.id] = signals[d.location].clone()
+      continue
+    }
+    const pose = poses[d.location]
+    const { bearing, distance, rise, elev } = d.placement
+    if (elev !== undefined) {
+      targets[d.id] = forward(pose.yaw + bearing, elev).multiplyScalar(distance).add(pose.pos)
+    } else {
+      const p = forward(pose.yaw + bearing, 0).multiplyScalar(distance).add(pose.pos)
+      p.y = floor(p.x, p.z) + (rise ?? 1)
+      targets[d.id] = p
+    }
+  }
+
   Object.assign(surface, {
     planet,
     settings,
@@ -86,6 +108,7 @@ export function prepareSurface(planet: PlanetId) {
     poses,
     landmarkBase,
     signals,
+    targets,
     envs,
     env: cloneEnv(envs[locations[0].id]),
   })
