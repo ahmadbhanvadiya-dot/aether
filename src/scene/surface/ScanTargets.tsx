@@ -1,5 +1,5 @@
 import { useFrame, useThree } from '@react-three/fiber'
-import { useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { AdditiveBlending, Color, DoubleSide, Mesh, MathUtils, PlaneGeometry, ShaderMaterial, Vector3 } from 'three'
 import { discoveriesFor, type DiscoveryData } from '../../data/discoveries'
 import { PLANET_BY_ID, type PlanetId } from '../../data/planets'
@@ -147,6 +147,8 @@ export function ScanTargets({ planet }: { planet: PlanetId }) {
   )
   const all = useMemo(() => discoveriesFor(planet), [planet])
   const quad = useMemo(() => new PlaneGeometry(1, 1), [])
+  // Freed with the surface (Phase 10): each descent mounts a new one.
+  useEffect(() => () => quad.dispose(), [quad])
 
   const fx = useMemo(() => {
     const make = (fragment: string, extra: Record<string, { value: unknown }>) =>

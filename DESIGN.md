@@ -1,8 +1,9 @@
 # AETHER — Design System
 
 **The source of truth for AETHER.** Every value below was read from the source code on
-2026‑11‑19. Phases 1–6 are live at <https://ahmadbhanvadiya-dot.github.io/aether/> (merge
-commit `b9dad38`); the first Phase 7 pass (§10) is in the working tree and not yet deployed. Product context lives in `PRODUCT.md`. When code and this document disagree, fix one of them in the same change.
+2026‑11‑20. Phases 1–6 and the hardening pass are live at
+<https://ahmadbhanvadiya-dot.github.io/aether/> (merge commit `21442cf`); Phase 7, Living
+Universe (§11), is in the working tree and not yet deployed. Product context lives in `PRODUCT.md`. When code and this document disagree, fix one of them in the same change.
 
 Status labels used throughout:
 
@@ -22,12 +23,16 @@ Status labels used throughout:
 7. [Phase 4 — The Observatory](#7-phase-4--the-observatory) (Implemented)
 8. [Phase 5 — The journey: camera choreography](#8-phase-5--the-journey-camera-choreography) (Implemented)
 9. [Phase 6 — Interactive exploration](#9-phase-6--interactive-exploration) (Implemented)
-10. [Phase 7 — Polish and hardening](#10-phase-7--polish-and-hardening) (In progress)
-11. [Technical architecture](#11-technical-architecture) (Implemented)
-12. [Rules for future work](#12-rules-for-future-work) (Planned)
-13. [Known limitations](#13-known-limitations)
-14. [Decision log](#14-decision-log)
-15. [Roadmap](#15-roadmap)
+10. [Hardening pass](#10-hardening-pass-between-phases-6-and-7) (Implemented)
+11. [Phase 7 — Living Universe](#11-phase-7--living-universe) (Implemented)
+12. [Phase 8 — Expeditions and storytelling](#12-phase-8--expeditions-and-storytelling) (Implemented)
+13. [Phase 9 — Universe simulation](#13-phase-9--universe-simulation) (Implemented)
+14. [Phase 10 — Production polish](#14-phase-10--production-polish) (Implemented)
+15. [Technical architecture](#15-technical-architecture) (Implemented)
+16. [Rules for future work](#16-rules-for-future-work) (Planned)
+17. [Known limitations](#17-known-limitations)
+18. [Decision log](#18-decision-log)
+19. [Roadmap](#19-roadmap)
 
 ---
 
@@ -375,7 +380,7 @@ limited to 0.15 … π − 0.15. Auto‑rotate is off when motion is paused or r
 
 ## 4. The six worlds
 
-**Status: Implemented.** All six share one pipeline (§11) and differ through a *kind* recipe
+**Status: Implemented.** All six share one pipeline (§15) and differ through a *kind* recipe
 in the bake and surface shaders (`scene/galaxy/shaders.ts`), plus per‑world data.
 
 | World | Kind | Accent | Atmosphere day / night | Shell | Clouds | Rings |
@@ -708,7 +713,7 @@ autoplay rules).
 | Thunder | After each lightning flash | Low‑passed noise at 140 Hz, 3.2s roll‑off |
 
 All are quiet (peak gain ≤ 0.09). The **Sound** button in the HUD and `M` toggle it; the
-setting persists.
+setting persists. Phase 7 adds ambient beds per world and a master volume (§11).
 
 ### Exploration interface
 
@@ -1199,10 +1204,10 @@ reflecting the finds; Revisit from the archive back to the object; the full flow
 
 ---
 
-## 10. Phase 7 — Polish and hardening
+## 10. Hardening pass (between Phases 6 and 7)
 
-**Status: In progress** (first pass implemented in the working tree; real‑device testing
-remains with the owner). No new features: accessibility, load, visual gaps, and first‑time
+**Status: Implemented** (deployed, merge commit `21442cf`; real‑device testing remains with
+the owner and moves to Phase 10). No new features: accessibility, load, visual gaps, and first‑time
 guidance.
 
 ### Accessibility pass
@@ -1270,7 +1275,456 @@ transitions, frame rate on the low tier) and a real screen reader (VoiceOver / N
 
 ---
 
-## 11. Technical architecture
+## 11. Phase 7 — Living Universe
+
+**Status: Implemented** (working tree; not yet deployed). An environmental animation and
+atmosphere upgrade, not a redesign: every world keeps its authored look, and now moves.
+
+### What existed (audit)
+
+Surfaces already had aurora curtains, star twinkle, lightning with thunder (one Vesper
+location), Nyx's pulsing fissures, shearing Vesper/Orion decks, Orion's storm spiral,
+three‑wave ocean swell and ripples, bioluminescent currents, a drifting cloud layer, motes,
+rain and geyser plumes. Orbit had Aurelis' city lights, Nyx's vein pulse, Vesper's night
+lightning, Thalassa's glowing currents, turning cloud shells and Orion's band shear.
+Missing: any change of light over time, per‑world wind, cloud shadows, Solara (static
+everywhere), Vesper storms beyond one location, turning rings and storms on Orion, and
+ambient sound.
+
+### The living pass (`scene/surface/living.ts`)
+
+Runs once per frame on a **copy** of the location's environment (never the stored one, so
+nothing compounds), before it reaches the shared surface uniforms:
+
+| | Behaviour |
+|---|---|
+| Day–night drift | Elys swings ±0.28 rad in azimuth and up to ±0.07 rad in elevation on a 7‑minute cycle, offset per world. It never crosses the horizon: day scenes stay day, night scenes stay night (Halvard, the Choir, the Lantern Current, the Caldera). |
+| Light | Sunlight ±8%, zenith ±5% with the cycle; as Elys lowers the horizon warms toward the sun's own colour (no foreign tints). |
+| Wind | Each world's prevailing wind (Aurelis 0.012/0.004, Nyx slow, Solara strong, Vesper, Thalassa, Orion zonal); gusts ±50%. Shaders read the **integrated drift** `uDrift`, so gusts change speed without jumps. |
+| Weather | Cloud cover breathes ±0.08 over minutes where there are clouds. |
+
+`uLive` (0 for reduced motion) switches off the fastest motions (gusting sand, grass
+gusts, haze shimmer); gusts are steady and drift halves for reduced motion.
+
+### Shared shader additions (`scene/surface/shaders.ts`)
+
+- **Cloud shadows** (`cloudShadow`): the terrain and water sample the cloud layer's own
+  field (scale, drift, cover) where the ray to Elys crosses it, so shadows slide across the
+  ground under the clouds above. Up to 55% of direct light; none for cloud decks below the
+  camera. 3 octaves (2 on the low tier, `LIVE_OCT`).
+- All wind‑advected noise (decks, giant bands, cloud layer) now uses `uDrift`.
+
+### Each world (compiled only into its own shaders via `SKIND`)
+
+| World | Surface | Orbit |
+|-------|---------|-------|
+| AURELIS | Gusts run across the grasslands as moving bands of light; cloud shadows; swell; aurora (Halvard) | Auroral ovals ring both poles on the night side, rippling; light cyclones in the cloud shell |
+| NYX | The vein field breathes (±28% over ~1 min); a violet uplight halos each fissure; banks of dark haze drift low across the plains | A few volcanic hot spots swell and fade over minutes, brightest on the night side |
+| SOLARA | Short sand wisps stream downwind near the eye, in gust patches; distant dust‑storm walls walk the horizon; heat haze shimmers above the horizon in daylight | Ochre dust storms drift east and change shape |
+| VESPER | Decks brighten and dim slowly; distant lightning everywhere (rare, dim, low on the horizon, late soft thunder), full storms at the Choir | Night‑side lightning (existing) |
+| THALASSA | Swell arrives in sets; rain curtains hang from distant cloud bases; cloud shadows on the sea | Cyclones turn in the cloud shell (opposite senses north and south) |
+| ORION | Ring clumps orbit in the sky (Kepler: inner faster, r^-1.5); small storms ride the bands, turning | The great amber storm turns; the rings' clumps orbit (Kepler) |
+
+### Heat haze (`scene/HeatHaze.tsx`)
+
+A UV‑only `postprocessing` effect merged into the existing effect pass (no extra render):
+a band just above the true horizon (projected each frame) shimmers sideways, strength
+following Elys' height and the absence of atmosphere haze. Solara surfaces only; off for
+reduced motion.
+
+### Ambient soundscapes (`audio/sound.ts`, `scene/surface/AmbienceDriver.tsx`)
+
+Built into the existing `SoundEngine` (no second system), from its shared noise buffer and
+a few oscillators; no audio files.
+
+| World | Bed |
+|-------|-----|
+| AURELIS | Sea wind (band‑passed noise, gusting), surf where there is water, a faint high air under the aurora |
+| NYX | A low beating drone (55 / 82 Hz), low wind, the ground ticking as it cools (sparse clicks) |
+| SOLARA | Dry wind with strong gusts and a sand hiss that rises with them |
+| VESPER | A deep cloud pad (73 / 110 Hz) breathing slowly, thin high wind; distant thunder from the lightning |
+| THALASSA | The ocean breathing (low‑passed swell), wind across it, rain where it falls |
+| ORION | A drone felt more than heard (41 / 62 Hz), a slow whoosh, faint ring‑ice tones |
+
+- Weather shapes the bed every 0.4 s from the drifted environment (rain, waves, aurora,
+  gusts) with 1 – 2 s glides, so flights between locations crossfade. Worlds crossfade
+  (3 s in, 2.5 s out); the bed fades out at the climb's hand‑over and is silent in space and
+  the Observatory.
+- **No autoplay**: nothing exists until the first click creates the AudioContext; muted =
+  nothing is built.
+- **Master volume** (persisted, default 80%) next to the Sound control (md and up; phones
+  use hardware buttons). Mute and volume act on the master gain, ambience included; raising
+  the volume while muted unmutes.
+
+### Also fixed
+
+- Galaxy travel now lands exactly on its final pose. A travel that completed while frames
+  were skipped (a background tab) left the camera mid‑flight and focus kept that distance.
+
+### Performance
+
+- Everything is shader work on existing materials, gated by compile‑time world defines; no
+  simulations, no new render passes, one new full‑screen UV effect inside the existing pass.
+- Per frame on the CPU: one environment copy, a few trig calls; the ambience updates
+  2.5 times a second. No React state changes.
+- Cost added per surface fragment: one 3‑octave noise lookup for cloud shadows (2 on the
+  low tier, skipped without clouds), plus world‑specific single noise lookups.
+- Bundle: app +3.4 kB, surface chunk +1.8 kB (gzipped).
+
+### Verified
+
+Dev build, all six worlds: every new shader variant compiles (no console errors) on
+Solara (Amber Sea, Salt Mirror), Nyx (Vein Fields), Orion (Ringrise), Thalassa (Long
+Storm), Vesper (Rose Terraces), Aurelis (Sounding Lagoon, Halvard Ridge), and every orbital
+world in the galaxy view; Vesper's distant flashes measured at 0.25 of a full flash at a
+location with no authored lightning; ambience beds built for all six worlds (5 – 9 sources
+each), rain layer present on Thalassa, master level 0.9 × volume, mute to 0 with the bed
+released, unmute rebuilding it, silence releasing the bed; the galaxy arrival fix
+(4.83 units, exactly the focus distance). Not verified: how it sounds and feels on real
+speakers and devices (the test pane cannot play audio or run at full frame rate).
+
+---
+
+## 12. Phase 8 — Expeditions and storytelling
+
+**Status: Implemented** (Expedition I complete and tested end to end; Expedition II
+written and wired, tested up to its opening). A mystery told through what the player
+already does — finding and scanning — not a quest system laid on top of it.
+
+### Principles
+
+- **No new progress database.** An expedition is a list of objectives, each a list of
+  discovery ids from the existing catalogue (§9). Whether an objective is sealed, open or
+  complete is *derived* from `discovered[id]`, so it can never disagree with the archive,
+  never double‑complete, and needs no migration.
+- **No fake interactions.** Every objective is completed by a real scan of a real place;
+  there are no "talk to" or "collect 5" steps, no markers that exist only for the story.
+- **Story arrives, it does not interrupt.** Fragments wait for a calm moment: never during
+  a scan, an open record, a flight, a descent or the journal.
+- **Type, not a quest log.** No checkboxes, XP or badges. Objectives read as field notes;
+  progress is a row of hairline segments.
+
+### Data (`data/expeditions.ts`)
+
+```
+Expedition { id, code ('Expedition I'), title, intro: Fragment, unlock, objectives[], closing: Fragment }
+  unlock: { firstDiscovery: true } | { after: expeditionId }
+Objective  { id, title, brief, requires: discoveryId[], fragment: Fragment }
+Fragment   { id, kind: transmission | record | log | clue, title, source, body: string[] }
+```
+
+- **Expedition I — The Listening Array** opens with the first discovery anywhere (its intro
+  answers that scan). Objectives: the Sounding Lagoon signal (Aurelis) → the Salt Mirror
+  signal (Solara) → the Cathedral column *and* the Starward Stair (Nyx) → the hidden
+  retrograde moonlet (Orion). Fragments: a research log, an ancient record, an
+  environmental clue, a transmission, and the closing.
+- **Expedition II — The Second Sky** opens when Expedition I completes: four points of
+  interest on Nyx, Vesper, Solara and Orion that are "there only some of the time".
+- Dev‑only integrity checks: every required id exists in the catalogue, fragment ids are
+  unique, every `after` names an earlier expedition.
+
+### Derived state (`state/expeditions.ts`)
+
+- `expeditionStates(found)` walks the expeditions in order. An expedition opens at its
+  unlock time (first discovery, or the previous one's completion). Objective *n* opens when
+  *n − 1* completes; it completes when all its required discoveries are found:
+  `completedAt = max(openedAt, latest required find)`. Finds made before an objective
+  opened still count — exploring ahead is never punished — and the fragment is then
+  dated to the moment it became relevant.
+- `unlockedFragments(states)` lists every fragment unlocked so far with its time (intro at
+  opening, each objective's fragment at completion, closing at completion), sorted.
+- **The only new persisted field** is `story: Record<fragmentId, timestamp>` in
+  `useExploration` (fragments already shown), for the journal's "New" marks and the HUD dot.
+  Old saves load unchanged (the field defaults to `{}`).
+
+### Story events (`ui/storyDirector.ts`, `ui/StoryUI.tsx`)
+
+- The scanner's `complete()` snapshots `discovered` before saving; if the find is new,
+  `noteDiscovery(before, after)` queues every fragment that is newly unlocked and unseen.
+  A repeat scan, a replay or a reload never queues anything.
+- `StoryHost` checks twice a second and presents the next fragment after one calm second
+  (`storyCanPlay`: no story, record, scan or journal open; on a surface the camera is in
+  free look; otherwise the galaxy or the Observatory).
+- **Framing on a surface** (not with reduced motion): the letterbox closes (1.1 s, `uiOut`),
+  the field of view narrows (scanner zoom 4, 2.4 s) and the gaze lifts by 0.1 rad. All of it
+  is undone on dismissal. In the galaxy and Observatory the panels fade out instead and the
+  scene stays as it is.
+- **The event**: a lower third on a scrim — kind (ion for transmissions and logs, violet for
+  records and clues), source, time received; a two‑line carrier waveform for
+  transmissions; the title in Italiana; body lines arriving 0.9 s apart, as if received.
+  Footer: expedition code, title and progress; *Open journal* and *Close* (focused; `Esc`).
+- Sound: `sound.transmission()` — a short static burst and three rising sine blips,
+  echoing the signal's three notes. Respects mute and master volume.
+- Leaving a surface mid‑story (`resetScanner` → `suspendStory`) re‑queues an unseen
+  fragment; the queue itself is in memory, so after a reload unseen fragments wait in the
+  journal (marked New) rather than playing unannounced.
+
+### The Expedition Journal (`ui/JournalUI.tsx`)
+
+- Opened from the HUD (book icon, with an ion dot while unseen records exist) or `J`, in
+  the galaxy, on a surface and in the Observatory. A right sheet on a scrim (full width
+  and solid on phones); `Esc` or Close; focus moves to the heading.
+- Expeditions sorted under way → complete → sealed. Each: code and status (Under way /
+  Complete · date / Sealed), title, the intro's last line, segment progress "n of m", and
+  its objectives — sealed ones say only "Sealed until objective n is complete"; the open
+  one shows its brief; each lists the places it needs (unfound ones under the same
+  "Unidentified signal / object" name the surface uses, with location and world) and the
+  date found; complete ones offer a replay of their fragment.
+- A sealed expedition shows only how it opens, never its title or objectives.
+- **Records**: every unlocked fragment, newest first, with kind, expedition and date; New
+  until seen; any can be replayed.
+
+### Integration
+
+- **Discovery record**: a find that serves an expedition says so — "Part of Expedition I ·
+  The Listening Array" — under the description.
+- **Observatory**: the ledger shows "Discoveries n of 54 · n hidden" and "Expeditions n of
+  m"; archive entries that serve an expedition carry its code as a tag.
+- While a story or the journal is open, the surface location panel, strip, markers and
+  guide step aside; while a story is open, the galaxy's world panel and index and the
+  Observatory's record do too. The HUD's right group sits above the journal so sound and
+  the journal toggle stay reachable.
+
+### Adding an expedition
+
+1. Append an `Expedition` to `EXPEDITIONS` with `unlock: { after: '<previous id>' }`.
+2. Each objective names existing discovery ids; prefer places on different worlds and at
+   least one hidden discovery, and write the brief as a field note that points at the place
+   without naming it.
+3. Write one fragment per objective plus an intro and a closing; vary the kinds.
+4. Run the dev build: the integrity checks report unknown ids or duplicate fragment ids.
+
+### Verified
+
+Dev build, a clean record: the first scan (Sounding Lagoon) queued the intro and the first
+log; the intro presented after the record closed, with letterbox, narrowing and focus on
+Close. Salt Mirror → *Survey ring seven* (record). Nyx Cathedral: the column alone queued
+nothing, the Starward Stair then queued *The angle of the stair* (clue). Orion: the
+retrograde moonlet revealed and scanned queued the transmission, the closing and
+Expedition II's intro, played in order; the journal then read "1 of 2 expeditions complete
+· 7 records", Expedition I complete 4 of 4, Expedition II under way 0 of 4. A replay from
+the journal and `Esc` work; a reload keeps unseen fragments as New. The Observatory ledger
+and tags; a story in the Observatory (panels step aside, no letterbox); phone layout of the
+story and journal at 375 × 812. `tsc`, build and lint pass (no new warnings).
+Not verified: a screen reader, real touch devices, how the transmission sounds on speakers.
+
+---
+
+## 13. Phase 9 — Universe simulation
+
+**Status: Implemented.** The system now runs on one simulation clock: worlds orbit Elys
+on periods that follow from Kepler's law, turn on their axes, carry their moons, and line
+up in conjunctions, transits and eclipses that are solved from the same positions the
+scene draws. The values are fictional; their relationships are real.
+
+### Astronomy (`data/astronomy.ts`, fields in `data/planets.ts`)
+
+- Each world states only what a reader could know: **year** (standard days), **day**
+  (hours; negative = retrograde), **mass**, and its modelled **moons** (orbit radius in km,
+  size, starting angle, optional inclination and retrograde sense). Everything else is
+  derived:
+  - distance from Elys, `a = ∛(M · T²)` (AU, Elys 0.92 solar masses): Aurelis 0.93,
+    Nyx 1.37, Solara 1.78, Vesper 2.40, Thalassa 3.20, Orion 5.04 AU;
+  - each moon's period, `T = 2π √(a³ / GM)` around its world: Pell 26 d; Kesh 17 h, Oro
+    3.3 d; Tamar 4.2 d, Brine 11 d, Cael 27 d; Heron 37 h, Calder 3.2 d, Vane 6.4 d, Ashe
+    15 d, and the retrograde moonlet (8.4 d, inclined 29°, the one found on the surface);
+  - the Day, Year and Moons rows of every fact list (`planetFacts`), so the galaxy panel,
+    the Observatory and the simulation can never disagree.
+- Vesper now turns backwards (a 5‑day retrograde day). Orbit inclinations were spread
+  (−0.06 … +0.065 rad) so transits stay rare; all orbits share one line of nodes.
+- The scene keeps its compressed distances (`orbitRadius`) and draws the true **angles**;
+  `sceneToAU` maps a scene distance to AU along the drawn orbits for the readout.
+
+### The clock (`state/simulation.ts`)
+
+- `sim.day` (standard days from epoch 10,000) is the only simulation time. It is advanced
+  once per frame by the scene's `Clock` (`stepSimulation`), and read by orbits, spin,
+  moons, rings, events and the readouts. `director.time` remains the *visual* clock for
+  clouds, storms and shimmer, which are weather, not astronomy.
+- Speeds: 1 hour, 1 day, **5 days** (default, close to the previous feel), 1 month, 1 year
+  per second. Play/pause, slower/faster, back to the epoch, orbits on/off. Speed and the
+  orbit toggle persist (`aether-simulation`); the time does not — every visit starts at
+  the epoch. *Pause motion* also stops the clock.
+- **Attached to a world, the clock eases down** to at most 5 days/s (flying to it, focused,
+  descending, on its surface, climbing back), quickly (τ 0.1 s) so a destination never runs
+  away; it eases back up (τ 0.45 s) in the overview and the Observatory. The controls say
+  "slowed to … near a world" when that happens. Reduced motion: changes snap.
+- **Rotation is drawn slowed.** True rotation would strobe at any speed that shows orbits,
+  so the fastest world (Orion, 10 h) is drawn at ~0.3 rad/s (scaled gently with the speed,
+  never faster than true) and every other world keeps its true ratio and sense to it
+  (`sim.spinHours`, `sim.spinScale`). Orion's ring clumps follow the same clock.
+
+### Moons (`scene/galaxy/Moons.tsx`)
+
+- Drawn in each world's equatorial plane (inside the axial‑tilt group, outside the spin)
+  at their **true angles** and compressed distances; lit by Elys.
+- A moon circling faster than ~3 rad/s on screen fades into a faint ring — a long
+  exposure instead of a strobe — and returns as a disc when the clock slows.
+- A moon inside its world's umbra (the same geometry as the events) darkens: lunar
+  eclipses are visible on the moons themselves.
+- Moon orbit lines appear close to a world (with the orbit toggle) and fade when the
+  camera is inside an orbit, so a line never cuts across the planet.
+
+### Celestial events (`state/events.ts`, `state/sky.ts`)
+
+| Kind | How it is found |
+|------|-----------------|
+| Conjunction, opposition | Angles are linear in time: exact times from the synodic period; window ±1° |
+| Transit of Elys | Tested at each conjunction against true 3‑D positions and Elys's angular radius from the outer world; edges by bisection. Only near the line of nodes: about one every few years |
+| Alignment | Daily sampling: four or more worlds within 40°, or three within 6° |
+| Total solar eclipse / moon transit | A moon crossing its world's face as seen from Elys; total if its umbra reaches the ground, a moon transit otherwise. Sampled at period/72, edges by bisection |
+| Lunar eclipse | A moon inside its world's umbra |
+
+- World events are solved 12 years ahead (transits 80) and cached for two years; moon
+  events 90 days ahead, re‑solved every 30 days of simulated time or on a jump. A full
+  solve takes ~50 ms, a cached one ~16 ms.
+- `useSky` is refreshed twice a second (not per frame) and changes React state only when
+  the events in progress or the next of each kind change: about two updates a second at
+  1 year/s, none at rest.
+
+### Interface (`ui/SimulationUI.tsx`)
+
+- **Galaxy overview**: the controls under the top row, centred (play, slower, speed,
+  faster, the clock "Day 10,214 · 06:40", back to the epoch, orbits) and one line below:
+  the event in progress, or the next event between worlds with "in 189 days". Hidden
+  while a world is focused. Keys: `T` play/pause, `[` `]` speed (galaxy and Observatory).
+- **Observatory — The sky** (a new section, linked as *Sky*): what the simulation is
+  (fictional, consistent, rotation slowed), the same controls, **Now** and **Coming** (the
+  next of each kind, soonest first, with what it is and when), and the selected world's
+  **orbital record**: distance, orbital period, rotation, axial tilt, moons with their
+  periods, atmosphere, and its next event.
+- **Show on the dial**: takes the clock to an event's peak as a short time‑lapse (≤ 2.4 s;
+  instant with reduced motion), pauses, and draws violet lines of sight from Elys through
+  the worlds involved. The dial stops turning while the selected world moves faster than
+  0.35 rad/s or a jump is running, and resumes tracking after.
+- Clock and "in N days" texts are written straight to the DOM from one animation‑frame
+  loop; the controls re‑render only on play, speed, orbit and reset.
+
+### Also fixed
+
+- Phones: the galaxy's *Return to Vael* is icon‑only (it ran into the journal button);
+  the world index sits above the three‑line status instead of on it.
+
+### Verified
+
+Dev build. Astronomy: AU distances and moon periods as listed; fact lists derived. Clock:
+speed presets, `T`/`[`/`]`, reset, orbits on/off (paths to 0 and back to 0.42), *Pause
+motion*. Flying to Aurelis at 1 year/s: the clock eased to 5 days/s within the flight and
+the camera arrived at exactly the focus distance; landing on Nyx, the surface, climbing
+back and returning to the overview (5 → 5 → 5 → 364 days/s). Moons: Pell lit at its true
+angle; Orion's four moons and the inclined moonlet with orbit lines; fast moons as rings.
+Events: 300+ solved, the next transit 4.3 years out; *Show on the dial* jumped 4.3 years in
+2 s, paused at the peak, listed the transit and the conjunction as Now and drew the line
+of sight through Aurelis to Orion; reduced motion jumped instantly. The Observatory dial
+showed Nyx and Orion in opposition across Elys. Phone layout of the controls and the Sky
+section at 375 × 812. `tsc`, build and lint pass (no new warnings).
+Not verified: frame time on real devices (the test pane is throttled), how the
+time‑lapse jump feels at full frame rate, screen readers.
+
+---
+
+## 14. Phase 10 — Production polish
+
+**Status: Implemented** (not yet deployed). An audit of the whole experience, then fixes
+for what it found: failure handling, a memory leak, adaptive resolution, layout and
+accessibility gaps, and a production build verified at its GitHub Pages sub‑path. No
+screen was redesigned.
+
+### Audit — what exists
+
+| Feature | State |
+|---------|-------|
+| Cinematic arrival (prelude count, Vael, Ithra, wordmark) | Implemented; verified in the production build |
+| Galaxy (six worlds, hover, focus, travel, world index, panel) | Implemented |
+| Planet exploration (descent, 18 locations, flights, ascent) | Implemented |
+| Camera and transitions (travel, entry, climb, Observatory zenith) | Implemented |
+| Discovery scanner (60 discoveries, hidden finds, records) | Implemented |
+| Planet archives and the Observatory | Implemented |
+| Expeditions and storytelling | Expedition I complete and played through; Expedition II written, played to its opening |
+| Living environments (drift, weather, per‑world effects, ambience) | Implemented; sound verified structurally, not by ear |
+| Universe simulation (clock, orbits, moons, events, Sky section) | Implemented |
+
+### Audit — what was wrong (and is now fixed)
+
+| Finding | Severity | Fix |
+|---------|----------|-----|
+| A surface chunk that failed to load (flaky connection, or a redeploy replacing the hashed file an open tab asks for) left the phase on *descending* forever; the memoised rejected promise never retried | Critical | `system/chunks.ts`: memoised loaders that retry twice and forget failures; the descent aborts back to orbit and a fault explains it |
+| The Observatory's lazy interface had no error boundary: a failed load would have unmounted the whole app | Critical | Boundary around it; opening the Observatory waits for its code and reports a failure instead |
+| No WebGL 2 → the canvas threw and the prelude counted to 35 % forever | Critical | WebGL 2 checked before the canvas exists; a fault says what to do |
+| A lost GPU context (driver reset, sleep) left a frozen frame | High | `webglcontextlost` reports a fault with Reload |
+| A start that never finishes had no way out | High | Watchdog: after 15 s without a ready scene, "Still receiving" with Reload |
+| Each surface visit leaked 5 geometries (motes, rain, landmarks, plume, hit sphere, scanner quad) | High | Disposed on unmount (`useDispose`); 60 → 64 → 64 → 64 across repeated visits (the 4 are the shared grids, made once) |
+| Resolution could only adapt down to 1×; on 1080p laptops with integrated graphics that is the whole budget | High | Starts at the display's ratio (≤ 1.75), steps down by 0.25 to 0.75 under sustained load, recovers with headroom |
+| "Coming" events listed a short eclipse as "now" while it was already happening | Medium | Upcoming events are at least one second of real time away |
+| A neighbour's moon orbits drew ellipses behind the focused world's panel; fast moons' trails read as rings | Medium | Moon orbit lines only for the world in view, at 7 %; trails at 5 % |
+| World index on top of the status line below 1100 px (tablets, small laptops) | Medium | Lifted clear of it |
+| The closed Observatory stayed in the accessibility tree | Medium | `inert` when closed |
+| The known‑limitations table said moons were not rendered (outdated since Phase 9) | Low | Corrected below |
+
+### Audit — duplication and consistency
+
+- **No duplicated systems found.** One progress store (`discovered`), one clock for
+  astronomy (`sim`) and one for visual motion (`director.time`), one scanner, one story
+  queue, one fault channel. Expedition, Observatory, archive and event figures are all
+  derived, never stored.
+- Surface skies show the same moon counts as the simulation (1, 0, 2, 0, 3, 4 + the
+  hidden moonlet).
+- Contrast against the void: starlight 17.6 : 1, haze 6.8 : 1, ion 8.9 : 1, violet
+  5.6 : 1 — all pass WCAG AA for body text.
+
+### Failure handling (`system/`)
+
+- `health.ts` — WebGL 2 check, context‑loss watch, slow‑start watchdog.
+- `chunks.ts` — `memoImport` (one shared request, two retries, failures forgotten);
+  `loadSurfaceScene`, `loadObservatoryUI`; the chunk fault text.
+- `SystemUI.tsx` — `Boundary` (catches render errors, reports a fault) around the scene
+  and the Observatory; `FaultUI`: a lower‑centre card (title, one line, Reload and/or
+  Dismiss) above everything, `role="alert"`. Reloading is always safe: progress is in
+  localStorage.
+
+### Performance (measured)
+
+GPU time from `EXT_disjoint_timer_query_webgl2`, 1280 × 720 at pixel ratio 1, median of
+12–20 frames, on an RTX 3050 Laptop GPU (the test machine); CPU time per frame from the
+frame call.
+
+| Scene | GPU median / p90 | Draw calls | Triangles |
+|-------|------------------|-----------|-----------|
+| Vael orbit (arrival) | — | 26 | 55 k |
+| Galaxy overview | 2.2 – 2.7 / 3.6 – 3.8 ms | 59 | 144 k |
+| Galaxy at 2240 × 1260 (ratio 1.75) | 3.7 / 5.7 ms | 59 | 144 k |
+| Aurelis surface | 2.1 / 3.5 ms | — | — |
+| Solara surface (heat haze) | 2.2 – 3.4 / 3.3 – 3.9 ms | — | — |
+
+- CPU per frame: 0.4 – 0.6 ms. JS heap steady at 97 – 103 MB across repeated descents.
+- Bundle: first visit 467 kB of JS gzipped (three 193, r3f 103, app 76, react 64,
+  gsap 31) + 16 kB CSS + two Latin font files; surface (14 kB) and Observatory (5 kB)
+  load on demand and are prefetched once the first scene is up.
+- Integrated laptop GPUs are roughly 6–10× slower than this one: about 13–30 ms at 720p,
+  which is why the resolution now adapts below 1×. **Not measured on such a machine.**
+
+### Production build and deployment
+
+- `npm run build` (`tsc -b && vite build`) — passes; `npm run lint` — 73 warnings, all
+  pre‑existing patterns (R3F mutation, fast‑refresh exports), none new.
+- `base: './'`: every asset path is relative, so the build works at any sub‑path.
+  Verified with `vite preview --base /aether/` (the GitHub Pages path): all assets 200;
+  arrival → galaxy → Aurelis → descent → scan → story → Observatory → journal → Sky
+  section and an event jump, in the production build; a deleted surface chunk produced
+  three retries, the abort to orbit and the fault.
+- Deployment: `.github/workflows/deploy.yml` builds on every push to `main` (Node 22,
+  `npm ci`, `npm run build`) and publishes `dist` to GitHub Pages.
+
+### Verified
+
+Everything above was exercised in the dev and production builds in a desktop browser
+(1280 × 720, tablet 768 × 1024, phone 375 × 812), including keyboard order and activation
+in the galaxy. Not verified: a real phone or tablet, an integrated‑GPU laptop, a screen
+reader, audio by ear.
+
+---
+
+## 15. Technical architecture
 
 **Status: Implemented.** React 19 · Vite 8 · TypeScript · three 0.187 · @react-three/fiber 9 ·
 @react-three/drei 10 (PerformanceMonitor only) · @react-three/postprocessing 3 · GSAP 3
@@ -1284,22 +1738,34 @@ src/
   App.tsx                  <Experience/> + <TitleScreen/>; dev-only window handles
   index.css                tokens (@theme), every component style, reduced-motion rules
   audio/
-    sound.ts               Web Audio synth: chime, wind, swell, thunder (Phase 3)
+    sound.ts               Web Audio synth: chime, wind, swell, thunder (Phase 3); scan, shimmer (6);
+                           ambient beds per world, master volume (Phase 7)
   data/
     planets.ts             PLANETS (six worlds), PLANET_BY_ID, ORDINALS, types
     locations.ts           LOCATIONS (18), SURFACES (per-world surface recipe), types (Phase 3)
     discoveries.ts         the catalogue: 60 discoveries, categories, placements, leads (Phase 6)
+    expeditions.ts         expeditions, objectives and story fragments; integrity checks (Phase 8)
+    astronomy.ts           Elys, Kepler-derived distances and moon periods, positions, fact rows, sceneToAU (Phase 9)
   state/
     useExperience.ts       Zustand store; quality tier; debugShot (?shot=)
     director.ts            palette; director (tweened values); telemetry; labels; Vael sun
     galaxy.ts              live world positions
-    exploration.ts         persisted progress: discoveries, first landings, Observatory mark, sound (v2)
+    exploration.ts         persisted progress: discoveries, first landings, Observatory mark, sound, volume, story seen (v2)
     progress.ts            pure derivations: location/world/system progress, categories, timeline, dates
+    expeditions.ts         pure derivations: expedition and objective status, unlocked fragments (Phase 8)
+    simulation.ts          the simulation clock (sim), speeds, attached cap, slowed rotation; persisted controls (Phase 9)
+    events.ts              celestial events solved from the simulation geometry (Phase 9)
+    sky.ts                 events now / next, refreshed twice a second; the event shown on the dial (Phase 9)
+  system/                  (Phase 10)
+    chunks.ts              on-demand code with retries; surface and Observatory loaders; the chunk fault
+    health.ts              WebGL 2 check, context-loss watch, slow-start watchdog
+    SystemUI.tsx           error Boundary, FaultUI
   scene/
     Experience.tsx         <Canvas>, pointer listeners, Clock, spaces, rigs, post stack
     CameraRig.tsx          Vael camera: framing, arrival, drift, dive, Ithra projection
     Warp.tsx               baseFov, Projection, WarpStreaks, Space, Precompile
     motion.ts              journey eases, durations, Bézier helpers, atmosphereFx, travelFx (§8)
+    HeatHaze.tsx           Solara's heat shimmer, a UV effect in the post pass (Phase 7)
     Atmosphere.tsx         in-scene haze for entry and climb (§8)
     Planet.tsx             Vael: terrain bake, surface, clouds, atmosphere
     Ithra.tsx              moon + dotted orbit
@@ -1314,6 +1780,7 @@ src/
       SpiralGalaxy.tsx     the surrounding galaxy
       GalaxyRig.tsx        OrbitControls, intro/outro/travel/focus/observatory, readouts, projections
       Thumbnails.tsx       portraits baked from the live world materials (Phase 4)
+      Moons.tsx            modelled moons at their true angles, blur at speed, eclipse shading (Phase 9)
       SpaceDust.tsx        near dust that streams past during travel (§8)
       shaders.ts           kind bake, world surface, clouds, atmosphere, rings, star, disc, warp
     surface/               (Phase 3)
@@ -1324,7 +1791,9 @@ src/
       SurfaceScene.tsx     SurfaceSpace → sky, terrain, water, clouds, weather, landmarks, signal
       SurfaceRig.tsx       surface camera: landing, free look, flights; readout; signal projection
       ScanTargets.tsx      glints, terrain occlusion, hidden-object gaze, scan beam/rings, projections (Phase 6, 7)
-      lazy.ts              memoised on-demand import of the surface scene (Phase 7)
+      lazy.ts              the surface scene's on-demand loader (memoImport, retries; Phase 10)
+      living.ts            day–night drift, per-world wind, breathing weather (Phase 7)
+      AmbienceDriver.tsx   tells the sound engine the world and its weather (Phase 7)
   ui/
     TitleScreen.tsx        prelude, arrival, warp out/back, letterbox, veil; mounts Hud + GalaxyUI
     Wordmark.tsx           AETHER letters
@@ -1336,6 +1805,10 @@ src/
     ObservatoryUI.tsx      dial overlay, record, ledger, worlds, discoveries, timeline, keys (Phase 4)
     observatoryDirector.ts open / close / explore / revisit choreography (Phase 4, 6)
     scanner.ts             scan, cancel, record, notice hidden; aims the surface camera (Phase 6)
+    storyDirector.ts       story queue, calm‑moment check, framing, dismiss, suspend (Phase 8)
+    StoryUI.tsx            the story event (transmission / record / log / clue) (Phase 8)
+    JournalUI.tsx          the Expedition Journal (Phase 8)
+    SimulationUI.tsx       clock controls, sky line, Observatory Sky section, keys, show on the dial (Phase 9)
     ScannerUI.tsx          scan markers, scanning interface, discovery record (Phase 6)
 ```
 
@@ -1380,9 +1853,14 @@ src/
 
 | Store | Kind | Contents |
 |-------|------|----------|
-| `useExperience` | Zustand (React renders) | `phase` (`boot · arriving · orbit · warping · galaxy · returning · descending · surface · ascending · observatory`), `observed` (the Observatory's selected world), `scanning`, `card`, `cardAt`, `detected` (Phase 6), `sceneReady`, `motionPaused`, `reducedMotion`, `cinema`, `focus`, `hovered`, `exploring`, `location`, `signalHovered`, `notice`, actions `setPhase`, `setSceneReady`, `toggleMotion`, `toggleCinema`, `setFocus`, `stepFocus`, `setHovered`, `setExploring`, `setLocation`, `setSignalHovered`, `setNotice` |
-| `useExploration` | Zustand + `persist` (localStorage `aether-exploration`, v2) | `discovered` (catalogued discovery id → timestamp; Phase 6), `visited` (world → first landing), `observatorySeenAt`, `soundOn`, `discover(id)` (true only the first time), `markVisited`, `markObservatorySeen`, `toggleSound` |
+| `useExperience` | Zustand (React renders) | `phase` (`boot · arriving · orbit · warping · galaxy · returning · descending · surface · ascending · observatory`), `observed` (the Observatory's selected world), `scanning`, `card`, `cardAt`, `detected` (Phase 6), `sceneReady`, `motionPaused`, `reducedMotion`, `cinema`, `focus`, `hovered`, `exploring`, `location`, `signalHovered`, `notice`, `storyQueue`, `story`, `journal` (Phase 8), actions `setPhase`, `setSceneReady`, `toggleMotion`, `toggleCinema`, `setFocus`, `stepFocus`, `setHovered`, `setExploring`, `setLocation`, `setSignalHovered`, `setNotice`, `queueStory`, `setStory`, `setJournal` |
+| `useExploration` | Zustand + `persist` (localStorage `aether-exploration`, v2) | `discovered` (catalogued discovery id → timestamp; Phase 6), `volume` (Phase 7), `story` (fragments shown; Phase 8), `visited` (world → first landing), `observatorySeenAt`, `soundOn`, `discover(id)` (true only the first time), `markVisited`, `markObservatorySeen`, `toggleSound` |
 | `state/progress.ts` | Pure functions | Every derived figure (§7); never stored |
+| `state/expeditions.ts` | Pure functions | Expedition and objective status, unlocked fragments (§12); never stored |
+| `sim` | Mutable (the scene's `Clock` writes, everything astronomical reads) | `day`, `rate`, `spinHours`, `spinScale`, `jumping` (§13) |
+| `useSimulation` | Zustand + `persist` (`aether-simulation`; speed and orbits only) | `playing`, `speed`, `orbits`, `epoch` |
+| `useSky` | Zustand, refreshed twice a second | `all`, `now`, `next`, `focus` (the event shown on the dial) |
+| `useExperience.fault` | Zustand | The failure shown by FaultUI (`id`, `title`, `detail`, `reload`, `dismissible`); Phase 10 |
 | `useThumbs` | Zustand | Baked portrait data URLs |
 | `director` | Mutable object (GSAP writes, `useFrame` reads) | `arrival`, `sun`, `sky`, `dive`, `letterbox`*, `hud`, `space` (`vael · galaxy · surface`), `warp`, `galaxyIntro`, `panelShift`, `descent`, `landing`, `observatory`, `atmo` (haze density, §8), `fovKick`, `time` |
 | `telemetry` | Mutable, read in `requestAnimationFrame` by DOM | `altitudeKm`, `readout`, `ithra {x,y,visible}`, `hover {x,y,visible,radiusPx}`, `signal {x,y,visible}`, `chart {ox,oy,active,worlds}` (Phase 4), `targets {id: {x,y,on,alpha}}` (Phase 6) |
@@ -1469,7 +1947,7 @@ Measured on an RTX 3050 laptop (forced frames): Vael ≈ 5.3 ms at a 2000×1125 
 
 ---
 
-## 12. Rules for future work
+## 16. Rules for future work
 
 These are rules, not features. The global rules apply to all future work. The Phase 3
 and Phase 4 subsections record how the shipped implementation follows them.
@@ -1541,6 +2019,33 @@ and Phase 4 subsections record how the shipped implementation follows them.
 - Hidden discoveries stay optional: never part of a completion percentage.
 - Keep left‑side points of interest at bearing ≥ −0.34 so the location panel never covers them.
 
+### Expeditions (Phase 8 — implemented, see §12)
+
+- Expedition progress is always derived from `discovered`; never store an objective's state.
+  The only story state stored is which fragments have been shown.
+- Every objective is a real scan of a real place in the catalogue. No story‑only markers.
+- Story events wait for a calm moment and never interrupt a scan, a record, a flight or a
+  descent; every fragment can be closed with `Esc` and replayed from the journal.
+- A sealed expedition reveals only how it opens.
+
+### Simulation (Phase 9 — implemented, see §13)
+
+- One clock: anything astronomical reads `sim.day`; anything atmospheric reads
+  `director.time`. Never derive an orbit, spin or moon from scene seconds.
+- State astronomy as year, day, mass and moons; derive the rest in `data/astronomy.ts`.
+  Never type a derived value (a distance, a period) into data or copy.
+- Events are solved from the same position functions the scene uses; never script one.
+- Nothing per frame through React: the clock and countdowns write to the DOM; stores
+  change on discrete events only.
+
+### Failure and memory (Phase 10 — implemented, see §14)
+
+- Any new on‑demand code uses `memoImport` and has a failure path that reports a fault
+  and leaves the visitor somewhere usable; any lazy component sits inside a `Boundary`.
+- Anything the visitor waits on has a way out (a watchdog or a timeout).
+- GPU objects made in hooks in a scene that mounts and unmounts are disposed on unmount.
+- Measure frame cost with the GPU timer query before and after visual work.
+
 ### Adding a world
 
 1. Add a `PLANETS` entry. Orbit radius must keep ≥ 4.5 units clearance to its neighbours,
@@ -1552,17 +2057,17 @@ and Phase 4 subsections record how the shipped implementation follows them.
 
 ---
 
-## 13. Known limitations
+## 17. Known limitations
 
 | Item | Status |
 |------|--------|
 | Not tested on a real phone (touch drag, pinch, tap on worlds); narrow layouts were checked in a desktop browser only | Open |
 | When the page is throttled (window not visible), GSAP's lag smoothing stretches transitions; they complete when the page is visible again | By design (GSAP default) |
-| Orion's rings receive the planet's shadow but cast none onto the planet | Resolved in Phase 7 (ring shadow band, physically placed) |
-| Moons listed in facts are not rendered in orbit (they appear only as discs in surface skies) | Open |
+| Orion's rings receive the planet's shadow but cast none onto the planet | Resolved in the hardening pass (ring shadow band, physically placed) |
+| Moons listed in facts are not rendered in orbit (they appear only as discs in surface skies) | Resolved in Phase 9 (11 modelled moons) |
 | Worlds do not shadow or eclipse each other | Open |
 | Hide interface fades over 200ms for both button and `H` | Accepted |
-| Single 1.5 MB JS chunk (~440 KB gzipped) | Resolved in Phase 7: app 58 kB + cached library groups + on‑demand surface and Observatory chunks; three.js (193 kB gzipped) remains the floor |
+| Single 1.5 MB JS chunk (~440 KB gzipped) | Resolved in the hardening pass: app 58 kB + cached library groups + on‑demand surface and Observatory chunks; three.js (193 kB gzipped) remains the floor |
 | Surfaces: no shadows; landmarks and terrain are lit by sun and sky only | Open |
 | Surfaces: far terrain "swims" slightly as the polar grid follows the camera (hidden by fog) | Accepted |
 | Surfaces: notifications replace rather than queue | Accepted |
@@ -1578,16 +2083,32 @@ and Phase 4 subsections record how the shipped implementation follows them.
 | Journey: the entry sweeps toward the day side; a world whose focus view is near local noon barely sweeps | Accepted |
 | Journey: near dust is subtle by design and reads only in motion | Accepted |
 | Journey: timings verified on forced frames in a desktop browser; not yet felt on a real phone or a 120 Hz display | Open |
-| Scanner: glints are drawn without depth test but fade when the terrain hides them (Phase 7); the signal beacon is depth‑tested as before | Resolved |
+| Scanner: glints are drawn without depth test but fade when the terrain hides them (hardening pass); the signal beacon is depth‑tested as before | Resolved |
 | Scanner: on narrow portrait phones the horizontal view is ~±0.3 rad, so points of interest at ±0.3 – 0.55 start just off screen; the "Here" list turns the view to them | Accepted |
 | Scanner: "noticed" hidden discoveries reset on each descent until scanned (by design: noticing is part of exploring) | By design |
 | Scanner: new descriptions are placed by bearing and distance only; they are not modelled in the terrain (a "cliff" is a marked point, not new geometry) | Open |
-| Scanner: not tested on a real touch device or with a screen reader (code‑level audit done in Phase 7) | Open |
+| Scanner: not tested on a real touch device or with a screen reader (code‑level audit done in the hardening pass) | Open |
 | On 4:3 desktop windows the left points of interest (bearing −0.3) can sit under the location panel's text; their markers stay on top and clickable | Accepted |
+| Living Universe: no cast shadows from terrain or landmarks (only cloud shadows and N·L shading change with the light) | Open |
+| Living Universe: the day–night drift never crosses the horizon by design; there is no full sunrise or sunset on any location | By design |
+| Living Universe: ambience and lightning sound were verified structurally (graph, levels, mute), not by ear on real speakers | Open |
+| Living Universe: frame cost measured only by reasoning and build size; needs a real laptop and phone measurement | Measured in Phase 10 on one discrete GPU (§14); integrated GPUs and phones still unmeasured |
+| Expeditions: the story queue is in memory; after a reload, unseen fragments wait in the journal (marked New) instead of playing | By design |
+| Expeditions: Expedition II was tested up to its opening; its four objectives were verified by data checks, not played through | Open |
+| Expeditions: the journal and story were not tested with a screen reader or on a real phone | Open |
+| Simulation: orbits are circular; distances are drawn compressed (true angles, not true spacing), so worlds look closer together than they are | By design |
+| Simulation: rotation is drawn slowed (true rotation would strobe); fast moons become rings | By design |
+| Simulation: surface skies (Phase 7 day–night drift) are not driven by the simulation clock; a world's sky does not show its moons' or neighbours' true positions | Open |
+| Simulation: a solar eclipse is listed and lunar eclipses darken the moon, but a moon's shadow is not drawn on a world's surface | Open |
+| Simulation: the time is not saved; every visit starts at the epoch | By design |
+| Simulation: frame cost of the moons and the event solve measured only in the throttled test pane | Measured in Phase 10 (§14): galaxy 2.2 ms GPU, solve ~50 ms twice a second at most |
+| Production: R3F logs a `THREE.Clock` deprecation warning (inside the library) | Accepted until R3F updates |
+| Production: an open tab after a redeploy can no longer load the old surface or Observatory chunk; it retries, then asks for a reload | By design |
+| Phase 10: no real‑phone, integrated‑GPU or screen‑reader testing was possible here | Open — needs the owner |
 
 ---
 
-## 14. Decision log
+## 18. Decision log
 
 Superseded Phase 1 decisions, kept so nobody reintroduces them by accident.
 
@@ -1624,10 +2145,23 @@ Superseded Phase 1 decisions, kept so nobody reintroduces them by accident.
 | One bundle | Library groups + on‑demand surface and Observatory | Releases invalidate 58 kB, not 463 kB |
 | Placements chosen by eye | Placements checked by a terrain line‑of‑sight sweep | Five finds were behind hills |
 | First‑time help as a stored "seen" flag | Derived: shown until the first discovery | No new state |
+| Frozen light per location | A 7‑minute drift that never crosses the horizon | Alive, but every place keeps its authored mood |
+| `uWind × uTime` in shaders | Integrated `uDrift` | Gusts could not vary speed without jumps |
+| One wind for every world | A prevailing wind per world | Each world's weather has its own direction and character |
+| Heat haze as a refraction pass | A UV‑only effect merged into the existing pass | Same look, no extra render |
+| Audio files for ambience | Synthesized beds from the existing engine's noise and oscillators | Nothing to download; the weather can shape every layer |
+| A quest state per expedition (stored steps) | Expedition progress derived from `discovered`; only fragments seen are stored | Cannot disagree with the archive or double‑complete; no migration |
+| Story fragments played the moment they unlock | Queued until the record is closed and nothing else is happening | A story must not interrupt a scan or a flight |
+| Orbits and spin on scene seconds (`orbitPeriod`, `spin`), unrelated to the stated years and days | One simulation clock in standard days; positions from each world's year | Orbits, facts and events must agree |
+| Orbit distance readout at 0.05 AU per scene unit | AU interpolated along the drawn orbits | The scene is compressed; the readout must match the astronomy |
+| Orbit inclinations within ±0.035 rad | Spread to −0.06 … +0.065 rad | Near‑equal inclinations made transits of Elys happen at most conjunctions |
+| Resolution adaptive between 1× and the display's ratio | Down to 0.75× under sustained load | 1× is the whole budget on integrated GPUs at 1080p |
+| Lazy chunks imported once, failures unhandled | Memoised loaders with retries, abort paths and a fault card | A redeploy or a dropped connection left the descent stuck |
+| Celestial events from the camera's view | Solved from the simulation's own geometry, independent of the camera | Events are facts about the system, not about a viewpoint |
 
 ---
 
-## 15. Roadmap
+## 19. Roadmap
 
 | Phase | Name | Status | Scope |
 |-------|------|--------|-------|
@@ -1636,5 +2170,11 @@ Superseded Phase 1 decisions, kept so nobody reintroduces them by accident.
 | 3 | Planet Exploration | **Complete** | Descent and ascent, six surface environments, 18 locations, flights between them, signals and discovery, notifications, persisted progress, synthesized sound with controls |
 | 4 | Observatory | **Complete** | Planisphere dial from the zenith, world record and ledger, six‑world archive, discovery collection with redacted unfound entries, timeline with new‑since‑last‑visit, baked portraits, persisted progress v2, navigation between galaxy, surfaces and Observatory |
 | 5 | Journey choreography | **Complete** | Approach, entry, exploration drift and flights, return to orbit as one continuous move (§8) |
-| 6 | Interactive Exploration | **Complete** (not yet deployed) | Scanner, 36 points of interest and 6 hidden discoveries in five categories, scan animation and records, planet archives, Observatory integration, Revisit (§9) |
-| 7 | Polish and hardening | **In progress** | Done: accessibility pass, bundle split and on‑demand loading, glint occlusion and placement sweep, Orion ring shadow, first‑scan guidance (§10). Open: real‑device and screen‑reader testing, surface shadows, low‑tier tuning from device measurements |
+| 6 | Interactive Exploration | **Complete** | Scanner, 36 points of interest and 6 hidden discoveries in five categories, scan animation and records, planet archives, Observatory integration, Revisit (§9) |
+| — | Hardening pass | **Complete** | Accessibility pass, bundle split and on‑demand loading, glint occlusion and placement sweep, Orion ring shadow, first‑scan guidance (§10) |
+| 7 | Living Universe | **Complete** (not yet deployed) | Day–night drift, per‑world wind and weather, cloud shadows, each world's surface and orbital behaviour, heat haze, ambient soundscapes, master volume (§11) |
+| 8 | Expeditions & Storytelling | **Complete** (not yet deployed) | Expedition system derived from discoveries, two expeditions with 12 story fragments, story events with framing, Expedition Journal, Observatory and record integration (§12) |
+| 9 | Universe Simulation | **Complete** (not yet deployed) | One simulation clock, Kepler‑consistent orbits, slowed rotation, 11 moons, controls, solved conjunctions, oppositions, alignments, transits and eclipses, Observatory Sky section (§13) |
+| 10 | Production polish | **Complete** (not yet deployed) | Audit, failure handling, surface memory leak, adaptive resolution to 0.75, layout and accessibility fixes, GPU measurement, production build verified at /aether/ (§14) |
+| 11 | Beyond the System | Proposal under review | Multiple star systems, deep‑space destinations, a universe map (see `docs/proposals/`) |
+| 12 | AETHER Command | Proposal under review | Navigator, mission control, celestial database, exploration log (see `docs/proposals/`) |

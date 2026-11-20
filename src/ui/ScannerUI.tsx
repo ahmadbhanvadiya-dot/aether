@@ -1,6 +1,7 @@
 import { Landmark, Leaf, Mountain, Sparkle, Wind, X, type LucideIcon } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { CATEGORIES, DISCOVERY_BY_ID, discoveriesAt, type Category, type DiscoveryData } from '../data/discoveries'
+import { expeditionsFor } from '../data/expeditions'
 import { LOCATION_BY_ID } from '../data/locations'
 import { PLANET_BY_ID } from '../data/planets'
 import { scanFx } from '../scene/motion'
@@ -201,6 +202,11 @@ function DiscoveryCard() {
           <dd>{isNew ? 'New discovery' : 'Catalogued'}</dd>
         </div>
       </dl>
+      {expeditionsFor(d.id).map((e) => (
+        <p key={e.id} className="discovery-card-expedition">
+          Part of {e.code} · {e.title}
+        </p>
+      ))}
       <p className="discovery-card-archive tabular-nums">
         Saved to the {world.name} archive · {progress.found} of {progress.total} found on {world.name}
         {progress.hiddenFound > 0 && `, ${progress.hiddenFound} hidden`}

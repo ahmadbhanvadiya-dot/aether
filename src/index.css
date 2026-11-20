@@ -2340,3 +2340,884 @@ body {
     transform: translate(-50%, 0);
   }
 }
+
+/* Phase 7: master volume — a hairline slider beside the Sound control. */
+.hud-volume {
+  align-items: center;
+  width: 72px;
+  height: 36px;
+  margin: 0 0.4rem 0 -0.2rem;
+  pointer-events: auto;
+}
+
+.hud-volume input {
+  width: 100%;
+  height: 20px;
+  background: transparent;
+  appearance: none;
+  cursor: pointer;
+}
+
+.hud-volume input::-webkit-slider-runnable-track {
+  height: 1px;
+  background: rgb(233 237 249 / 0.35);
+}
+
+.hud-volume input::-moz-range-track {
+  height: 1px;
+  background: rgb(233 237 249 / 0.35);
+}
+
+.hud-volume input::-webkit-slider-thumb {
+  appearance: none;
+  width: 9px;
+  height: 9px;
+  margin-top: -4px;
+  border-radius: 999px;
+  background: var(--color-starlight);
+}
+
+.hud-volume input::-moz-range-thumb {
+  width: 9px;
+  height: 9px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--color-starlight);
+}
+
+.hud-volume input:focus-visible {
+  outline: 1px solid var(--color-ion);
+  outline-offset: 4px;
+}
+
+.hud-volume[data-muted] {
+  opacity: 0.45;
+}
+
+
+/* ==========================================================================
+   Phase 8: expeditions and story
+   ========================================================================== */
+
+/* A record that serves an expedition says so, quietly. */
+.discovery-card-expedition {
+  font-size: 0.8125rem;
+  color: var(--color-violet);
+}
+
+.obs-entry-tag-exp {
+  color: var(--color-ion);
+}
+
+/* New records waiting in the journal. */
+.hud-new-dot {
+  width: 5px;
+  height: 5px;
+  margin-left: -0.15rem;
+  align-self: flex-start;
+  margin-top: 0.35rem;
+  border-radius: 999px;
+  background: var(--color-ion);
+  box-shadow: 0 0 8px var(--color-ion);
+}
+
+/* The story event: a lower third on a scrim. Type, not a card. */
+.story {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 14;
+  padding: 7rem calc(env(safe-area-inset-right) + var(--gutter)) calc(env(safe-area-inset-bottom) + var(--gutter) + 3.2rem)
+    calc(env(safe-area-inset-left) + var(--gutter));
+  background: linear-gradient(0deg, rgb(2 3 10 / 0.9) 0%, rgb(2 3 10 / 0.72) 55%, rgb(2 3 10 / 0) 100%);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 600ms var(--ease-out-ui);
+}
+
+.story[data-open] {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.story-panel {
+  max-width: 640px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+.story-kind {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.4rem 1rem;
+  font-size: 0.8125rem;
+  color: var(--color-haze);
+}
+
+.story-kind > span:first-child {
+  color: var(--color-ion);
+  letter-spacing: 0.06em;
+}
+
+.story[data-kind='record'] .story-kind > span:first-child,
+.story[data-kind='clue'] .story-kind > span:first-child {
+  color: var(--color-violet);
+}
+
+.story-time {
+  margin-left: auto;
+}
+
+/* The carrier: two thin waves drifting against each other. */
+.story-wave {
+  width: 100%;
+  height: 22px;
+  overflow: visible;
+}
+
+.story-wave path {
+  fill: none;
+  stroke: var(--color-ion);
+  stroke-width: 1;
+  opacity: 0.55;
+  vector-effect: non-scaling-stroke;
+  stroke-dasharray: 6 4;
+  animation: story-carrier 3.2s linear infinite;
+}
+
+.story-wave path + path {
+  opacity: 0.3;
+  animation-duration: 5s;
+  animation-direction: reverse;
+}
+
+@keyframes story-carrier {
+  to {
+    stroke-dashoffset: -60;
+  }
+}
+
+.story-title {
+  font-family: var(--font-display);
+  font-size: clamp(1.8rem, 3vw, 2.5rem);
+  line-height: 1.05;
+  letter-spacing: 0.05em;
+  color: var(--color-starlight);
+}
+
+.story-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.story-body p {
+  max-width: 58ch;
+  font-size: 0.98rem;
+  line-height: 1.65;
+  font-weight: 300;
+  color: rgb(233 237 249 / 0.86);
+}
+
+/* Lines arrive one after another, as if being received. */
+.story[data-open] .story-body p {
+  animation: story-line 900ms var(--ease-out-ui) both;
+  animation-delay: calc(0.5s + var(--i) * 0.9s);
+}
+
+@keyframes story-line {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+    filter: blur(2px);
+  }
+}
+
+.story-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem 1rem;
+  margin-top: 0.4rem;
+  padding-top: 0.8rem;
+  border-top: 1px solid rgb(233 237 249 / 0.12);
+}
+
+.story-expedition {
+  font-size: 0.8125rem;
+  color: var(--color-haze);
+}
+
+.story-actions {
+  display: flex;
+  gap: 0.25rem;
+  margin-left: auto;
+}
+
+/* The Expedition Journal: a sheet on a right scrim. */
+.journal {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 13;
+  width: min(560px, 100vw);
+  background: linear-gradient(270deg, rgb(2 3 10 / 0.95) 0%, rgb(2 3 10 / 0.9) 78%, rgb(2 3 10 / 0) 100%);
+  opacity: 0;
+  transform: translateX(16px);
+  pointer-events: none;
+  transition:
+    opacity 400ms var(--ease-out-ui),
+    transform 400ms var(--ease-out-ui);
+}
+
+.journal[data-open] {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+}
+
+.journal-scroll {
+  height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: calc(env(safe-area-inset-top) + var(--gutter) + 52px) calc(env(safe-area-inset-right) + var(--gutter))
+    calc(env(safe-area-inset-bottom) + var(--gutter) + 2rem) 3rem;
+  scrollbar-width: thin;
+  scrollbar-color: rgb(233 237 249 / 0.18) transparent;
+}
+
+.journal-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.35rem 1rem;
+  margin-bottom: 2rem;
+}
+
+.journal-heading {
+  font-family: var(--font-display);
+  font-size: clamp(1.8rem, 2.6vw, 2.4rem);
+  letter-spacing: 0.08em;
+  color: var(--color-starlight);
+  outline: none;
+}
+
+.journal-sub {
+  grid-column: 1;
+  font-size: 0.8125rem;
+  color: var(--color-haze);
+}
+
+.journal-close {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: start;
+}
+
+.journal-expedition {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 1.3rem 0 1.6rem;
+  border-top: 1px solid rgb(233 237 249 / 0.12);
+}
+
+.journal-code {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  font-size: 0.8125rem;
+  color: var(--color-haze);
+}
+
+.journal-code > span:first-child {
+  color: var(--color-ion);
+  letter-spacing: 0.06em;
+}
+
+.journal-expedition[data-status='sealed'] .journal-code > span:first-child {
+  color: var(--color-haze);
+}
+
+.journal-title {
+  font-family: var(--font-display);
+  font-size: 1.6rem;
+  letter-spacing: 0.06em;
+  color: var(--color-starlight);
+}
+
+.journal-expedition[data-status='sealed'] .journal-title {
+  color: rgb(233 237 249 / 0.55);
+}
+
+.journal-copy {
+  max-width: 52ch;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  font-weight: 300;
+  color: rgb(233 237 249 / 0.78);
+}
+
+/* Progress: one hairline segment per objective. */
+.journal-progress {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 0.2rem;
+}
+
+.journal-progress > span:not(.journal-progress-count) {
+  flex: 1;
+  height: 2px;
+  background: rgb(233 237 249 / 0.14);
+}
+
+.journal-progress > span[data-open] {
+  background: rgb(90 176 255 / 0.4);
+}
+
+.journal-progress > span[data-done] {
+  background: var(--color-ion);
+  box-shadow: 0 0 6px rgb(90 176 255 / 0.6);
+}
+
+.journal-progress-count {
+  margin-left: 0.6rem;
+  font-size: 0.8125rem;
+  color: var(--color-haze);
+}
+
+.journal-objectives {
+  display: flex;
+  flex-direction: column;
+  margin-top: 0.4rem;
+}
+
+.journal-objectives > li {
+  display: grid;
+  grid-template-columns: 2rem minmax(0, 1fr);
+  gap: 0.6rem;
+  padding: 0.75rem 0;
+  border-top: 1px solid rgb(233 237 249 / 0.07);
+}
+
+.journal-objective-n {
+  font-size: 0.8125rem;
+  color: var(--color-haze);
+  padding-top: 0.1rem;
+}
+
+.journal-objective-title {
+  font-size: 0.95rem;
+  color: var(--color-starlight);
+}
+
+.journal-objectives > li[data-status='complete'] .journal-objective-title {
+  color: rgb(233 237 249 / 0.75);
+}
+
+.journal-objectives > li[data-status='sealed'] .journal-objective-title {
+  font-size: 0.8125rem;
+  color: var(--color-haze);
+}
+
+.journal-objective-brief {
+  margin-top: 0.3rem;
+  max-width: 50ch;
+  font-size: 0.875rem;
+  line-height: 1.6;
+  font-weight: 300;
+  color: rgb(233 237 249 / 0.82);
+}
+
+.journal-places {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-top: 0.5rem;
+}
+
+.journal-places li {
+  display: grid;
+  grid-template-columns: 7px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.8125rem;
+  color: rgb(233 237 249 / 0.7);
+}
+
+.journal-places li[data-found] {
+  color: var(--color-starlight);
+}
+
+.journal-place-state {
+  color: var(--color-haze);
+}
+
+.journal-replay {
+  margin-top: 0.4rem;
+  margin-left: -0.75rem;
+  padding: 0 0.75rem;
+  font-size: 0.8125rem;
+}
+
+.journal-section-title {
+  margin: 1.4rem 0 0.6rem;
+  padding-top: 1.3rem;
+  border-top: 1px solid rgb(233 237 249 / 0.12);
+  font-family: var(--font-display);
+  font-size: 1.4rem;
+  letter-spacing: 0.08em;
+  color: var(--color-starlight);
+}
+
+.journal-records ol {
+  display: flex;
+  flex-direction: column;
+}
+
+.journal-record {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.15rem 1rem;
+  width: 100%;
+  padding: 0.7rem 0;
+  border-bottom: 1px solid rgb(233 237 249 / 0.07);
+  text-align: left;
+  cursor: pointer;
+}
+
+.journal-record-kind {
+  grid-column: 1;
+  font-size: 0.75rem;
+  color: var(--color-haze);
+}
+
+.journal-record-title {
+  grid-column: 1;
+  font-size: 0.95rem;
+  color: var(--color-starlight);
+}
+
+.journal-record-meta {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+  font-size: 0.8125rem;
+  color: var(--color-haze);
+}
+
+.journal-new {
+  margin-left: 0.6rem;
+  color: var(--color-ion);
+}
+
+.journal-record:focus-visible,
+.journal-heading:focus-visible {
+  outline: 1px solid var(--color-ion);
+  outline-offset: 3px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .journal-record:hover .journal-record-title {
+    color: var(--color-ion);
+  }
+}
+
+@media (max-width: 640px) {
+  /* Full width on a phone: a solid sheet, nothing behind it reads through. */
+  .journal {
+    background: rgb(2 3 10 / 0.97);
+  }
+  .journal-scroll {
+    padding-left: var(--gutter);
+  }
+  .journal-heading {
+    font-size: 1.6rem;
+  }
+  .story {
+    padding-top: 5rem;
+  }
+  .story-time {
+    margin-left: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .story-wave path {
+    animation: none;
+  }
+  .story[data-open] .story-body p {
+    animation-name: fade-only;
+  }
+  .journal,
+  .journal[data-open] {
+    transform: none;
+  }
+}
+
+/* While a story plays, the exploration interface steps aside (the scene stays). */
+.explore-ui .location-panel,
+.explore-ui .location-strip,
+.explore-ui .scan-markers,
+.explore-ui .scan-guide {
+  transition: opacity 400ms ease;
+}
+
+.explore-ui[data-story] .location-panel,
+.explore-ui[data-story] .location-strip,
+.explore-ui[data-story] .scan-markers,
+.explore-ui[data-story] .scan-guide {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+
+/* In orbit and in the Observatory, the panels give the story the screen. */
+.observatory .obs-scroll {
+  transition: opacity 500ms ease;
+}
+
+:root[data-story] .observatory .obs-scroll,
+:root[data-story] .observatory .obs-chart-fade,
+:root[data-story] .world-panel,
+:root[data-story] .world-index {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* ==========================================================================
+   Phase 9: simulation
+   ========================================================================== */
+
+/* Galaxy: the clock under the top row, centred; the sky line below it. */
+.sim-dock {
+  position: absolute;
+  top: calc(env(safe-area-inset-top) + var(--gutter) + 30px);
+  left: var(--gutter);
+  right: var(--gutter);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  transform: translateY(-6px);
+  opacity: 0;
+  /* The band is full width; only its contents take the pointer, the scene keeps the rest. */
+  pointer-events: none;
+  transition:
+    opacity 300ms ease,
+    transform 300ms var(--ease-out-ui);
+}
+
+.sim-dock[data-visible] {
+  opacity: 1;
+  transform: none;
+}
+
+.sim-dock[data-visible] > * {
+  pointer-events: auto;
+}
+
+.sim {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0 0.1rem;
+  font-size: 0.8125rem;
+  color: var(--color-haze);
+  text-shadow: 0 0 14px rgb(2 3 10 / 0.85);
+}
+
+.sim .quiet-button[aria-pressed='true'] {
+  color: var(--color-starlight);
+}
+
+.sim .quiet-button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.sim-speed {
+  display: inline-flex;
+  align-items: center;
+}
+
+.sim-rate {
+  min-width: 6.6rem;
+  text-align: center;
+  color: var(--color-starlight);
+}
+
+.sim-clock {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 9.5rem;
+  padding: 0 0.6rem;
+  line-height: 1.25;
+  color: var(--color-starlight);
+}
+
+.sim-held {
+  font-size: 0.6875rem;
+  color: var(--color-haze);
+}
+
+.sim-held:empty {
+  display: none;
+}
+
+.sky-line {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0 0.5rem;
+  font-size: 0.8125rem;
+  color: rgb(233 237 249 / 0.82);
+  text-shadow: 0 0 14px rgb(2 3 10 / 0.85);
+}
+
+.sky-line > span:last-child:not(:nth-child(2)) {
+  color: var(--color-haze);
+}
+
+.sky-line-mark {
+  color: var(--color-ion);
+  letter-spacing: 0.06em;
+}
+
+/* Observatory: the dial's lines of sight. */
+.obs-sight line {
+  stroke: var(--color-violet);
+  stroke-opacity: 0.7;
+  stroke-width: 1;
+  stroke-dasharray: 1 3;
+}
+
+/* Observatory: the Sky section. */
+#obs-sky {
+  background: linear-gradient(180deg, rgb(2 3 10 / 0) 0, rgb(2 3 10 / 0.94) 140px);
+  padding-top: 160px;
+}
+
+#obs-sky + #obs-worlds {
+  background: rgb(2 3 10 / 0.94);
+  padding-top: 88px;
+}
+
+#obs-sky .obs-section-note {
+  max-width: 62ch;
+  line-height: 1.6;
+}
+
+#obs-sky .sim {
+  justify-content: flex-start;
+  margin: 0 0 2rem -0.6rem;
+  text-shadow: none;
+}
+
+#obs-sky .sim-clock {
+  align-items: flex-start;
+}
+
+.sky-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  gap: 2rem 4rem;
+}
+
+.sky-subtitle {
+  margin: 0 0 0.6rem;
+  font-family: var(--font-display);
+  font-size: 1.4rem;
+  letter-spacing: 0.08em;
+  color: var(--color-starlight);
+}
+
+.sky-subtitle span {
+  font-family: var(--font-sans);
+  font-size: 0.8125rem;
+  letter-spacing: 0;
+  color: var(--color-haze);
+}
+
+.sky-events + .sky-subtitle,
+.sky-empty + .sky-subtitle {
+  margin-top: 1.8rem;
+}
+
+.sky-empty {
+  font-size: 0.875rem;
+  color: var(--color-haze);
+}
+
+.sky-event {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.15rem 1rem;
+  padding: 0.75rem 0;
+  border-top: 1px solid rgb(233 237 249 / 0.1);
+}
+
+.sky-event-kind {
+  grid-column: 1;
+  font-size: 0.75rem;
+  color: var(--color-haze);
+}
+
+.sky-event[data-live] .sky-event-kind,
+.sky-event[data-focus] .sky-event-kind {
+  color: var(--color-violet);
+}
+
+.sky-event-title {
+  grid-column: 1;
+  font-size: 0.95rem;
+  color: var(--color-starlight);
+}
+
+.sky-event-when {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+  font-size: 0.8125rem;
+  color: var(--color-haze);
+}
+
+.sky-event-detail {
+  grid-column: 1 / -1;
+  max-width: 60ch;
+  font-size: 0.85rem;
+  line-height: 1.55;
+  font-weight: 300;
+  color: rgb(233 237 249 / 0.72);
+}
+
+.sky-event-show {
+  grid-column: 1 / -1;
+  justify-self: start;
+  margin-left: -0.75rem;
+  font-size: 0.8125rem;
+}
+
+.sky-facts {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.sky-facts > div:nth-last-child(-n + 2) {
+  grid-column: 1 / -1;
+}
+
+.sky-inline {
+  text-align: left;
+  color: var(--color-starlight);
+  text-decoration: underline;
+  text-decoration-color: rgb(138 147 184 / 0.35);
+  text-underline-offset: 4px;
+  cursor: pointer;
+}
+
+.sky-inline:focus-visible {
+  outline: 1px solid var(--color-ion);
+  outline-offset: 3px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .sky-inline:hover {
+    color: var(--color-ion);
+  }
+}
+
+@media (max-width: 860px) {
+  .sky-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .sim-dock {
+    top: calc(env(safe-area-inset-top) + var(--gutter) + 34px);
+  }
+  .sim-rate {
+    min-width: 5.4rem;
+  }
+  .sim-clock {
+    min-width: 0;
+    padding: 0 0.3rem;
+  }
+  .sky-line {
+    font-size: 0.75rem;
+  }
+}
+
+/* ==========================================================================
+   Phase 10: faults — what failed, and the one action that helps
+   ========================================================================== */
+
+.fault {
+  position: absolute;
+  left: 50%;
+  bottom: calc(env(safe-area-inset-bottom) + var(--gutter) + 3rem);
+  z-index: 40;
+  width: min(440px, calc(100vw - 2 * var(--gutter)));
+  transform: translate(-50%, 8px);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 400ms var(--ease-out-ui),
+    transform 400ms var(--ease-out-ui);
+}
+
+.fault[data-open] {
+  opacity: 1;
+  transform: translate(-50%, 0);
+  pointer-events: auto;
+}
+
+.fault-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding: 1.1rem 1.25rem 0.6rem;
+  border-top: 1px solid rgb(90 176 255 / 0.45);
+  background: rgb(2 3 10 / 0.88);
+  backdrop-filter: blur(8px);
+}
+
+.fault-title {
+  font-size: 0.95rem;
+  color: var(--color-starlight);
+}
+
+.fault-detail {
+  font-size: 0.85rem;
+  line-height: 1.55;
+  font-weight: 300;
+  color: rgb(233 237 249 / 0.78);
+}
+
+.fault-actions {
+  display: flex;
+  gap: 0.25rem;
+  margin-left: -0.75rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fault,
+  .fault[data-open] {
+    transform: translate(-50%, 0);
+  }
+}
+
+/* Below wide desktops the centred world index and the three-line status share the
+   bottom edge: lift the index clear of it (Phase 10). */
+@media (max-width: 1100px) {
+  .world-index {
+    bottom: calc(env(safe-area-inset-bottom) + var(--gutter) + 76px);
+  }
+}

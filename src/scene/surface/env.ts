@@ -142,6 +142,9 @@ export function createSurfaceUniforms(settings: SurfaceSettings) {
     uWaterDeep: { value: new Color(settings.waterDeep) },
     uWaterShallow: { value: new Color(settings.waterShallow) },
     uWind: { value: new Vector2(0, 0) },
+    /** Phase 7: integrated wind (shaders advect with this, so gusts never jump) and motion allowance. */
+    uDrift: { value: new Vector2(0, 0) },
+    uLive: { value: 1 },
     uLocA: { value: [new Vector4(), new Vector4(), new Vector4()] },
     uLocB: { value: [new Vector4(), new Vector4(), new Vector4()] },
   }

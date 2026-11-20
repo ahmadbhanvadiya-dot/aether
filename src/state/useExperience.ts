@@ -54,6 +54,13 @@ interface ExperienceState {
   cardAt: number
   /** Hidden discoveries noticed this visit (looked at long enough); scannable once noticed. */
   detected: Record<string, true>
+  /** Phase 8: story fragments waiting to be presented, the one open now, and the journal. */
+  storyQueue: string[]
+  story: string | null
+  journal: boolean
+  /** Phase 10: something failed (a chunk, WebGL, a slow start); shown by FaultUI. */
+  fault: Fault | null
+  setFault: (fault: Fault | null) => void
   setPhase: (phase: Phase) => void
   setSceneReady: () => void
   toggleMotion: () => void
@@ -69,6 +76,20 @@ interface ExperienceState {
   setScanning: (id: string | null) => void
   setCard: (id: string | null) => void
   detect: (id: string) => void
+  queueStory: (ids: string[]) => void
+  setStory: (id: string | null) => void
+  setJournal: (open: boolean) => void
+}
+
+/** A failure the visitor should know about, with the one action that helps. */
+export interface Fault {
+  id: string
+  title: string
+  detail: string
+  /** Offer a reload (progress is saved, so it is always safe). */
+  reload?: boolean
+  /** Can be dismissed and exploring continues. */
+  dismissible?: boolean
 }
 
 export interface Notice {
@@ -97,6 +118,11 @@ export const useExperience = create<ExperienceState>((set) => ({
   card: null,
   cardAt: 0,
   detected: {},
+  storyQueue: [],
+  story: null,
+  journal: false,
+  fault: null,
+  setFault: (fault) => set({ fault }),
   setPhase: (phase) => set({ phase }),
   setSceneReady: () => set({ sceneReady: true }),
   toggleMotion: () => set((s) => ({ motionPaused: !s.motionPaused })),
@@ -117,6 +143,9 @@ export const useExperience = create<ExperienceState>((set) => ({
   setScanning: (scanning) => set({ scanning }),
   setCard: (card) => set(card ? { card, cardAt: Date.now() } : { card }),
   detect: (id) => set((s) => (s.detected[id] ? s : { detected: { ...s.detected, [id]: true } })),
+  queueStory: (ids) => set((s) => ({ storyQueue: [...s.storyQueue, ...ids.filter((id) => !s.storyQueue.includes(id))] })),
+  setStory: (story) => set((s) => ({ story, storyQueue: story ? s.storyQueue.filter((id) => id !== story) : s.storyQueue })),
+  setJournal: (journal) => set({ journal }),
 }))
 
 /**

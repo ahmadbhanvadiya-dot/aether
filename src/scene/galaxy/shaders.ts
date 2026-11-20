@@ -177,6 +177,14 @@ float hash12(vec2 p) {
 
 vec4 T(vec2 uv) { return texture2D(uTerrain, uv); }
 
+// Phase 7: smooth value noise for weather drifting over the baked surface.
+float vn(vec2 p) {
+  vec2 i = floor(p);
+  vec2 f = fract(p);
+  vec2 u = f * f * (3.0 - 2.0 * f);
+  return mix(mix(hash12(i), hash12(i + vec2(1.0, 0.0)), u.x), mix(hash12(i + vec2(0.0, 1.0)), hash12(i + vec2(1.0, 1.0)), u.x), u.y);
+}
+
 float heightOf(vec4 t) {
 #if KIND == K_TERRESTRIAL
   float land = smoothstep(0.02, 0.05, t.r);
@@ -251,6 +259,13 @@ void main() {
   float lights = step(0.86, hash12(floor(uv * vec2(900.0, 450.0)))) * land * (1.0 - ice);
   lights *= smoothstep(0.25, 0.0, elev) * smoothstep(-0.3, 0.6, t.b);
   emissive = vec3(1.0, 0.72, 0.4) * lights * 0.35 * (1.0 - smoothstep(-0.2, 0.05, NdL));
+  // Auroral ovals ring both poles on the night side, rippling slowly.
+  {
+    float ring = exp(-pow((abs(lat) - 1.12 - 0.04 * sin(lon * 3.0 + uTime * 0.07)) / 0.05, 2.0));
+    float ripple = 0.55 + 0.45 * vn(vec2(lon * 9.0 + uTime * 0.12, lat * 4.0));
+    float darkSide = 1.0 - smoothstep(-0.25, 0.08, NdL);
+    emissive += mix(vec3(0.2, 1.0, 0.62), vec3(0.55, 0.4, 1.0), ripple * 0.5) * ring * ripple * darkSide * 0.32;
+  }
 
 #elif KIND == K_DARK
   // Thin, sparse fissures: only the very crest of the vein field glows.
@@ -262,6 +277,15 @@ void main() {
   vec3 veinCol = mix(uViolet, uIon, smoothstep(-0.5, 0.8, t.b));
   float night = 1.0 - smoothstep(-0.3, 0.2, NdL);
   emissive = veinCol * veins * pulse * (0.12 + night * 0.7);
+  // Volcanic hot spots: a few places swell to a glow and fade over minutes.
+  {
+    vec2 cell = floor(uv * vec2(40.0, 20.0));
+    float h = hash12(cell);
+    vec2 f = fract(uv * vec2(40.0, 20.0)) - 0.5;
+    float spot = exp(-dot(f, f) * 22.0) * step(0.93, h);
+    float flare = smoothstep(0.55, 1.0, sin(uTime * (0.03 + h * 0.04) + h * 60.0));
+    emissive += mix(uViolet, vec3(1.0, 0.55, 0.85), 0.35) * spot * flare * (0.05 + night * 0.55);
+  }
 
 #elif KIND == K_DESERT
   float basin = smoothstep(-0.2, -0.45, t.r);
@@ -270,6 +294,13 @@ void main() {
   albedo = mix(sand, rock, smoothstep(0.35, 0.7, t.b) * smoothstep(-0.05, 0.25, t.r));
   albedo = mix(albedo, vec3(0.84, 0.76, 0.62), basin * 0.8);       // salt flats
   albedo = mix(albedo, vec3(0.88, 0.86, 0.82), smoothstep(0.9, 0.97, abs(p.y))); // frost caps
+  // Dust storms: soft ochre veils that drift east and slowly change shape.
+  {
+    vec2 sp = vec2(lon * 2.2 - uTime * 0.012, lat * 4.0);
+    float storm = vn(sp) * 0.65 + vn(sp * 2.7 + vec2(uTime * 0.01, 3.1)) * 0.35;
+    storm = smoothstep(0.58, 0.85, storm) * (1.0 - smoothstep(0.7, 1.1, abs(lat)));
+    albedo = mix(albedo, vec3(0.74, 0.54, 0.32), storm * 0.6);
+  }
   wrap = 0.05;
 
 #elif KIND == K_CLOUD
@@ -314,7 +345,7 @@ void main() {
   // The great amber storm in the southern belt
   vec2 d = vec2((uv.x - 0.62) * 2.0, (uv.y - 0.33) * 5.0);
   float storm = exp(-dot(d, d) * 90.0);
-  float swirl = sin(atan(d.y, d.x) * 2.0 + length(d) * 40.0) * 0.5 + 0.5;
+  float swirl = sin(atan(d.y, d.x) * 2.0 + length(d) * 40.0 - uTime * 0.08) * 0.5 + 0.5;
   albedo = mix(albedo, mix(vec3(0.85, 0.42, 0.18), vec3(0.95, 0.68, 0.42), swirl), storm * 0.9);
   wrap = 0.12;
 #endif
@@ -369,12 +400,24 @@ uniform float uSpeed;
 uniform vec3 uCloudColor;
 uniform float uOpacity;
 uniform vec3 uAtmoDay;
+uniform float uStorms;
 
 varying vec3 vObjPos;
 varying vec3 vWorldPos;
 varying vec3 vWorldNormal;
 
 const float PI = 3.141592653589793;
+
+/** Phase 7: a cyclone — a spiral of cloud around a clear eye, turning. */
+float cyclone(vec2 uv, vec2 c, float r, float t) {
+  vec2 d = (uv - c) * vec2(2.0, 1.0);
+  float dist = length(d);
+  if (dist > r) return 0.0;
+  float a = atan(d.y, d.x) - t + dist / r * 9.0;
+  float arms = 0.5 + 0.5 * sin(a * 2.0);
+  float eye = smoothstep(r * 0.05, r * 0.14, dist);
+  return arms * eye * (1.0 - smoothstep(r * 0.4, r, dist));
+}
 
 void main() {
   vec3 p = normalize(vObjPos);
@@ -384,6 +427,13 @@ void main() {
   float d = texture2D(uTerrain, uv).a;
   // Wide, soft ramp so cloud edges feather instead of cutting like brush strokes.
   float cover = smoothstep(-0.05, 0.6, d);
+  if (uStorms > 0.0) {
+    // Cyclones turn where they are (anticlockwise north, clockwise south) and drift with the clouds.
+    float s = cyclone(uv, vec2(0.3, 0.33), 0.12, uTime * 0.05);
+    s = max(s, cyclone(uv, vec2(0.74, 0.7), 0.09, -uTime * 0.06));
+    s = max(s, cyclone(uv, vec2(1.05, 0.38), 0.07, uTime * 0.07) * uStorms);
+    cover = max(cover, s * uStorms);
+  }
   cover *= cover * smoothstep(1.0, 0.6, abs(p.y) * 0.9 + 0.1);
 
   vec3 N = normalize(vWorldNormal);
@@ -464,6 +514,7 @@ uniform float uPlanetR;
 uniform vec3 uColorA;
 uniform vec3 uColorB;
 uniform float uOpacity;
+uniform float uTime;
 
 varying vec3 vLocal;
 varying vec3 vWorldPos;
@@ -484,6 +535,9 @@ void main() {
   float gap = smoothstep(0.6, 0.615, x) * (1.0 - smoothstep(0.655, 0.67, x));
   float density = clamp(bands, 0.0, 1.0) * (1.0 - gap * 0.92);
   density *= smoothstep(0.0, 0.08, x) * (1.0 - smoothstep(0.9, 1.0, x));
+  // Phase 7: the rings turn — clumps orbit, the inner ones faster (Kepler: r^-1.5).
+  float ang = atan(vLocal.y, vLocal.x) + uTime * 0.02 * pow(r / uInner, -1.5);
+  density *= 0.8 + 0.2 * noise1(ang * 30.0 + floor(x * 40.0) * 7.0);
 
   vec3 col = mix(uColorB, uColorA, noise1(x * 34.0 + 3.0));
 

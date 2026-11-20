@@ -44,6 +44,16 @@ interface ExplorationState {
   /** When the Observatory was last opened (0 = never). Newer discoveries animate in. */
   observatorySeenAt: number
   soundOn: boolean
+  /** Master volume, 0 – 1 (Phase 7). Mute is `soundOn`. */
+  volume: number
+  /**
+   * Phase 8: story fragments already presented (id → when). Not progress —
+   * expedition progress is derived from `discovered` — only so a story event
+   * plays once and the journal can mark what is new.
+   */
+  story: Record<string, number>
+  markStory: (id: string) => void
+  setVolume: (v: number) => void
   /** Records a catalogued discovery. Returns true only the first time (never for unknown ids). */
   discover: (id: string) => boolean
   /** Records the first landing on a world. */
@@ -52,7 +62,7 @@ interface ExplorationState {
   toggleSound: () => void
 }
 
-type Persisted = Pick<ExplorationState, 'discovered' | 'visited' | 'observatorySeenAt' | 'soundOn'>
+type Persisted = Pick<ExplorationState, 'discovered' | 'visited' | 'observatorySeenAt' | 'soundOn' | 'volume' | 'story'>
 
 export const useExploration = create<ExplorationState>()(
   persist(
@@ -61,6 +71,13 @@ export const useExploration = create<ExplorationState>()(
       visited: {},
       observatorySeenAt: 0,
       soundOn: true,
+      volume: 0.8,
+      story: {},
+      markStory: (id) => {
+        if (get().story[id]) return
+        set((s) => ({ story: { ...s.story, [id]: Date.now() } }))
+      },
+      setVolume: (v) => set({ volume: Math.max(0, Math.min(1, v)) }),
       discover: (id) => {
         // Only catalogued discoveries, and each only once.
         if (!DISCOVERY_BY_ID[id] || get().discovered[id]) return false
@@ -83,6 +100,8 @@ export const useExploration = create<ExplorationState>()(
         visited: s.visited,
         observatorySeenAt: s.observatorySeenAt,
         soundOn: s.soundOn,
+        volume: s.volume,
+        story: s.story,
       }),
       /**
        * v1 → v2: v1 stored only discoveries. A world with a discovery was
