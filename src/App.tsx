@@ -7,6 +7,7 @@ import { director, telemetry } from './state/director'
 import { sound } from './audio/sound'
 import { useExploration } from './state/exploration'
 import { galaxy } from './state/galaxy'
+import { scanFx } from './scene/motion'
 import { sim, useSimulation } from './state/simulation'
 import { useSky } from './state/sky'
 import { useExperience } from './state/useExperience'
@@ -16,7 +17,7 @@ import { TitleScreen } from './ui/TitleScreen'
 
 // Dev-only handles for inspecting live state from the console.
 if (import.meta.env.DEV) {
-  Object.assign(window, { __store: useExperience, __director: director, __galaxyCam: galaxyCam, __galaxy: galaxy, __gsap: gsap, __telemetry: telemetry, __sound: sound, __exploration: useExploration, __surfaceCam: surfaceCam, __surface: surface, __sim: sim, __simulation: useSimulation, __sky: useSky })
+  Object.assign(window, { __store: useExperience, __director: director, __galaxyCam: galaxyCam, __galaxy: galaxy, __gsap: gsap, __telemetry: telemetry, __sound: sound, __exploration: useExploration, __surfaceCam: surfaceCam, __surface: surface, __sim: sim, __simulation: useSimulation, __sky: useSky, __scanFx: scanFx })
 }
 
 // Phase 10: without WebGL 2 there is no scene to wait for; say so at once.

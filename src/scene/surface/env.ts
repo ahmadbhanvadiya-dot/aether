@@ -145,6 +145,16 @@ export function createSurfaceUniforms(settings: SurfaceSettings) {
     /** Phase 7: integrated wind (shaders advect with this, so gusts never jump) and motion allowance. */
     uDrift: { value: new Vector2(0, 0) },
     uLive: { value: 1 },
+    /**
+     * Overhaul: the world's occasional event (an eruption on Nyx, a dust devil on
+     * Solara, a meteor or a break in the clouds on Aurelis, a deep storm on Orion):
+     * its direction from the camera, and x = strength 0 → 1, y = progress 0 → 1.
+     */
+    uEventDir: { value: new Vector3(1, 0.05, 0).normalize() },
+    uEvent: { value: new Vector2(0, 0) },
+    /** Overhaul: a discovery's light wave across the ground (xyz = where, w = progress 0 → 1). */
+    uReveal: { value: new Vector4(0, 0, 0, 0) },
+    uRevealColor: { value: new Color(settings.glow) },
     uLocA: { value: [new Vector4(), new Vector4(), new Vector4()] },
     uLocB: { value: [new Vector4(), new Vector4(), new Vector4()] },
   }

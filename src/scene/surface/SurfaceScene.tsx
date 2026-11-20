@@ -17,6 +17,7 @@ import {
   SphereGeometry,
   TorusGeometry,
   Vector3,
+  Vector4,
   type BufferGeometry as BG,
 } from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
@@ -30,6 +31,8 @@ import { startScan } from '../../ui/scanner'
 import { liveEnv } from './living'
 import { ScanTargets } from './ScanTargets'
 import { sound } from '../../audio/sound'
+import { surfaceCam } from './SurfaceRig'
+import { scanFx } from '../motion'
 import { applyEnv, createSurfaceUniforms, type SurfaceUniforms } from './env'
 import {
   beaconCoreFragment,
@@ -250,46 +253,92 @@ const MOTE_MOTION: Record<SurfaceSettings['motes'], { vel: [number, number, numb
   haze: { vel: [1.2, 0.1, 0.5], size: 3.4 },
 }
 
+// ---------------------------------------------------------------------------
+// Overhaul: each world's occasional events. The scheduler (in Weather) picks one
+// every 25–60 s; the shaders draw it from uEventDir and uEvent.
+
+type EventKind = 'meteor' | 'sunbreak' | 'eruption' | 'devil' | 'deep'
+
+/** Which event a world has (Vesper and Thalassa have their lightning instead). */
+const EVENTS: Partial<Record<SurfaceSettings['kind'], (night: boolean) => EventKind>> = {
+  terrestrial: (night) => (night ? 'meteor' : 'sunbreak'),
+  dark: () => 'eruption',
+  desert: () => 'devil',
+  giant: () => 'deep',
+}
+
+const DURATION: Record<EventKind, number> = { meteor: 1.4, sunbreak: 14, eruption: 16, devil: 22, deep: 3.2 }
+
+/** Strength over the event's life (t: 0 → 1). */
+const ENVELOPE: Record<EventKind, (t: number) => number> = {
+  meteor: (t) => Math.sin(Math.min(t, 1) * Math.PI),
+  sunbreak: (t) => Math.sin(Math.min(t, 1) * Math.PI) ** 2,
+  // An eruption flares quickly, then glows and fades for a long time.
+  eruption: (t) => Math.min(1, t * 8) * Math.pow(1 - Math.min(t, 1), 1.5),
+  devil: (t) => Math.min(1, t * 5) * Math.min(1, (1 - Math.min(t, 1)) * 5),
+  // Deep storms flicker: a few pulses inside one envelope.
+  deep: (t) => Math.sin(Math.min(t, 1) * Math.PI) * (0.55 + 0.45 * Math.sin(t * 37) * Math.sin(t * 11 + 1)),
+}
+
+/** The camera's heading as an angle in the shaders' (cos a, sin a) convention. */
+function viewAngle() {
+  const yaw = surfaceCam.current.yaw
+  return Math.atan2(-Math.cos(yaw), Math.sin(yaw))
+}
+
+/** One particle layer (see motesVertex): `far` fills the middle distance, `near` is the bokeh foreground. */
+function makeMotes(settings: SurfaceSettings, uniforms: SurfaceUniforms, layer: 'far' | 'near') {
+  const far = layer === 'far'
+  const count = far ? (HIGH ? 1400 : 560) : HIGH ? 90 : 40
+  const rand = mulberry32(settings.seed + (far ? 0 : 101))
+  const seeds = new Float32Array(count * 3)
+  const r = new Float32Array(count)
+  for (let i = 0; i < count; i++) {
+    seeds.set([rand(), rand(), rand()], i * 3)
+    r[i] = rand()
+  }
+  const g = new BufferGeometry()
+  g.setAttribute('position', new BufferAttribute(new Float32Array(count * 3), 3))
+  g.setAttribute('aSeed', new BufferAttribute(seeds, 3))
+  g.setAttribute('aRand', new BufferAttribute(r, 1))
+  const motion = MOTE_MOTION[settings.motes]
+  const material = new ShaderMaterial({
+    vertexShader: motesVertex,
+    fragmentShader: motesFragment,
+    uniforms: {
+      uTime: uniforms.uTime,
+      uWind: uniforms.uWind,
+      uVel: { value: new Vector3(...motion.vel) },
+      uSize: { value: far ? motion.size : motion.size * 9 },
+      uPR: { value: 1 },
+      uAmount: { value: 0 },
+      uColor: { value: new Color(settings.moteColor) },
+      uBox: { value: far ? new Vector3(80, 40, 80) : new Vector3(16, 9, 16) },
+      uFade: { value: far ? new Vector4(0.5, 3, 25, 40) : new Vector4(0.6, 1.6, 5.5, 8) },
+      uMaxPx: { value: far ? 12 : 64 },
+      uBokeh: { value: far ? 0 : 1 },
+    },
+    transparent: true,
+    depthWrite: false,
+    blending: AdditiveBlending,
+  })
+  const points = new Points(g, material)
+  points.frustumCulled = false
+  return { points, material, base: new Color(settings.moteColor) }
+}
+
 function Weather({ uniforms, settings }: { uniforms: SurfaceUniforms; settings: SurfaceSettings }) {
   const dpr = useThree((st) => st.viewport.dpr)
   const motionPaused = useExperience((st) => st.motionPaused)
   const reducedMotion = useExperience((st) => st.reducedMotion)
   const nextFlash = useRef(4)
   const flash = useRef(0)
+  const event = useRef({ kind: 'meteor' as EventKind, age: -1, wait: 12, dur: 1, az: 0, el: 0 })
 
-  const motes = useMemo(() => {
-    const count = HIGH ? 1400 : 560
-    const rand = mulberry32(settings.seed)
-    const seeds = new Float32Array(count * 3)
-    const r = new Float32Array(count)
-    for (let i = 0; i < count; i++) {
-      seeds.set([rand(), rand(), rand()], i * 3)
-      r[i] = rand()
-    }
-    const g = new BufferGeometry()
-    g.setAttribute('position', new BufferAttribute(new Float32Array(count * 3), 3))
-    g.setAttribute('aSeed', new BufferAttribute(seeds, 3))
-    g.setAttribute('aRand', new BufferAttribute(r, 1))
-    const motion = MOTE_MOTION[settings.motes]
-    const material = new ShaderMaterial({
-      vertexShader: motesVertex,
-      fragmentShader: motesFragment,
-      uniforms: {
-        uTime: uniforms.uTime,
-        uVel: { value: new Vector3(...motion.vel) },
-        uSize: { value: motion.size },
-        uPR: { value: 1 },
-        uAmount: { value: 0 },
-        uColor: { value: new Color(settings.moteColor) },
-      },
-      transparent: true,
-      depthWrite: false,
-      blending: AdditiveBlending,
-    })
-    const points = new Points(g, material)
-    points.frustumCulled = false
-    return { points, material, base: new Color(settings.moteColor) }
-  }, [settings, uniforms])
+  // Overhaul: two layers from one shader — fine motes through the middle distance,
+  // and a few large, soft ones near the lens that give the frame a foreground.
+  const motes = useMemo(() => makeMotes(settings, uniforms, 'far'), [settings, uniforms])
+  const near = useMemo(() => makeMotes(settings, uniforms, 'near'), [settings, uniforms])
 
   const rain = useMemo(() => {
     const count = HIGH ? 2600 : 1000
@@ -337,6 +386,11 @@ function Weather({ uniforms, settings }: { uniforms: SurfaceUniforms; settings: 
       .multiplyScalar(Math.max(env.sunDir.y, 0) * 0.7 + 0.25)
       .add(env.zenith.clone().multiplyScalar(0.6))
     mm.uColor.value.copy(motes.base).multiply(light)
+    const nm = near.material.uniforms
+    nm.uPR.value = dpr
+    // The foreground layer is faint: it should be felt more than seen.
+    nm.uAmount.value = env.motes * (reducedMotion ? 0.2 : 0.32)
+    nm.uColor.value.copy(mm.uColor.value)
     rain.material.uniforms.uAmount.value = env.rain * 0.35
     rain.lines.visible = env.rain > 0.01
 
@@ -350,7 +404,9 @@ function Weather({ uniforms, settings }: { uniforms: SurfaceUniforms; settings: 
       nextFlash.current -= dt
       if (nextFlash.current <= 0) {
         flash.current = distant ? 0.45 + Math.random() * 0.2 : 1
-        const a = Math.random() * Math.PI * 2
+        // Overhaul: most flashes happen where the visitor is looking (they used to
+        // fall anywhere around, mostly behind); some still light the sky behind.
+        const a = viewAngle() + (Math.random() < 0.75 ? (Math.random() - 0.5) * 1.6 : Math.random() * Math.PI * 2)
         const up = distant ? 0.02 + Math.random() * 0.08 : 0.08 + Math.random() * 0.22
         uniforms.uFlashDir.value.set(Math.cos(a), up, Math.sin(a)).normalize()
         nextFlash.current = (2.5 + Math.random() * 6) / level
@@ -358,17 +414,61 @@ function Weather({ uniforms, settings }: { uniforms: SurfaceUniforms; settings: 
         else sound.thunder(0.8 + Math.random() * 2.2, 0.4 + env.lightning * 0.6)
       }
     }
+    // Overhaul: the world's occasional event (see EVENTS). One at a time, never in
+    // reduced motion or while paused, always roughly where the visitor is looking.
+    const ev = event.current
+    const eu = uniforms.uEvent.value
+    const spec = EVENTS[settings.kind]
+    if (spec && !motionPaused && !reducedMotion && director.space === 'surface' && surfaceCam.mode === 'free') {
+      if (ev.age < 0) {
+        ev.wait -= dt
+        if (ev.wait <= 0) {
+          const night = env.stars > 0.25 || env.sunDir.y < 0
+          ev.kind = spec(night)
+          ev.age = 0
+          ev.dur = DURATION[ev.kind]
+          ev.az = viewAngle() + (Math.random() - 0.5) * 1.3
+          ev.el = ev.kind === 'meteor' ? 0.35 + Math.random() * 0.3 : ev.kind === 'deep' ? -0.25 - Math.random() * 0.2 : 0.02
+          if (ev.kind === 'eruption') sound.thunder(3.5 + Math.random() * 2, 0.35)
+          if (ev.kind === 'deep') sound.thunder(2.5, 0.2)
+        }
+      }
+    }
+    if (ev.age >= 0) {
+      ev.age += dt / ev.dur
+      // A dust devil wanders along the horizon; the others stay put.
+      if (ev.kind === 'devil') ev.az += dt * 0.02
+      uniforms.uEventDir.value.set(Math.cos(ev.az) * Math.cos(ev.el), Math.sin(ev.el), Math.sin(ev.az) * Math.cos(ev.el))
+      const t = ev.age
+      eu.set(ENVELOPE[ev.kind](t), t)
+      if (t >= 1) {
+        ev.age = -1
+        ev.wait = 25 + Math.random() * 35
+        eu.set(0, 0)
+      }
+    }
+
+    // Overhaul: a discovery's light wave, timed by the scanner's completion pulse.
+    const revealId = scanFx.target
+    const at = revealId ? surface.targets[revealId] : null
+    const rv = uniforms.uReveal.value
+    // Only for things on the ground: a find in the sky has no ground to light.
+    const grounded = at && at.y - surface.floor(at.x, at.z) < 40
+    if (at && grounded && scanFx.pulse > 0.001 && scanFx.pulse < 0.999) rv.set(at.x, at.y, at.z, scanFx.pulse)
+    else rv.w = 0
+
     // A double flicker that decays quickly.
     flash.current = Math.max(0, flash.current - dt * 3.2)
     const f = flash.current
     uniforms.uFlash.value = f > 0 ? f * f * (0.7 + 0.3 * Math.sin(f * 40)) : 0
   })
 
-  useDispose(motes.points.geometry, rain.lines.geometry)
+  useDispose(motes.points.geometry, near.points.geometry, rain.lines.geometry)
 
   return (
     <>
       <primitive object={motes.points} />
+      <primitive object={near.points} />
       <primitive object={rain.lines} />
     </>
   )

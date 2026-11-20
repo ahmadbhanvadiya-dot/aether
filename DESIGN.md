@@ -28,11 +28,12 @@ Status labels used throughout:
 12. [Phase 8 — Expeditions and storytelling](#12-phase-8--expeditions-and-storytelling) (Implemented)
 13. [Phase 9 — Universe simulation](#13-phase-9--universe-simulation) (Implemented)
 14. [Phase 10 — Production polish](#14-phase-10--production-polish) (Implemented)
-15. [Technical architecture](#15-technical-architecture) (Implemented)
-16. [Rules for future work](#16-rules-for-future-work) (Planned)
-17. [Known limitations](#17-known-limitations)
-18. [Decision log](#18-decision-log)
-19. [Roadmap](#19-roadmap)
+15. [Planet exploration overhaul](#15-planet-exploration-overhaul) (Implemented)
+16. [Technical architecture](#16-technical-architecture) (Implemented)
+17. [Rules for future work](#17-rules-for-future-work) (Planned)
+18. [Known limitations](#18-known-limitations)
+19. [Decision log](#19-decision-log)
+20. [Roadmap](#20-roadmap)
 
 ---
 
@@ -380,7 +381,7 @@ limited to 0.15 … π − 0.15. Auto‑rotate is off when motion is paused or r
 
 ## 4. The six worlds
 
-**Status: Implemented.** All six share one pipeline (§15) and differ through a *kind* recipe
+**Status: Implemented.** All six share one pipeline (§16) and differ through a *kind* recipe
 in the bake and surface shaders (`scene/galaxy/shaders.ts`), plus per‑world data.
 
 | World | Kind | Accent | Atmosphere day / night | Shell | Clouds | Rings |
@@ -1724,7 +1725,148 @@ reader, audio by ear.
 
 ---
 
-## 15. Technical architecture
+## 15. Planet exploration overhaul
+
+**Status: Implemented** (not yet deployed). A pass on the surfaces only, building on the
+existing scene (§6, §8, §11). No screen, navigation or identity was replaced.
+
+### Audit: why the surfaces felt static
+
+Measured as the share of pixels that change visibly (luminance step > 12/255) in 3 s
+of a settled view. Film grain alone accounts for 1.2 %.
+
+| Location | Before | After (3 s / 6 s) |
+|----------|--------|-------------------|
+| Aurelis · the Glass Shelf | 10.4 % | 41.8 / 21.9 % |
+| Nyx · the Vein Fields | 15.4 % | 4.2 / 13.4 % |
+| Solara · the Amber Sea | 45 % (heat shimmer) | 14 / 45.4 % |
+| Vesper · Thunderhead Choir | 22.3 % | 15.3 / 10.7 % |
+| Thalassa · the Long Storm | 18.9 % | 48 / 19.7 % |
+| Orion · Ringrise | 4.5 % | 42.7 / 13.4 % |
+
+The figures swing with where the camera dolly is in its arc. On the dark worlds (Nyx,
+Vesper) the threshold misses most of the change; there the screenshots are the
+evidence. Causes found:
+
+1. **The camera was locked off.** Free view swayed ±1.5 units and ~1° against
+   terrain hundreds of units away, so there was no parallax.
+2. **One flat haze.** A single fog level flattened depth: Orion overexposed (ring
+   arch and pale horizon), Nyx and Vesper near black.
+3. **An empty foreground.** Particles were small points 3–40 units away, faint.
+4. **Motion too slow to see.** Clouds drifted ~1.7 units/s at hundreds of units;
+   the light drift is a 7‑minute cycle.
+5. **Named features missing:** Nyx's veins barely visible, no thunderheads at the
+   Thunderhead Choir, a flat grey storm over the Long Storm.
+6. **Lightning out of view and overexposed:** flashes fell at random azimuths (mostly
+   behind) and lifted the whole frame.
+
+### Camera (`SurfaceRig.tsx`, free mode)
+
+- **A living camera:** a slow dolly arcs ±10 units across the scene, rises ±2.8 and
+  pushes ±4 on incommensurate 50–110 s periods. The view stays aimed at a focal
+  point 220 units ahead, so near ground, landmarks and distance separate in
+  parallax instead of the whole frame sliding. Two small fast terms add a hand‑held
+  breath (≤ 0.2°).
+- **Scan framing:** while scanning, the dolly settles to a quarter and the camera
+  leans 6 units toward the target (with the existing narrowing and aim).
+- Eases in from rest after every landing and flight (no jump). Off with reduced
+  motion or *Pause motion*.
+- Approach, entry, landing, flights between locations and the climb to orbit are
+  unchanged (§8).
+
+### Shared depth (`shaders.ts`, every world)
+
+- **Drifting haze banks** near the ground on every world, moving with the world's wind
+  (Nyx's existing denser banks unchanged).
+- **Light shafts:** haze toward Elys is shaded by the cloud layer's shadow, sampled
+  once along the ray, so light falls through cloud gaps in beams.
+- **Clouds move:** clouds and their shadows drift 2.4× faster (`CLOUD_RATE`, about
+  40 m/s at this scale, a gentle time‑lapse). Cloud shadows are a little deeper.
+- **Textured cloud bases:** under full cover the layer is shaded by its own density
+  (thick masses darker from below), and fogged as if half as far, since haze lies
+  below it.
+- **Foreground particles:** the mote shader now draws two layers, carried by the
+  world's wind. Fine motes fill the middle distance; 40–90 large soft discs with a
+  faint rim (bokeh) drift within 8 units of the lens.
+- **Weathered landmarks:** strata, streaks, darker and wet feet, sky light on upward
+  faces, occlusion toward the base, cloud shadows.
+- **Lightning:** 75 % of strikes now fall within ±46° of the view. They light their own
+  part of the sky; the frame lifts only slightly.
+
+### Each world
+
+| World | Continuous | Event (every 25–60 s, near the view) |
+|-------|------------|--------------------------------------|
+| Aurelis | Moving cloud shadows and shafts over sea and land; aurora curtains fold and travel, with surges along them | By day, a break in the clouds strengthens the beams (14 s); at night, a meteor and its fading trail (1.4 s) |
+| Nyx | Veins burn brighter with pulses running along them and a wider uplight; a low volcanic glow wanders the horizon | An eruption: a wide low flare, a rising lit ash column, the plain lit from its side, a distant rumble (16 s) |
+| Solara | Wind ripples across the dunes near the eye, catching the sun; existing sand wisps, dust walls and heat haze | A dust devil: a twisting funnel with a dust skirt, wandering along the horizon (22 s) |
+| Vesper | Taller thunderheads with billowed, sunlit crowns, slowly churning; soft ribbons of energy drifting in the violet sky | Lightning (existing schedule, now in view): a forked bolt under each strong flash |
+| Thalassa | Rolling, textured storm ceiling; haze banks over the swell; existing rain, curtains and swell sets | Lightning with visible bolts, as Vesper |
+| Orion | Ring arch with deeper gaps between ringlets and less glare; existing band motion and storms | A storm deep below flickers up through the cloud tops (3.2 s, soft rumble) |
+
+The scheduler lives in `Weather` (`SurfaceScene.tsx`) and writes two uniforms,
+`uEventDir` and `uEvent` (strength, progress). Each world's shader decides what to draw
+from them. There are no events in reduced motion, while paused, during flights, or off
+the surface.
+
+### Discovery feedback
+
+When a scan completes, a ring of light runs out across the ground from the find (220
+units, eased with the scanner's completion pulse) in the world's glow colour, with a
+brief glow where it stands (`revealLight`, on terrain, water and landmarks). Finds in
+the sky do not trigger it.
+
+### Data changes
+
+Ringrise (Orion): horizon `#E8D6B8 → #CBB596`, ground `#A88A66 → #8E7356`. The
+location faced Elys across a near‑white horizon.
+
+### Performance
+
+- No new render passes and no textures. Everything is in the existing materials.
+- Per fragment: one value‑noise lookup for haze banks; one cloud‑shadow lookup for
+  shafts (only toward Elys, only with clouds); world‑specific single lookups.
+- Particles: 40–90 more points.
+- Measured GPU per frame, pixel ratio 1, RTX 3050 Laptop:
+
+  | Location | Resolution | GPU |
+  |----------|------------|-----|
+  | Glass Shelf | 768 × 576 | 1.0 ms |
+  | Vein Fields | 1024 × 768 | 2.1 ms |
+  | Amber Sea | 768 × 576 | 1.0 ms |
+  | Thunderhead Choir | 1024 × 768 | 1.6 ms |
+  | Long Storm | 768 × 576 | 1.0 ms |
+  | Ringrise | 768 × 576 | 0.9 ms |
+
+  Phase 10's surfaces were 2.1–3.4 ms at 1280 × 720, which is in line once
+  resolution is accounted for.
+- Surface chunk: 43 → 56 kB (13.8 → 18.3 kB gzipped).
+- All animation is delta‑time or clock based; nothing new runs through React state.
+
+### Verified
+
+Dev build:
+
+- **Every world:** all six landed, measured and photographed. Shaders compile with no
+  errors.
+- **Each event, forced and photographed:** eruption, dust devil, meteor, lightning bolt
+  at full strength (no white‑out). Orion's deep storm was forced too, but its glow
+  did not land in the captured frame, so it is unconfirmed.
+- **Discovery wave:** frozen mid‑pulse on Halvard Ridge's signal.
+- **Reduced motion:** stops the dolly and events.
+- **Checks:** `tsc`, build and lint pass. Lint has one new warning, the established
+  uniform‑mutation pattern.
+
+Not verified:
+
+- events firing on their own schedule (they were forced for capture);
+- how the dolly feels at full frame rate on a real display;
+- phones;
+- sound of the eruption rumble by ear.
+
+---
+
+## 16. Technical architecture
 
 **Status: Implemented.** React 19 · Vite 8 · TypeScript · three 0.187 · @react-three/fiber 9 ·
 @react-three/drei 10 (PerformanceMonitor only) · @react-three/postprocessing 3 · GSAP 3
@@ -1947,7 +2089,7 @@ Measured on an RTX 3050 laptop (forced frames): Vael ≈ 5.3 ms at a 2000×1125 
 
 ---
 
-## 16. Rules for future work
+## 17. Rules for future work
 
 These are rules, not features. The global rules apply to all future work. The Phase 3
 and Phase 4 subsections record how the shipped implementation follows them.
@@ -2057,7 +2199,7 @@ and Phase 4 subsections record how the shipped implementation follows them.
 
 ---
 
-## 17. Known limitations
+## 18. Known limitations
 
 | Item | Status |
 |------|--------|
@@ -2108,7 +2250,7 @@ and Phase 4 subsections record how the shipped implementation follows them.
 
 ---
 
-## 18. Decision log
+## 19. Decision log
 
 Superseded Phase 1 decisions, kept so nobody reintroduces them by accident.
 
@@ -2157,11 +2299,13 @@ Superseded Phase 1 decisions, kept so nobody reintroduces them by accident.
 | Orbit inclinations within ±0.035 rad | Spread to −0.06 … +0.065 rad | Near‑equal inclinations made transits of Elys happen at most conjunctions |
 | Resolution adaptive between 1× and the display's ratio | Down to 0.75× under sustained load | 1× is the whole budget on integrated GPUs at 1080p |
 | Lazy chunks imported once, failures unhandled | Memoised loaders with retries, abort paths and a fault card | A redeploy or a dropped connection left the descent stuck |
+| Surface camera: ±1.5 unit sway, ~1° view drift | A slow ±10 unit dolly aimed at a focal point 220 units ahead | No parallax meant no depth; the surfaces read as stills |
+| Lightning at random azimuths, lifting the whole frame | Mostly within the view; lights its own part of the sky; visible bolts | Flashes fell behind the visitor and whited out the frame |
 | Celestial events from the camera's view | Solved from the simulation's own geometry, independent of the camera | Events are facts about the system, not about a viewpoint |
 
 ---
 
-## 19. Roadmap
+## 20. Roadmap
 
 | Phase | Name | Status | Scope |
 |-------|------|--------|-------|
@@ -2176,5 +2320,6 @@ Superseded Phase 1 decisions, kept so nobody reintroduces them by accident.
 | 8 | Expeditions & Storytelling | **Complete** (not yet deployed) | Expedition system derived from discoveries, two expeditions with 12 story fragments, story events with framing, Expedition Journal, Observatory and record integration (§12) |
 | 9 | Universe Simulation | **Complete** (not yet deployed) | One simulation clock, Kepler‑consistent orbits, slowed rotation, 11 moons, controls, solved conjunctions, oppositions, alignments, transits and eclipses, Observatory Sky section (§13) |
 | 10 | Production polish | **Complete** (not yet deployed) | Audit, failure handling, surface memory leak, adaptive resolution to 0.75, layout and accessibility fixes, GPU measurement, production build verified at /aether/ (§14) |
+| — | Planet exploration overhaul | **Complete** (not yet deployed) | Living surface camera, shared depth (haze banks, shafts, foreground particles, weathered landmarks), each world's continuous life and events, visible lightning, discovery light wave (§15) |
 | 11 | Beyond the System | Proposal under review | Multiple star systems, deep‑space destinations, a universe map (see `docs/proposals/`) |
 | 12 | AETHER Command | Proposal under review | Navigator, mission control, celestial database, exploration log (see `docs/proposals/`) |
