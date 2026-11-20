@@ -36,6 +36,23 @@ uniform vec3 uWaterShallow;
 uniform vec2 uWind;
 uniform vec2 uDrift;
 uniform float uLive;
+uniform vec3 uEventDir;
+uniform vec2 uEvent;
+uniform vec4 uReveal;
+uniform vec3 uRevealColor;
+
+/**
+ * Overhaul: when something is discovered, a ring of light runs out across the
+ * ground from it and fades, with a brief glow where it stands.
+ */
+vec3 revealLight(vec3 p) {
+  if (uReveal.w <= 0.0 || uReveal.w >= 1.0) return vec3(0.0);
+  float r = length(p.xz - uReveal.xz);
+  float R = uReveal.w * 220.0;
+  float ring = exp(-pow((r - R) / (5.0 + R * 0.07), 2.0));
+  float fade = pow(1.0 - uReveal.w, 1.5);
+  return uRevealColor * (ring * 0.6 + exp(-r * 0.05) * 0.3) * fade;
+}
 
 float sunVisible() { return smoothstep(-0.08, 0.06, uSunDir.y); }
 
@@ -47,13 +64,15 @@ float sunVisible() { return smoothstep(-0.08, 0.06, uSunDir.y); }
 #ifndef LIVE_OCT
 #define LIVE_OCT 3
 #endif
+// Overhaul: clouds (and their shadows) drift fast enough to be seen moving.
+#define CLOUD_RATE 1.2
 float cloudShadow(vec3 p) {
   if (uCloudCover < 0.03 || uCloudHeight < p.y + 2.0) return 1.0;
   float sy = max(uSunDir.y, 0.1);
   vec2 at = p.xz + uSunDir.xz / sy * (uCloudHeight - p.y);
-  float c = fbm2(at * 0.0035 + uDrift * 0.5, LIVE_OCT) * 0.5 + 0.5;
+  float c = fbm2(at * 0.0035 + uDrift * CLOUD_RATE, LIVE_OCT) * 0.5 + 0.5;
   float dens = smoothstep(1.0 - uCloudCover, 1.0 - uCloudCover + 0.22, c);
-  return 1.0 - dens * 0.55 * sunVisible();
+  return 1.0 - dens * 0.68 * sunVisible();
 }
 
 vec3 skyBase(vec3 d) {
@@ -64,7 +83,8 @@ vec3 skyBase(vec3 d) {
   float vis = smoothstep(-0.2, 0.05, uSunDir.y);
   col += uSunColor * (pow(mu, 6.0) * 0.16 + pow(mu, 48.0) * 0.3) * vis;
   col += uSunColor * pow(mu, 2.0) * 0.06 * (1.0 - clamp(abs(y) * 4.0, 0.0, 1.0)) * vis;
-  col += vec3(0.62, 0.66, 0.95) * uFlash * (pow(max(dot(d, uFlashDir), 0.0), 4.0) * 1.4 + 0.12);
+  // Overhaul: lightning lights its own part of the sky; the whole frame lifts only a little.
+  col += vec3(0.62, 0.66, 0.95) * uFlash * (pow(max(dot(d, uFlashDir), 0.0), 24.0) * 0.6 + pow(max(dot(d, uFlashDir), 0.0), 6.0) * 0.1 + 0.03);
   return col;
 }
 
@@ -73,12 +93,31 @@ vec3 applyFog(vec3 col, vec3 wpos) {
   float dist = length(v);
   vec3 d = v / max(dist, 1e-4);
   float heightK = 1.0 + 1.5 * exp(-max(wpos.y, 0.0) * 0.012);
+  // Overhaul: low banks of haze on every world, drifting with its wind, so the
+  // air between near and far has layers that move (Nyx's are the densest).
 #if SKIND == 1
-  // Nyx: banks of dark haze drift low across the plains.
   heightK *= 0.7 + 0.6 * smoothstep(-0.4, 0.6, vnoise(wpos.xz * 0.0025 + uDrift * 1.5));
+#else
+  float bank = smoothstep(-0.3, 0.7, vnoise(wpos.xz * 0.003 + uDrift * 2.0));
+  heightK *= 0.78 + 0.5 * bank * exp(-max(wpos.y, 0.0) * 0.02);
 #endif
-  float f = 1.0 - exp(-dist * uFog * heightK);
-  return mix(col, skyBase(d), clamp(f, 0.0, 1.0));
+  float f = clamp(1.0 - exp(-dist * uFog * heightK), 0.0, 1.0);
+  vec3 air = skyBase(d);
+  // Shafts: where clouds shade the sun, the haze toward it is darker, so light
+  // falls through the gaps in beams (one shadow sample, halfway along the ray).
+  float mu = max(dot(d, uSunDir), 0.0);
+  if (uCloudCover > 0.03 && mu > 0.2) {
+    float shade = cloudShadow(mix(cameraPosition, wpos, 0.35));
+    air *= mix(1.0, 0.72 + 0.28 * shade, smoothstep(0.2, 0.85, mu));
+#if SKIND == 0
+    // Aurelis: now and then the cloud breaks and the beams strengthen.
+    float beams = 1.0 + 2.2 * uEvent.x * step(0.0, uSunDir.y);
+#else
+    float beams = 1.0;
+#endif
+    air += uSunColor * pow(mu, 10.0) * 0.18 * shade * sunVisible() * beams;
+  }
+  return mix(col, air, f);
 }
 
 vec3 ambient(vec3 n) {
@@ -159,8 +198,10 @@ void main() {
   if (uAurora > 0.0 && d.y > 0.0) {
     float a = atan(d.z, d.x);
     float h = d.y;
-    float curtain = smoothstep(0.5, 0.85, fbm2(vec2(a * 2.6 + uTime * 0.015, h * 1.2), 3) * 0.5 + 0.5);
-    float streak = 0.5 + 0.5 * vnoise(vec2(a * 140.0, h * 3.0 - uTime * 0.2));
+    // Overhaul: the curtains fold and travel, and surges of brightness run along them.
+    float curtain = smoothstep(0.5, 0.85, fbm2(vec2(a * 2.6 + uTime * 0.04 + sin(h * 6.0 + uTime * 0.3) * 0.12, h * 1.2), 3) * 0.5 + 0.5);
+    float streak = 0.5 + 0.5 * vnoise(vec2(a * 140.0 + uTime * 0.6, h * 3.0 - uTime * 0.5));
+    curtain *= 0.65 + 0.55 * smoothstep(0.2, 0.9, sin(a * 3.0 - uTime * 0.35) * 0.5 + 0.5);
     float band = smoothstep(0.04, 0.18, h) * (1.0 - smoothstep(0.26, 0.5, h));
     vec3 ac = mix(vec3(0.2, 1.0, 0.65), vec3(0.55, 0.35, 1.0), smoothstep(0.12, 0.5, h));
     col += ac * curtain * streak * band * uAurora * 0.42;
@@ -181,7 +222,8 @@ void main() {
           float x = (r - 1.35);
           float bands = vnoise(vec2(x * 70.0, 0.5)) * 0.45 + vnoise(vec2(x * 210.0, 2.5)) * 0.25 + vnoise(vec2(x * 14.0, 7.5)) * 0.5;
           float gap = smoothstep(0.6, 0.615, x) * (1.0 - smoothstep(0.655, 0.67, x));
-          float dens = clamp(bands * 0.5 + 0.55, 0.0, 1.0) * (1.0 - gap * 0.92);
+          // Overhaul: deeper gaps between ringlets — the arch has structure, sky shows through.
+          float dens = clamp(bands * 0.8 + 0.3, 0.0, 1.0) * (1.0 - gap * 0.92);
           // The rings turn: clumps of ice orbit, the inner ones faster (Kepler: r^-1.5).
           vec3 e1 = normalize(cross(axis, vec3(0.0, 0.0, 1.0)) + vec3(1e-4));
           vec3 e2 = cross(axis, e1);
@@ -195,8 +237,10 @@ void main() {
           float hq = bq * bq - cq;
           float shadow = (hq > 0.0 && -bq - sqrt(max(hq, 0.0)) > 0.0) ? 0.12 : 1.0;
           float fwd = pow(max(dot(d, uSunDir), 0.0), 5.0);
-          rc *= (0.55 + fwd * 1.2) * shadow;
-          float alpha = dens * 0.85 * smoothstep(-0.02, 0.04, d.y);
+          // Overhaul: darker and more transparent (they read as ice against the sky,
+          // not a white sheet), brightening only toward Elys.
+          rc *= (0.34 + fwd * 0.65) * shadow;
+          float alpha = dens * 0.62 * smoothstep(-0.02, 0.04, d.y);
           col = mix(col, rc, alpha);
         }
       }
@@ -233,16 +277,108 @@ void main() {
   // Storm towers on the horizon, lit from within by lightning
   if (d.y > -0.06) {
     float a = atan(d.z, d.x);
-    float prof = 0.035 + 0.24 * pow(max(fbm2(vec2(a * 2.2, 3.7), 4) * 0.5 + 0.5 - 0.35, 0.0) * 1.6, 1.4);
-    prof += fbm2(vec2(a * 30.0, d.y * 20.0), 2) * 0.012;
-    float inside = 1.0 - smoothstep(prof - 0.012, prof, d.y);
+    // Overhaul: towering thunderheads with billowed, sunlit crowns, slowly churning.
+    float prof = 0.04 + 0.34 * pow(max(fbm2(vec2(a * 2.2, 3.7), 4) * 0.5 + 0.5 - 0.35, 0.0) * 1.6, 1.3);
+    prof += fbm2(vec2(a * 30.0, d.y * 20.0 - uTime * 0.01), 2) * 0.016;
+    float inside = 1.0 - smoothstep(prof - 0.014, prof, d.y);
     if (inside > 0.0) {
       float k = clamp(d.y / max(prof, 0.01), 0.0, 1.0);
-      vec3 tc = mix(uGround * 1.15, uHorizon * 0.95, k);
+      float billow = fbm2(vec2(a * 16.0 + uTime * 0.004, d.y * 26.0 - uTime * 0.012), 3) * 0.5 + 0.5;
+      vec3 tc = mix(uGround * 1.1, uHorizon * 1.05, k) * (0.78 + 0.4 * billow);
+      // Crowns catch the light; bases stay in their own shadow.
+      tc += uHorizon * 0.35 * smoothstep(0.55, 1.0, k) * billow;
       tc += uSunColor * 0.18 * pow(max(dot(d, uSunDir), 0.0), 2.0) * sunVisible();
-      tc += vec3(0.78, 0.72, 1.0) * uFlash * pow(max(dot(d, uFlashDir), 0.0), 3.0) * 1.8;
+      tc += vec3(0.78, 0.72, 1.0) * uFlash * pow(max(dot(d, uFlashDir), 0.0), 8.0) * 0.9;
       col = mix(col, tc, inside);
     }
+  }
+#endif
+
+  // ---- Overhaul: each world's sky life and events --------------------------
+  float evS = uEvent.x;
+  vec3 evD = normalize(uEventDir);
+  float evAz = atan(evD.z, evD.x);
+  float dAz = atan(d.z, d.x);
+  float azOff = abs(mod(dAz - evAz + 3.14159265, 6.2831853) - 3.14159265);
+
+#if SKIND == 0
+  // Aurelis at night: a meteor crosses, leaving a fading trail.
+  if (evS > 0.0 && evD.y > 0.2) {
+    vec3 side = normalize(cross(evD, vec3(0.0, 1.0, 0.0)));
+    vec3 path = normalize(side - vec3(0.0, 0.45, 0.0));
+    vec3 head = normalize(evD + path * (uEvent.y * 0.55));
+    vec3 tail = normalize(evD + path * (uEvent.y * 0.55 - 0.16));
+    vec3 seg = head - tail;
+    float q = clamp(dot(d - tail, seg) / dot(seg, seg), 0.0, 1.0);
+    float dist = length(d - mix(tail, head, q));
+    col += vec3(0.85, 0.92, 1.0) * exp(-dist * dist / 0.0000025) * q * q * evS * 2.2;
+  }
+#endif
+
+#if SKIND == 1
+  // Nyx: a low volcanic glow wanders the horizon...
+  if (d.y > -0.05 && d.y < 0.25) {
+    float glowAz = fbm2(vec2(dAz * 1.4 + uTime * 0.01, 2.2), 3) * 0.5 + 0.5;
+    float flick = 0.8 + 0.2 * sin(uTime * 1.7 + dAz * 5.0) * sin(uTime * 0.6);
+    float low = exp(-max(d.y, 0.0) * 22.0);
+    col += vec3(0.42, 0.16, 0.6) * smoothstep(0.55, 0.85, glowAz) * low * flick * 0.35;
+  }
+  // ...and now and then something erupts on it: a flare, then a glowing column of ash.
+  if (evS > 0.0 && d.y > -0.05) {
+    // A wide, low glow over the vent (not a pillar), brightest at the horizon.
+    float flare = exp(-azOff * azOff / 0.012) * exp(-max(d.y, 0.0) * 30.0) * 1.2 + exp(-azOff * azOff / 0.0015) * exp(-max(d.y, 0.0) * 14.0) * 0.5;
+    float colH = 0.06 + 0.16 * min(uEvent.y * 3.0, 1.0);
+    float width = 0.012 + d.y * 0.18;
+    float wob = (fbm2(vec2(d.y * 30.0 - uTime * 0.4, evAz), 2)) * 0.02;
+    float column = (1.0 - smoothstep(width * 0.6, width, abs(azOff + wob))) * (1.0 - smoothstep(colH * 0.7, colH, d.y));
+    vec3 hot = mix(vec3(1.0, 0.45, 0.6), vec3(0.6, 0.35, 1.0), smoothstep(0.0, 0.12, d.y));
+    col += hot * flare * evS * 1.4;
+    col = mix(col, uGround * 0.6 + hot * 0.25 * evS * exp(-d.y * 12.0), column * evS * 0.85);
+  }
+#endif
+
+#if SKIND == 2
+  // Solara: a dust devil wanders along the horizon, twisting.
+  if (evS > 0.0 && d.y > -0.02 && d.y < 0.22) {
+    float h = clamp(d.y / 0.2, 0.0, 1.0);
+    float sway = sin(h * 5.0 + uTime * 0.8) * 0.01 * h;
+    float width = 0.007 + h * h * 0.04;
+    float body = 1.0 - smoothstep(width * 0.45, width, abs(azOff + sway));
+    float twist = 0.65 + 0.35 * sin(h * 40.0 - uTime * 6.0 + azOff * 300.0);
+    // A skirt of raised dust where it touches the sand.
+    float skirt = exp(-azOff * azOff / 0.0016) * exp(-max(d.y, 0.0) * 60.0);
+    vec3 dust = mix(uGround * 1.3, uHorizon * 1.15, h) + uSunColor * 0.12;
+    col = mix(col, dust, clamp(body * twist * (1.0 - smoothstep(0.8, 1.0, h)) + skirt * 0.6, 0.0, 1.0) * evS * 0.8);
+  }
+#endif
+
+#if SKIND == 3
+  // Vesper: slow ribbons of energy drift high in the violet sky — soft, flowing,
+  // with a faint halo, brightening and fading along their length.
+  if (d.y > 0.08) {
+    float t = uTime * 0.01;
+    float fa = 1.0 - abs(fbm2(vec2(dAz * 1.3 + t, d.y * 2.6 - t * 1.5), 3));
+    float fb = 1.0 - abs(fbm2(vec2(dAz * 2.1 - t * 0.8 + 5.0, d.y * 3.4 + t), 3));
+    float core = smoothstep(0.93, 0.995, fa) + smoothstep(0.95, 0.997, fb) * 0.5;
+    float halo = smoothstep(0.7, 0.99, fa) * 0.18;
+    float band = smoothstep(0.1, 0.25, d.y) * (1.0 - smoothstep(0.5, 0.85, d.y));
+    float along = 0.35 + 0.65 * smoothstep(0.3, 0.8, vnoise(vec2(dAz * 3.0 - uTime * 0.05, 1.7)) * 0.5 + 0.5);
+    col += mix(vec3(0.55, 0.4, 1.0), vec3(0.45, 0.75, 1.0), fb) * (core + halo) * band * along * 0.22;
+  }
+#endif
+
+#if SKIND == 3 || SKIND == 4
+  // Lightning you can see: a forked bolt under the flash, for its first instants.
+  if (uFlash > 0.25) {
+    float fAz = atan(uFlashDir.z, uFlashDir.x);
+    float off = mod(dAz - fAz + 3.14159265, 6.2831853) - 3.14159265;
+    float top = uFlashDir.y + 0.1;
+    float seed = fAz * 13.0;
+    float h = clamp((top - d.y) / 0.14, 0.0, 1.0);
+    float jag = (vnoise(vec2(d.y * 90.0, seed)) - 0.5) * 0.012 + (vnoise(vec2(d.y * 25.0, seed + 3.0)) - 0.5) * 0.02;
+    float bolt = exp(-pow((off - jag) / 0.0012, 2.0)) * step(0.0, h) * step(h, 1.0);
+    float fork = exp(-pow((off - jag - h * 0.03 * sign(sin(seed))) / 0.001, 2.0)) * step(0.4, h) * step(h, 0.8);
+    col += vec3(0.85, 0.85, 1.0) * (bolt + fork * 0.6) * smoothstep(0.25, 0.7, uFlash) * 2.5;
   }
 #endif
 
@@ -318,10 +454,15 @@ void main() {
   float breathe = 0.72 + 0.28 * sin(uTime * 0.11 + p.x * 0.0021 - p.z * 0.0017);
   float crack = lines * (0.6 + 0.4 * sin(uTime * 0.7 + p.x * 0.01 + p.z * 0.013)) * breathe;
   vec3 veinCol = mix(vec3(0.5, 0.34, 1.0), vec3(0.32, 0.6, 1.0), smoothstep(0.0, 0.8, micro));
-  emissive = veinCol * crack * uFissure * 0.9;
+  // Overhaul: pulses of light run along the veins, and they burn brighter.
+  float run = smoothstep(0.75, 1.0, sin(dot(p.xz, vec2(0.021, 0.013)) - uTime * 0.9)) * 0.9;
+  emissive = veinCol * crack * (1.0 + run) * uFissure * 1.5;
   // ...and lights the ground around it: a soft violet uplight beside each fissure.
-  float halo = smoothstep(0.86, 0.97, c1) * (1.0 - smoothstep(0.97, 0.995, c1));
-  emissive += albedo * veinCol * halo * breathe * uFissure * 2.2;
+  float halo = smoothstep(0.82, 0.97, c1) * (1.0 - smoothstep(0.97, 0.995, c1));
+  emissive += albedo * veinCol * halo * breathe * (1.0 + run * 0.6) * uFissure * 3.2;
+  // An eruption on the horizon lights the plain from its side.
+  vec3 toP = normalize(p - cameraPosition);
+  emissive += albedo * vec3(1.0, 0.5, 0.75) * uEvent.x * pow(max(dot(normalize(vec3(toP.x, 0.0, toP.z)), normalize(vec3(uEventDir.x, 0.0, uEventDir.z))), 0.0), 6.0) * 0.9;
 #elif SKIND == 2
   albedo = mix(uPalette[0], uPalette[1], (0.5 + 0.5 * micro) * 0.6 + smoothstep(0.0, 30.0, h) * 0.3);
   float strata = 0.5 + 0.5 * sin(h * 0.7 + micro * 2.0);
@@ -339,6 +480,15 @@ void main() {
     float level = 1.0 - smoothstep(0.12, 0.3, slope);
     albedo = mix(albedo, uPalette[1] * 1.18, smoothstep(0.68, 0.95, stream) * patchy * near * level * 0.36 * uLive);
   }
+  // Overhaul: wind ripples across the dunes, catching the low sun near the eye.
+  {
+    vec2 wd = normalize(uWind + vec2(1e-5));
+    float rq = dot(p.xz, wd) * 1.6 + vnoise(p.xz * 0.08) * 3.0;
+    float near = 1.0 - smoothstep(40.0, 260.0, length(p.xz - cameraPosition.xz));
+    float level = 1.0 - smoothstep(0.1, 0.3, slope);
+    n = normalize(n + vec3(wd.x, 0.0, wd.y) * cos(rq) * 0.16 * near * level * (0.7 + 0.3 * vnoise(p.xz * 0.02)));
+    albedo *= 1.0 - 0.05 * sin(rq) * near * level;
+  }
 #elif SKIND == 3
   float c = fbm2(p.xz * 0.012 + uDrift, 3) * 0.5 + 0.5;
   albedo = mix(uPalette[0], uPalette[1], smoothstep(-20.0, 4.0, h));
@@ -346,7 +496,7 @@ void main() {
   albedo = mix(albedo, uPalette[3], smoothstep(0.55, 0.9, fbm2(p.xz * 0.004, 2) * 0.5 + 0.5) * 0.5);
   // Vesper: the decks brighten and dim slowly as light filters through moving layers above.
   albedo *= 0.93 + 0.07 * sin(uTime * 0.05 + c * 6.0 + p.x * 0.001);
-  emissive = vec3(0.7, 0.6, 1.0) * uFlash * pow(max(dot(normalize(p - cameraPosition), uFlashDir), 0.0), 3.0) * 0.5;
+  emissive = vec3(0.7, 0.6, 1.0) * uFlash * pow(max(dot(normalize(p - cameraPosition), uFlashDir), 0.0), 3.0) * 0.35;
   wrap = 0.35;
 #elif SKIND == 4
   albedo = mix(uPalette[0], uPalette[1], smoothstep(1.0, 12.0, h));
@@ -370,6 +520,8 @@ void main() {
       albedo = mix(albedo, mix(uPalette[1], uPalette[2] * 1.1, sw), (1.0 - smoothstep(rad * 0.3, rad, dist)) * 0.7);
     }
   }
+  // Overhaul: a storm deep below flickers up through the cloud tops.
+  emissive += vec3(1.0, 0.78, 0.55) * uEvent.x * pow(max(dot(normalize(p - cameraPosition), normalize(uEventDir)), 0.0), 40.0) * 1.4;
   wrap = 0.35;
 #endif
 
@@ -410,7 +562,8 @@ void main() {
 #endif
 
   col += emissive;
-  col += albedo * vec3(0.6, 0.65, 0.95) * uFlash * 0.25;
+  col += revealLight(p) * (albedo * 1.4 + 0.08);
+  col += albedo * vec3(0.6, 0.65, 0.95) * uFlash * 0.12;
   col = applyFog(col, p);
   gl_FragColor = vec4(col, 1.0);
   #include <tonemapping_fragment>
@@ -500,6 +653,7 @@ void main() {
   vec3 col = mix(body, refl, fres) + glow;
   col = mix(col, vec3(0.9, 0.95, 1.0) * (ambient(vec3(0.0, 1.0, 0.0)) + uSunColor * 0.5), clamp(foam, 0.0, 1.0) * 0.7);
   col += vec3(0.6, 0.65, 0.95) * uFlash * 0.2;
+  col += revealLight(p) * 0.5;
   col = applyFog(col, p);
   gl_FragColor = vec4(col, 1.0);
   #include <tonemapping_fragment>
@@ -526,7 +680,7 @@ varying vec3 vWorld;
 
 void main() {
   vec3 p = vWorld;
-  vec2 q = p.xz * 0.0035 + uDrift * 0.5;
+  vec2 q = p.xz * 0.0035 + uDrift * CLOUD_RATE;
   float c = fbm2(q, OCT) * 0.5 + 0.5;
   float c2 = fbm2(q * 3.1 + 3.0, 3) * 0.5 + 0.5;
   float dens = smoothstep(1.0 - uCloudCover, 1.0 - uCloudCover + 0.22, c * 0.8 + c2 * 0.2);
@@ -534,10 +688,17 @@ void main() {
   vec3 lit = uCloudColor * (uSunColor * max(uSunDir.y + 0.15, 0.0) * 1.2 + ambient(vec3(0.0, 1.0, 0.0)) * 1.2);
   vec3 under = uCloudColor * ambient(vec3(0.0, -1.0, 0.0)) * 0.8;
   vec3 col = above ? lit : under;
+  // Overhaul: texture even under full cover — thick masses darker from below and
+  // brighter from above, thin streaks lighter; a storm base reads as rolling cloud.
+  float thick = c * 0.75 + c2 * 0.25;
+  float rolls = fbm2(q * 6.0 - uDrift * 3.0, 2) * 0.5 + 0.5;
+  col *= above ? 0.85 + 0.3 * thick : 1.25 - 0.7 * smoothstep(0.35, 0.85, thick) + 0.18 * rolls;
   col += uSunColor * pow(max(dot(normalize(p - cameraPosition), uSunDir), 0.0), 8.0) * 0.4 * dens * sunVisible();
-  col += vec3(0.7, 0.7, 1.0) * uFlash * 0.6;
+  col += vec3(0.7, 0.7, 1.0) * uFlash * (0.12 + 0.5 * pow(max(dot(normalize(p - cameraPosition), uFlashDir), 0.0), 6.0));
   dens *= smoothstep(2.0, 25.0, abs(cameraPosition.y - p.y));
-  col = applyFog(col, p);
+  // Overhaul: most haze lies below the cloud base, so the layer is fogged as if
+  // half as far away: a storm's ceiling stays visible over rain-filled air.
+  col = applyFog(col, mix(cameraPosition, p, 0.5));
   gl_FragColor = vec4(col, dens * 0.92);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
@@ -553,30 +714,47 @@ attribute vec3 aSeed;
 attribute float aRand;
 uniform float uTime;
 uniform vec3 uVel;
+uniform vec2 uWind;
 uniform float uSize;
 uniform float uPR;
 uniform float uAmount;
+// Overhaul: the same particles draw two layers — fine motes through the middle
+// distance, and a few large, soft, out-of-focus ones close to the lens.
+uniform vec3 uBox;
+uniform vec4 uFade;
+uniform float uMaxPx;
 varying float vA;
+varying float vSoft;
 void main() {
-  vec3 box = vec3(80.0, 40.0, 80.0);
-  vec3 pos = aSeed * box + uVel * uTime * (0.6 + aRand * 0.8);
+  vec3 box = uBox;
+  // Carried by the world's wind (noise units/s → world units/s), plus their own drift.
+  vec3 vel = uVel + vec3(uWind.x, 0.0, uWind.y) * 360.0;
+  vec3 pos = aSeed * box + vel * uTime * (0.6 + aRand * 0.8);
   vec3 rel = mod(pos - cameraPosition + box * 0.5, box) - box * 0.5;
   vec3 wp = cameraPosition + rel;
   wp.x += sin(uTime * 0.7 + aRand * 30.0) * 0.6;
+  wp.y += sin(uTime * 0.43 + aRand * 17.0) * 0.4;
   vec4 mv = viewMatrix * vec4(wp, 1.0);
   gl_Position = projectionMatrix * mv;
   float dist = -mv.z;
-  gl_PointSize = min(uSize * uPR * (0.6 + aRand) * (20.0 / max(dist, 0.5)), 12.0 * uPR);
-  vA = uAmount * smoothstep(0.5, 3.0, dist) * (1.0 - smoothstep(25.0, 40.0, dist));
+  gl_PointSize = min(uSize * uPR * (0.6 + aRand) * (20.0 / max(dist, 0.5)), uMaxPx * uPR);
+  vA = uAmount * smoothstep(uFade.x, uFade.y, dist) * (1.0 - smoothstep(uFade.z, uFade.w, dist));
+  vSoft = clamp(1.0 - dist / max(uFade.w, 1.0), 0.0, 1.0);
 }
 `
 
 export const motesFragment = /* glsl */ `
 uniform vec3 uColor;
+uniform float uBokeh;
 varying float vA;
+varying float vSoft;
 void main() {
   vec2 c = gl_PointCoord - 0.5;
-  float a = exp(-dot(c, c) * 14.0) * vA;
+  float r2 = dot(c, c);
+  // Near the lens a mote is a soft disc with a faint brighter rim (bokeh); far, a point.
+  float point = exp(-r2 * 14.0);
+  float disc = (1.0 - smoothstep(0.16, 0.25, r2)) * (0.55 + 0.45 * smoothstep(0.08, 0.22, r2));
+  float a = mix(point, disc, uBokeh * vSoft) * vA;
   if (a < 0.004) discard;
   gl_FragColor = vec4(uColor * a, a);
 }
@@ -638,16 +816,29 @@ varying vec3 vLocal;
 void main() {
   vec3 n = normalize(vNormalW);
   vec3 V = normalize(cameraPosition - vWorld);
-  float diff = max(dot(n, uSunDir), 0.0) * sunVisible();
+  float rise = smoothstep(0.0, 1.0, vLocal.y / max(uHeight, 1.0));
+  // Overhaul: weathered stone, not flat prisms. Strata run across the height,
+  // streaks run down the faces, the foot is darker and wet where it meets ground
+  // or water, and upward faces catch the sky. Light falls with cloud shadows.
+  float strata = vnoise(vec2(vLocal.y * 0.55, vLocal.x * 0.05 + vLocal.z * 0.05));
+  float streak = vnoise(vec2((vLocal.x + vLocal.z) * 0.9, vLocal.y * 0.06));
   float grain = vnoise(vLocal.xy * 1.7 + vLocal.z) * 0.12;
-  vec3 col = uRock * (1.0 + grain) * (uSunColor * diff * 1.5 + ambient(n));
-  col += uSunColor * pow(max(dot(n, normalize(uSunDir + V)), 0.0), 40.0) * 0.25 * diff;
+  vec3 rock = uRock * (0.86 + grain + strata * 0.16 - streak * 0.12);
+  float foot = 1.0 - smoothstep(0.0, 0.14, rise);
+  rock *= 1.0 - foot * 0.45;
+  float shade = cloudShadow(vWorld);
+  float diff = max(dot(n, uSunDir), 0.0) * sunVisible() * shade;
+  // Ambient occlusion toward the base; the sky lights what faces up.
+  float occl = mix(0.55, 1.0, smoothstep(0.0, 0.35, rise));
+  vec3 col = rock * (uSunColor * diff * 1.5 + ambient(n) * occl + uZenith * max(n.y, 0.0) * 0.18);
+  float wet = foot * (0.4 + 0.6 * pow(1.0 - max(dot(n, V), 0.0), 2.0));
+  col += uSunColor * pow(max(dot(n, normalize(uSunDir + V)), 0.0), mix(40.0, 120.0, wet)) * (0.25 + wet * 0.9) * diff;
   float rim = pow(1.0 - max(dot(n, V), 0.0), 3.0);
   float seam = uSeam * smoothstep(0.93, 0.98, fract(vLocal.y / max(uHeight / 5.0, 1.0)));
-  float rise = smoothstep(0.0, 1.0, vLocal.y / max(uHeight, 1.0));
   float pulse = 0.75 + 0.25 * sin(uTime * 0.8 + vLocal.y * 0.1);
   col += uGlowColor * (rim * 0.7 + seam * 1.6 + rise * 0.5) * uGlowAmt * pulse;
   col += uRock * vec3(0.6, 0.65, 0.95) * uFlash * 0.3;
+  col += revealLight(vWorld) * (uRock + 0.06);
   col = applyFog(col, vWorld);
   gl_FragColor = vec4(col, 1.0);
   #include <tonemapping_fragment>

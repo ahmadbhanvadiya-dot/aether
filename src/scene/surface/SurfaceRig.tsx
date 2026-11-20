@@ -265,20 +265,36 @@ export function SurfaceRig() {
         // Ambient drift: slow, incommensurate swells in position and view, so
         // the world feels alive. Eases in after arriving; stops when paused.
         surfaceCam.drift = MathUtils.damp(surfaceCam.drift, live ? 1 : 0, 0.55, dt)
-        const k = surfaceCam.drift
+        // A scan steadies the frame: the dolly holds still and the camera leans in.
+        const scanning = Math.min(1, scanFx.zoom / 4)
+        const k = surfaceCam.drift * (1 - 0.75 * scanning)
         const T = director.time
         forward(pose.yaw, 0, tmp)
         right.set(Math.cos(pose.yaw), 0, Math.sin(pose.yaw))
+        // Overhaul: a slow cinematic dolly. The camera arcs across the scene, rises
+        // and pushes in on long, incommensurate periods (50–110 s) while the view stays
+        // on a focal point far ahead, so near ground, landmarks and distance separate
+        // in parallax. Small, fast terms add the breath of a hand-held camera.
+        const lateral = Math.sin(T * 0.057) * 7 + Math.sin(T * 0.023 + 1.3) * 3
+        const rise = Math.sin(T * 0.081 + 0.4) * 1.8 + Math.sin(T * 0.037 + 2.2) * 1.0
+        const push = Math.sin(T * 0.043 + 2.1) * 4
         c.pos
           .copy(pose.pos)
-          .addScaledVector(right, (Math.sin(T * 0.11) * 1.5 + Math.sin(T * 0.27 + 1.3) * 0.5) * k)
-          .addScaledVector(UP, Math.sin(T * 0.17 + 0.4) * 0.6 * k)
-          .addScaledVector(tmp, Math.sin(T * 0.07 + 2.1) * 1.0 * k)
+          .addScaledVector(right, lateral * k)
+          .addScaledVector(UP, rise * k)
+          .addScaledVector(tmp, push * k + scanning * 6)
         c.pos.y = Math.max(c.pos.y, surface.floor(c.pos.x, c.pos.z) + 3)
-        const driftYaw = Math.sin(T * 0.13 + 0.7) * 0.016 + Math.sin(T * 0.31) * 0.005
-        const driftPitch = Math.sin(T * 0.19 + 1.1) * 0.009
-        c.yaw = pose.yaw + smooth.yaw + (smooth.px * 0.06 + driftYaw) * k
-        c.pitch = MathUtils.clamp(pose.pitch + smooth.pitch + (driftPitch - smooth.py * 0.035) * k, -1.2, 1.2)
+        // Aim back at the focal point the location frames (220 units ahead), so the
+        // arc reads as parallax around it, not as the whole view sliding.
+        const focal = 220
+        const aimYaw = Math.atan2(-lateral * k, focal)
+        const aimPitch = Math.atan2(-(rise * k), focal)
+        const breathYaw = Math.sin(T * 0.53 + 0.7) * 0.0022 + Math.sin(T * 1.27) * 0.0009
+        const breathPitch = Math.sin(T * 0.71 + 1.1) * 0.0018 + Math.sin(T * 1.61 + 0.3) * 0.0007
+        const driftYaw = Math.sin(T * 0.13 + 0.7) * 0.012 + breathYaw
+        const driftPitch = Math.sin(T * 0.19 + 1.1) * 0.006 + breathPitch
+        c.yaw = pose.yaw + smooth.yaw + aimYaw + (smooth.px * 0.06 + driftYaw) * k
+        c.pitch = MathUtils.clamp(pose.pitch + smooth.pitch + aimPitch + (driftPitch - smooth.py * 0.035) * k, -1.2, 1.2)
         copyEnv(surface.envs[location], surface.env)
         break
       }
