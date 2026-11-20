@@ -146,12 +146,16 @@ export function ExploreUI() {
   const visited = useExploration((s) => s.visited)
   const onSurface = phase === 'surface'
   const card = useExperience((s) => s.card)
+  const story = useExperience((s) => s.story)
+  const journal = useExperience((s) => s.journal)
 
   // Surface keys: Esc cancels a scan, closes a card, else returns to orbit;
   // ← / → travel; Shift + arrows look around. M toggles sound anywhere.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return
+      // A story or the journal has the keyboard (Phase 8).
+      if (useExperience.getState().story || useExperience.getState().journal) return
       if (e.key === 'm' || e.key === 'M') {
         sound.unlock()
         useExploration.getState().toggleSound()
@@ -200,7 +204,7 @@ export function ExploreUI() {
         )}
       </div>
 
-      <div className="explore-ui" data-visible={onSurface || undefined} data-card={card ? true : undefined} inert={!onSurface}>
+      <div className="explore-ui" data-visible={onSurface || undefined} data-card={card ? true : undefined} data-story={story || journal ? true : undefined} inert={!onSurface}>
         <button
           type="button"
           className="quiet-button ui-hideable pointer-events-auto absolute px-3"

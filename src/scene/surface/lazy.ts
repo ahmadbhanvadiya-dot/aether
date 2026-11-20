@@ -1,11 +1,9 @@
+import { memoImport } from '../../system/chunks'
+
 /**
  * The surface scene (terrain, sky, water, weather, landmarks, scanner glints)
  * is loaded on demand: it is only needed once a descent begins. The loader is
- * memoised so prefetching, React.lazy and the descent share one request.
+ * memoised so prefetching, React.lazy and the descent share one request, and it
+ * retries before giving up (Phase 10).
  */
-let pending: Promise<typeof import('./SurfaceScene')> | null = null
-
-export function loadSurfaceScene() {
-  pending ??= import('./SurfaceScene')
-  return pending
-}
+export const loadSurfaceScene = memoImport(() => import('./SurfaceScene'))

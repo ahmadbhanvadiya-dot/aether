@@ -8,11 +8,16 @@ import { debugShot, useExperience } from '../state/useExperience'
 import { GalaxyUI } from './GalaxyUI'
 import { ExploreUI } from './ExploreUI'
 // The Observatory's interface loads after the first paint (it is needed minutes later).
-const ObservatoryUI = lazy(() => import('./ObservatoryUI').then((m) => ({ default: m.ObservatoryUI })))
+const ObservatoryUI = lazy(() => loadObservatoryUI().then((m) => ({ default: m.ObservatoryUI })))
 import { closeObservatory, openObservatory } from './observatoryDirector'
+import { loadObservatoryUI, observatoryUnavailable } from '../system/chunks'
+import { Boundary } from '../system/SystemUI'
 import { jumpToLocation } from './exploreDirector'
 import type { PlanetId } from '../data/planets'
 import { Hud } from './Hud'
+import { JournalUI } from './JournalUI'
+import { SimulationKeys } from './SimulationUI'
+import { StoryUI } from './StoryUI'
 import { OrbitLabel } from './OrbitLabel'
 import { Wordmark } from './Wordmark'
 
@@ -41,6 +46,13 @@ function useCinemaShortcut() {
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return
       if (e.key === 'h' || e.key === 'H') toggleCinema()
+      const st = useExperience.getState()
+      // J opens and closes the Expedition Journal wherever exploring happens (Phase 8).
+      if ((e.key === 'j' || e.key === 'J') && ['galaxy', 'surface', 'observatory'].includes(st.phase) && !st.story) {
+        st.setJournal(!st.journal)
+        return
+      }
+      if (st.story || st.journal) return
       if (e.key === 'o' || e.key === 'O') {
         const phase = useExperience.getState().phase
         if (phase === 'galaxy' || phase === 'surface') openObservatory()
@@ -317,9 +329,15 @@ export function TitleScreen() {
 
       <GalaxyUI onReturnToVael={returnToVael} />
       <ExploreUI />
-      <Suspense fallback={null}>
-        <ObservatoryUI />
-      </Suspense>
+      {/* Phase 10: if its code never arrives, the rest of AETHER carries on. */}
+      <Boundary fault={() => (observatoryUnavailable.current = true)}>
+        <Suspense fallback={null}>
+          <ObservatoryUI />
+        </Suspense>
+      </Boundary>
+      <JournalUI />
+      <StoryUI />
+      <SimulationKeys />
 
       <div className="pointer-events-auto">
         <Hud />

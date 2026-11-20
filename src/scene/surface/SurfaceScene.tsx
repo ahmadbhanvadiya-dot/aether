@@ -27,6 +27,7 @@ import { useExploration } from '../../state/exploration'
 import { quality, useExperience } from '../../state/useExperience'
 import { signalFx } from '../../ui/exploreDirector'
 import { startScan } from '../../ui/scanner'
+import { liveEnv } from './living'
 import { ScanTargets } from './ScanTargets'
 import { sound } from '../../audio/sound'
 import { applyEnv, createSurfaceUniforms, type SurfaceUniforms } from './env'
@@ -67,6 +68,15 @@ function mulberry32(seed: number) {
   }
 }
 
+/**
+ * Phase 10: geometries made in hooks are not freed by React; release their GPU
+ * buffers when the surface unmounts (each descent mounts a new one). Materials are
+ * kept: they hold no buffers, and their compiled programs make revisits instant.
+ */
+function useDispose(...items: ({ dispose(): void } | null | undefined)[]) {
+  useEffect(() => () => items.forEach((i) => i?.dispose()), items) // eslint-disable-line react-hooks/exhaustive-deps
+}
+
 function gridGeometry(rings: number, segments: number, first: number, ratio: number) {
   const g = polarGrid(rings, segments, first, ratio)
   const geometry = new BufferGeometry()
@@ -95,17 +105,25 @@ export default function SurfaceScene({ planet }: { planet: PlanetId }) {
     return u
   }, [settings, s])
 
-  const defines = useMemo(() => ({ SEED: `${settings.seed}u`, SKIND: KIND_IDS[settings.kind] }), [settings])
+  // LIVE_OCT: noise octaves for the Phase 7 cloud shadows (one fewer on the low tier).
+  const defines = useMemo(() => ({ SEED: `${settings.seed}u`, SKIND: KIND_IDS[settings.kind], LIVE_OCT: HIGH ? 3 : 2 }), [settings])
 
   // Compile every surface program now (during the descent), not on first view.
   useEffect(() => {
     if (group.current) gl.compile(group.current, camera, scene)
   }, [gl, camera, scene])
 
-  useFrame(() => {
-    if (s.env) applyEnv(uniforms, s.env)
+  useFrame((_, delta) => {
+    const { reducedMotion, motionPaused } = useExperience.getState()
+    // The living pass: day–night drift, gusting wind and breathing weather (Phase 7).
+    if (s.env) {
+      const env = liveEnv(s.env, uniforms, planet, director.time, Math.min(delta, 1 / 20), {
+        reduced: reducedMotion,
+        paused: motionPaused,
+      })
+      applyEnv(uniforms, env)
+    }
     uniforms.uTime.value = director.time
-    uniforms.uWind.value.set(0.012, 0.004)
   })
 
   return (
@@ -322,16 +340,22 @@ function Weather({ uniforms, settings }: { uniforms: SurfaceUniforms; settings: 
     rain.material.uniforms.uAmount.value = env.rain * 0.35
     rain.lines.visible = env.rain > 0.01
 
-    // Lightning: never in reduced motion (flashing), never while paused.
-    const active = env.lightning > 0.01 && !motionPaused && !reducedMotion && director.space === 'surface'
+    // Lightning: never in reduced motion (flashing), never while paused. Vesper
+    // always has storms somewhere (Phase 7): a faint, distant baseline — rare,
+    // dim flashes low on the horizon, thunder that arrives late and soft.
+    const level = Math.max(env.lightning, settings.kind === 'deck' ? 0.12 : 0)
+    const distant = env.lightning < 0.05
+    const active = level > 0.01 && !motionPaused && !reducedMotion && director.space === 'surface'
     if (active) {
       nextFlash.current -= dt
       if (nextFlash.current <= 0) {
-        flash.current = 1
+        flash.current = distant ? 0.45 + Math.random() * 0.2 : 1
         const a = Math.random() * Math.PI * 2
-        uniforms.uFlashDir.value.set(Math.cos(a), 0.08 + Math.random() * 0.22, Math.sin(a)).normalize()
-        nextFlash.current = (2.5 + Math.random() * 6) / env.lightning
-        sound.thunder(0.8 + Math.random() * 2.2, 0.4 + env.lightning * 0.6)
+        const up = distant ? 0.02 + Math.random() * 0.08 : 0.08 + Math.random() * 0.22
+        uniforms.uFlashDir.value.set(Math.cos(a), up, Math.sin(a)).normalize()
+        nextFlash.current = (2.5 + Math.random() * 6) / level
+        if (distant) sound.thunder(2.8 + Math.random() * 3, 0.22)
+        else sound.thunder(0.8 + Math.random() * 2.2, 0.4 + env.lightning * 0.6)
       }
     }
     // A double flicker that decays quickly.
@@ -339,6 +363,8 @@ function Weather({ uniforms, settings }: { uniforms: SurfaceUniforms; settings: 
     const f = flash.current
     uniforms.uFlash.value = f > 0 ? f * f * (0.7 + 0.3 * Math.sin(f * 40)) : 0
   })
+
+  useDispose(motes.points.geometry, rain.lines.geometry)
 
   return (
     <>
@@ -490,6 +516,7 @@ function Landmark({
     })
     return { geometry, material, height }
   }, [kind, loc, settings, uniforms, defines])
+  useDispose(geometry)
 
   if (!base) return null
   return (
@@ -549,6 +576,7 @@ function Plume({ planet, scale, height }: { planet: PlanetId; scale: number; hei
     material.uniforms.uTime.value = director.time
     material.uniforms.uPR.value = dpr
   })
+  useDispose(points.geometry)
   return <primitive object={points} />
 }
 
@@ -600,6 +628,7 @@ function Signal({ settings }: { settings: SurfaceSettings }) {
   }, [settings])
 
   const hitGeometry = useMemo(() => new SphereGeometry(8, 12, 12), [])
+  useDispose(hitGeometry)
 
   useFrame(({ camera }) => {
     if (!location || !group.current) return

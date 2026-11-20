@@ -5,6 +5,7 @@ import { PLANET_BY_ID, type PlanetId } from '../data/planets'
 import { beginGalaxyAscent, beginGalaxyDescent, primeGalaxyFocus } from '../scene/galaxy/GalaxyRig'
 import { atmosphereFx, climb, DURATION, entry, glide, signalFx } from '../scene/motion'
 import { loadSurfaceScene } from '../scene/surface/lazy'
+import { CHUNK_FAULT } from '../system/chunks'
 import { beginClimb, beginTravel, surfaceCam } from '../scene/surface/SurfaceRig'
 import { prepareSurface, surface } from '../scene/surface/world'
 import { director } from '../state/director'
@@ -115,7 +116,17 @@ export function startDescent(planet: PlanetId, options: { location?: string; the
   tintAtmosphere(planet, first)
   // The surface code (prefetched long before, normally) must be loaded; then two
   // frames: the surface mounts and compiles its shaders before anything moves.
-  void loadSurfaceScene().then(() => requestAnimationFrame(() => requestAnimationFrame(runDescent)))
+  loadSurfaceScene().then(
+    () => requestAnimationFrame(() => requestAnimationFrame(runDescent)),
+    // Phase 10: the surface code could not be loaded. Stay in orbit and say so.
+    () => {
+      const s = useExperience.getState()
+      s.setExploring(null)
+      s.setLocation(null)
+      s.setPhase('galaxy')
+      s.setFault({ id: `surface-${Date.now()}`, ...CHUNK_FAULT })
+    },
+  )
 }
 
 function switchToSurface() {

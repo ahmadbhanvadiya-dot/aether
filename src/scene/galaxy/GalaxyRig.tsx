@@ -1,4 +1,6 @@
 import { useFrame, useThree } from '@react-three/fiber'
+import { sceneToAU } from '../../data/astronomy'
+import { sim } from '../../state/simulation'
 import gsap from 'gsap'
 import { useEffect, useMemo } from 'react'
 import { MathUtils, PerspectiveCamera, Vector3 } from 'three'
@@ -141,9 +143,15 @@ export function startGalaxyTravel(focus: PlanetId | null) {
     duration,
     ease: 'none',
     onComplete: () => {
+      // Land exactly on the final pose: if frames were skipped (a background
+      // tab), the last drawn pose may be mid-flight, and focus would keep it.
+      travelDest(focus, rig.width / rig.height, destPos, destTarget)
+      camera.position.copy(destPos)
+      controls.target.copy(destTarget)
       galaxyCam.mode = focus ? 'focus' : 'free'
       if (focus) galaxyCam.last.copy(galaxy.positions[focus])
       camera.up.set(0, 1, 0)
+      camera.lookAt(destTarget)
       controls.enabled = true
       const done = galaxyCam.onArrive
       galaxyCam.onArrive = null
@@ -422,7 +430,10 @@ export function GalaxyRig() {
         const theta = Math.atan2(P.z, P.x)
         destPos.set(Math.sin(theta), 0, -Math.cos(theta))
         const turn = motionPaused || reducedMotion ? 1 : 1 - Math.exp(-3 * dt)
-        galaxyCam.obsUp.lerp(destPos, turn).normalize()
+        // Phase 9: when the selected world runs faster than the dial can turn gracefully
+        // (high speeds, a jump to an event), the dial holds still and the world moves on it.
+        const omega = (Math.PI * 2 * sim.rate) / PLANET_BY_ID[sel].yearDays
+        if (!sim.jumping && omega < 0.35) galaxyCam.obsUp.lerp(destPos, turn).normalize()
         const k = director.observatory
         const H = zenithHeight(baseFovFor(aspect), size.width, size.height)
         destTarget.set(0, 0, 0)
@@ -537,7 +548,7 @@ export function GalaxyRig() {
       const alt = Math.max(0, (d / data.radius - 1) * data.radiusKm)
       telemetry.readout = `Altitude ${km.format(Math.round(alt / 100) * 100)} km`
     } else {
-      telemetry.readout = `${(camera.position.length() * 0.05).toFixed(1)} AU from Elys`
+      telemetry.readout = `${sceneToAU(camera.position.length()).toFixed(1)} AU from Elys`
     }
 
     // ---- Hover label position ---------------------------------------------

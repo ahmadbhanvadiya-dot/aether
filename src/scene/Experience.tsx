@@ -4,17 +4,21 @@ import { Bloom, EffectComposer, Noise, ToneMapping, Vignette } from '@react-thre
 import { BlendFunction, ToneMappingMode, type BloomEffect } from 'postprocessing'
 import { lazy, Suspense, useEffect, useRef, useState, type RefObject } from 'react'
 import { director, pointer } from '../state/director'
+import { ATTACHED_MAX, SPEEDS, stepSimulation, useSimulation } from '../state/simulation'
 import { quality, useExperience } from '../state/useExperience'
+import { watchContext } from '../system/health'
 import { Atmosphere } from './Atmosphere'
 import { CameraRig } from './CameraRig'
 import { Nebula } from './Nebula'
 import { Planet } from './Planet'
-import { GalaxyRig } from './galaxy/GalaxyRig'
+import { GalaxyRig, galaxyCam } from './galaxy/GalaxyRig'
+import { HeatHaze } from './HeatHaze'
 import { GalaxySystem } from './galaxy/GalaxySystem'
 import { SpaceDust } from './galaxy/SpaceDust'
 import { ThumbnailBaker } from './galaxy/Thumbnails'
 import { Ithra } from './Ithra'
 import { SurfaceRig } from './surface/SurfaceRig'
+import { AmbienceDriver } from './surface/AmbienceDriver'
 import { loadSurfaceScene } from './surface/lazy'
 import { Precompile, Projection, Space, WarpStreaks } from './Warp'
 import { DistantGalaxies, Dust, ShootingStars, Starfield } from './Starfield'
@@ -38,7 +42,8 @@ function PrefetchSurface() {
   useEffect(() => {
     if (!ready) return
     const idle = (window as { requestIdleCallback?: (cb: () => void) => number }).requestIdleCallback
-    const start = () => void loadSurfaceScene()
+    // A failed prefetch is not an error yet: the descent retries and reports it.
+    const start = () => void loadSurfaceScene().catch(() => {})
     if (idle) idle(start)
     else setTimeout(start, 1500)
   }, [ready])
@@ -52,7 +57,14 @@ function Clock() {
   const frames = useRef(0)
 
   useFrame((_, delta) => {
-    if (!motionPaused) director.time += Math.min(delta, 1 / 20)
+    const dt = Math.min(delta, 1 / 20)
+    if (!motionPaused) director.time += dt
+    // Phase 9: the simulation clock. Full speed only while the camera is free
+    // (the galaxy overview, the Observatory); attached to a world, it eases down.
+    const { playing, speed } = useSimulation.getState()
+    const { reducedMotion, phase } = useExperience.getState()
+    const free = (phase === 'galaxy' && galaxyCam.mode === 'free') || phase === 'observatory'
+    stepSimulation(dt, playing && !motionPaused ? SPEEDS[speed].perSec : 0, free ? Infinity : ATTACHED_MAX, reducedMotion)
     // Wait a couple of frames so shader compilation never stalls the intro.
     if (frames.current < 3 && ++frames.current === 3) setSceneReady()
   })
@@ -60,6 +72,8 @@ function Clock() {
 }
 
 const MAX_DPR = quality.tier === 'high' ? 1.75 : 1.5
+const START_DPR = Math.min(typeof window === 'undefined' ? 1 : window.devicePixelRatio || 1, MAX_DPR)
+const MIN_DPR = 0.75
 
 
 /**
@@ -81,7 +95,10 @@ function BloomControl({ bloom }: { bloom: RefObject<BloomEffect | null> }) {
 }
 
 export function Experience() {
-  const [dpr, setDpr] = useState(MAX_DPR)
+  // Phase 10: adaptive resolution. Start at the display's pixel ratio (capped); under
+  // sustained load step down to 0.75 (below 1 on ordinary 1080p laptops with
+  // integrated graphics, where 1 is often too much); recover when there is headroom.
+  const [dpr, setDpr] = useState(START_DPR)
   const bloom = useRef<BloomEffect>(null)
 
   useEffect(() => {
@@ -127,22 +144,24 @@ export function Experience() {
   return (
     <Canvas
       className="!fixed inset-0"
-      dpr={[1, dpr]}
+      dpr={dpr}
       camera={{ fov: 34, near: 0.05, far: 1200, position: [0, 0, 24] }}
       gl={{ antialias: false, powerPreference: 'high-performance', stencil: false }}
       aria-hidden
       onCreated={(state) => {
+        watchContext(state.gl.domElement)
         // Dev-only handle for profiling frames from the console.
         if (import.meta.env.DEV) (window as unknown as { __aether: unknown }).__aether = state
       }}
     >
       <PerformanceMonitor
-        onDecline={() => setDpr((d) => Math.max(1, d - 0.35))}
-        onIncline={() => setDpr((d) => Math.min(MAX_DPR, d + 0.25))}
+        onDecline={() => setDpr((d) => Math.max(MIN_DPR, +(d - 0.25).toFixed(2)))}
+        onIncline={() => setDpr((d) => Math.min(START_DPR, +(d + 0.25).toFixed(2)))}
         flipflops={3}
       />
       <Clock />
       <PrefetchSurface />
+      <AmbienceDriver />
       <Nebula />
       <Space space={['vael', 'galaxy']}>
         <Starfield />
@@ -171,6 +190,7 @@ export function Experience() {
       <ThumbnailBaker />
       <BloomControl bloom={bloom} />
       <EffectComposer multisampling={quality.tier === 'high' ? 4 : 0} enableNormalPass={false}>
+        <HeatHaze />
         <Bloom
           ref={bloom}
           mipmapBlur

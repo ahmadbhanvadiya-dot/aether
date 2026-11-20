@@ -1,10 +1,12 @@
 import { ChevronLeft, ChevronRight, Orbit, Undo2 } from 'lucide-react'
 import { useEffect, useRef } from 'react'
+import { planetFacts } from '../data/astronomy'
 import { ORDINALS, PLANET_BY_ID, PLANETS, type PlanetId } from '../data/planets'
 import { telemetry } from '../state/director'
 import { discoveredCount, PER_WORLD, useExploration } from '../state/exploration'
 import { useExperience } from '../state/useExperience'
 import { startDescent } from './exploreDirector'
+import { SimControls, SkyLine } from './SimulationUI'
 
 /** Name + teaser on a leader line, following the hovered world. */
 function HoverLabel() {
@@ -118,7 +120,7 @@ function InfoPanel({ focus }: { focus: PlanetId | null }) {
           </p>
           <p className="world-panel-copy">{data.description}</p>
           <dl className="world-facts">
-            {data.facts.map((f) => (
+            {planetFacts(data).map((f) => (
               <div key={f.label}>
                 <dt>{f.label}</dt>
                 <dd>{f.value}</dd>
@@ -182,8 +184,8 @@ function useGalaxyKeys(active: boolean) {
   useEffect(() => {
     if (!active) return
     const onKey = (e: KeyboardEvent) => {
-      const { focus, setFocus, stepFocus } = useExperience.getState()
-      if (!focus) return
+      const { focus, setFocus, stepFocus, story, journal } = useExperience.getState()
+      if (!focus || story || journal) return
       if (e.key === 'Escape') setFocus(null)
       else if (e.key === 'ArrowRight') stepFocus(1)
       else if (e.key === 'ArrowLeft') stepFocus(-1)
@@ -216,10 +218,17 @@ export function GalaxyUI({ onReturnToVael }: { onReturnToVael: () => void }) {
         data-hidden={!inGalaxy || focus !== null || undefined}
       >
         <Undo2 size={15} strokeWidth={1.5} aria-hidden />
-        Return to Vael
+        {/* Icon only on phones: the top row is full there. */}
+        <span className="hidden sm:inline">Return to Vael</span>
+        <span className="sr-only sm:hidden">Return to Vael</span>
       </button>
 
       <WorldIndex visible={inGalaxy && !focus} />
+      {/* Phase 9: the simulation clock, and what the sky is doing. */}
+      <div className="sim-dock ui-hideable" data-visible={(inGalaxy && !focus) || undefined} inert={!inGalaxy || focus !== null}>
+        <SimControls variant="galaxy" active={inGalaxy && !focus} />
+        <SkyLine />
+      </div>
       <InfoPanel focus={inGalaxy ? focus : null} />
     </div>
   )

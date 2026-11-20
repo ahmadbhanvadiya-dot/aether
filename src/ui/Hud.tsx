@@ -1,9 +1,10 @@
-import { Eye, EyeOff, Pause, Play, Telescope, Volume2, VolumeX } from 'lucide-react'
-import { useEffect, useRef } from 'react'
+import { BookOpen, Eye, EyeOff, Pause, Play, Telescope, Volume2, VolumeX } from 'lucide-react'
+import { useEffect, useMemo, useRef } from 'react'
 import { telemetry } from '../state/director'
 import { sound } from '../audio/sound'
 import { openObservatory } from './observatoryDirector'
 import { PLANET_BY_ID } from '../data/planets'
+import { expeditionStates, unlockedFragments } from '../state/expeditions'
 import { discoveredCount, hiddenCount, TOTAL_DISCOVERIES, useExploration } from '../state/exploration'
 import { quality, useExperience, type Phase } from '../state/useExperience'
 
@@ -68,7 +69,17 @@ export function Hud() {
   const location = useExperience((s) => s.location)
   const soundOn = useExploration((s) => s.soundOn)
   const toggleSound = useExploration((s) => s.toggleSound)
+  const volume = useExploration((s) => s.volume)
+  const setVolume = useExploration((s) => s.setVolume)
   const discovered = useExploration((s) => s.discovered)
+  const journal = useExperience((s) => s.journal)
+  const setJournal = useExperience((s) => s.setJournal)
+  const seenStory = useExploration((s) => s.story)
+  // Records unlocked but never presented (e.g. progress made before Phase 8).
+  const unseen = useMemo(
+    () => unlockedFragments(expeditionStates(discovered)).filter((f) => !seenStory[f.fragment.id]).length,
+    [discovered, seenStory],
+  )
   const signalFound = location ? !!discovered[location] : false
   const world = exploring ? PLANET_BY_ID[exploring].name : ''
   const status =
@@ -131,10 +142,26 @@ export function Hud() {
         style={{
           top: 'calc(env(safe-area-inset-top) + var(--gutter) - 14px)',
           right: 'calc(env(safe-area-inset-right) + var(--gutter) - 10px)',
+          // Above the journal sheet, so sound and the journal toggle stay reachable.
+          zIndex: 15,
         }}
         data-reveal
         data-hud
       >
+        {(canObserve || inObservatory) && (
+          <button
+            type="button"
+            className="quiet-button ui-hideable px-3"
+            onClick={() => setJournal(!journal)}
+            aria-pressed={journal}
+            title="Expedition Journal (J)"
+          >
+            <BookOpen size={15} strokeWidth={1.5} aria-hidden />
+            <span className="hidden sm:inline">Journal</span>
+            <span className="sr-only sm:hidden">Expedition Journal</span>
+            {unseen > 0 && <span className="hud-new-dot" aria-label={`${unseen} new ${unseen === 1 ? 'record' : 'records'}`} />}
+          </button>
+        )}
         {canObserve && (
           <button
             type="button"
@@ -171,6 +198,24 @@ export function Hud() {
           {soundOn ? <Volume2 size={15} strokeWidth={1.5} /> : <VolumeX size={15} strokeWidth={1.5} />}
           <span className="hidden lg:inline">{soundOn ? 'Sound on' : 'Sound off'}</span>
         </button>
+        {/* Master volume (Phase 7). Phones keep their hardware buttons and the mute. */}
+        <label className="hud-volume ui-hideable hidden md:flex" title="Volume" data-muted={!soundOn || undefined}>
+          <span className="sr-only">Volume</span>
+          <input
+            type="range"
+            min={0}
+            max={1}
+            step={0.05}
+            value={volume}
+            aria-valuetext={soundOn ? `${Math.round(volume * 100)}%` : 'Muted'}
+            onChange={(e) => {
+              sound.unlock()
+              const v = Number(e.target.value)
+              setVolume(v)
+              if (!soundOn && v > 0) toggleSound()
+            }}
+          />
+        </label>
         <button
           type="button"
           className="quiet-button px-3"

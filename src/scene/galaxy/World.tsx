@@ -23,9 +23,11 @@ import {
   Vector3,
   WebGLRenderTarget,
 } from 'three'
+import { orbitAngle } from '../../data/astronomy'
 import type { PlanetData, PlanetKind } from '../../data/planets'
 import { director, palette } from '../../state/director'
 import { galaxy } from '../../state/galaxy'
+import { sim, useSimulation } from '../../state/simulation'
 import { quality, useExperience } from '../../state/useExperience'
 import {
   bakeFragment,
@@ -37,6 +39,7 @@ import {
   worldFragment,
   worldVertex,
 } from './shaders'
+import { Moons } from './Moons'
 
 const KIND_IDS: Record<PlanetKind, number> = {
   terrestrial: 0,
@@ -233,6 +236,8 @@ export function World({ data, seed }: { data: PlanetData; seed: number }) {
             uCloudColor: { value: new Color(data.clouds.color) },
             uOpacity: { value: data.clouds.opacity },
             uAtmoDay: { value: atmoDay },
+            // Phase 7: turning cyclones (Thalassa's storm belt; a few on Aurelis).
+            uStorms: { value: data.kind === 'ocean' ? 1 : data.kind === 'terrestrial' ? 0.5 : 0 },
           },
           transparent: true,
           depthWrite: false,
@@ -272,6 +277,7 @@ export function World({ data, seed }: { data: PlanetData; seed: number }) {
             uColorA: { value: new Color(data.rings.colorA) },
             uColorB: { value: new Color(data.rings.colorB) },
             uOpacity: { value: 0.9 },
+            uTime: { value: 0 },
           },
           side: DoubleSide,
           transparent: true,
@@ -288,14 +294,16 @@ export function World({ data, seed }: { data: PlanetData; seed: number }) {
 
   useFrame(() => {
     const t = director.time
-    const angle = data.phase - (t / data.orbitPeriod) * Math.PI * 2
+    // Phase 9: position, rotation and rings follow the simulation clock.
+    const angle = orbitAngle(data, sim.day)
     const r = data.orbitRadius
     if (body.current) {
       body.current.position.set(Math.cos(angle) * r, 0, Math.sin(angle) * r)
       body.current.getWorldPosition(center)
       galaxy.positions[data.id].copy(center)
     }
-    if (spin.current) spin.current.rotation.y = t * data.spin
+    // Drawn rotation is slowed (sim.spinScale) but keeps every world's true ratio and sense.
+    if (spin.current) spin.current.rotation.y = ((Math.PI * 2 * sim.spinHours) / data.dayHours) % (Math.PI * 2)
     if (surfaceMesh.current) {
       surfaceMesh.current.updateWorldMatrix(true, false)
       materials.surface.uniforms.uModelRot.value.setFromMatrix4(surfaceMesh.current.matrixWorld)
@@ -311,10 +319,15 @@ export function World({ data, seed }: { data: PlanetData; seed: number }) {
     if (materials.clouds) materials.clouds.uniforms.uTime.value = t
     materials.atmosphere.uniforms.uCenter.value.copy(center)
     materials.surface.uniforms.uCenter.value.copy(center)
-    if (materials.rings) materials.rings.uniforms.uCenter.value.copy(center)
+    if (materials.rings) {
+      materials.rings.uniforms.uCenter.value.copy(center)
+      materials.rings.uniforms.uTime.value = sim.spinHours * 2.1
+    }
 
     // Orbit paths: quiet in overview, bright on hover, dim behind a focused world.
-    const target = isHover ? 0.95 : focus ? (isFocus ? 0.4 : 0.12) : 0.42
+    // The orbit paths can be switched off (simulation controls); a hovered world still shows its own.
+    const shown = useSimulation.getState().orbits
+    const target = isHover ? 0.95 : !shown ? 0 : focus ? (isFocus ? 0.4 : 0.12) : 0.42
     const om = orbit.material.uniforms
     om.uOpacity.value += (target * director.galaxyIntro - om.uOpacity.value) * 0.08
     om.uPixelRatio.value = dpr
@@ -362,6 +375,7 @@ export function World({ data, seed }: { data: PlanetData; seed: number }) {
               </mesh>
             )}
           </group>
+          <Moons data={data} />
           {materials.rings && data.rings && (
             <mesh material={materials.rings} rotation={[Math.PI / 2, 0, 0]} renderOrder={3}>
               <ringGeometry args={[data.rings.inner * data.radius, data.rings.outer * data.radius, 192, 1]} />

@@ -1,4 +1,5 @@
 import gsap from 'gsap'
+import { CHUNK_FAULT, loadObservatoryUI, observatoryUnavailable } from '../system/chunks'
 import { sound } from '../audio/sound'
 import { DISCOVERY_BY_ID } from '../data/discoveries'
 import type { PlanetId } from '../data/planets'
@@ -20,10 +21,17 @@ const bars = () => document.querySelectorAll<HTMLElement>('[data-letterbox]')
 let timeline: gsap.core.Timeline | null = null
 
 export function openObservatory() {
+  // Phase 10: the Observatory's interface loads on demand; open only once it is here.
+  const fail = () => useExperience.getState().setFault({ id: `observatory-${Date.now()}`, ...CHUNK_FAULT })
+  if (observatoryUnavailable.current) return fail()
+  loadObservatoryUI().then(enterObservatory, fail)
+}
+
+function enterObservatory() {
   const st = useExperience.getState()
   // From a surface: climb to orbit first, then rise to the zenith.
   if (st.phase === 'surface') {
-    startAscent(() => openObservatory())
+    startAscent(() => enterObservatory())
     return
   }
   if (st.phase !== 'galaxy') return

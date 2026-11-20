@@ -10,6 +10,10 @@ import { discoveryTimeline, formatWhen, systemProgress, type WorldProgress } fro
 import { quality, useExperience } from '../state/useExperience'
 import { closeObservatory, exploreFromObservatory, revisitDiscovery, stepObserved } from './observatoryDirector'
 import { CATEGORY_ICON, unknownName } from './ScannerUI'
+import { expeditionsFor } from '../data/expeditions'
+import { expeditionStates } from '../state/expeditions'
+import { ObservatorySky } from './SimulationUI'
+import { useSky } from '../state/sky'
 
 const ORDER = PLANETS.map((p) => p.id)
 /** The location hint each signal shows on site before it is found (safe to show here too). */
@@ -82,6 +86,20 @@ function Chart({ progress }: { progress: WorldProgress[] }) {
           reading.setAttribute('x2', (c.ox + Math.cos(selAngle) * (outer + 70)).toFixed(1))
           reading.setAttribute('y2', (c.oy + Math.sin(selAngle) * (outer + 70)).toFixed(1))
         }
+        // Lines of sight for the event shown on the dial.
+        const sight = root.querySelectorAll<SVGLineElement>('[data-sight] line')
+        const shown = useSky.getState().focus
+        sight.forEach((ln, i) => {
+          const id = shown?.bodies[i]
+          if (!id) return void ln.setAttribute('visibility', 'hidden')
+          const w = c.worlds[id]
+          const a = Math.atan2(w.y - c.oy, w.x - c.ox)
+          ln.setAttribute('visibility', 'visible')
+          ln.setAttribute('x1', c.ox.toFixed(1))
+          ln.setAttribute('y1', c.oy.toFixed(1))
+          ln.setAttribute('x2', (c.ox + Math.cos(a) * outer).toFixed(1))
+          ln.setAttribute('y2', (c.oy + Math.sin(a) * outer).toFixed(1))
+        })
         // Three location marks trailing each world along its orbit.
         for (const id of ORDER) {
           const w = c.worlds[id]
@@ -131,6 +149,12 @@ function Chart({ progress }: { progress: WorldProgress[] }) {
           ))}
         </g>
         <line data-reading className="obs-reading" />
+        {/* Phase 9: an event shown on the dial — lines of sight from Elys through its worlds. */}
+        <g data-sight className="obs-sight">
+          {ORDER.map((id) => (
+            <line key={id} />
+          ))}
+        </g>
         {ORDER.map((id) =>
           marks[id].map((state, i) => (
             <circle
@@ -266,6 +290,11 @@ function ArchiveEntry({ d, at, accent, active }: { d: DiscoveryData; at: number 
             <Icon size={13} strokeWidth={1.5} aria-hidden />
             {CATEGORIES[d.category].label}
             {hidden && <span className="obs-entry-tag">Hidden</span>}
+            {expeditionsFor(d.id).map((e) => (
+              <span key={e.id} className="obs-entry-tag obs-entry-tag-exp">
+                {e.code}
+              </span>
+            ))}
           </p>
           <p className="obs-entry-finding">{d.name}</p>
           <p className="obs-entry-copy">{d.description}</p>
@@ -360,6 +389,8 @@ export function ObservatoryUI() {
     if (!open) return
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return
+      // A story or the journal has the keyboard (Phase 8).
+      if (useExperience.getState().story || useExperience.getState().journal) return
       if (e.key === 'Escape') closeObservatory()
       else if (e.key === 'ArrowRight') stepObserved(1, ORDER)
       else if (e.key === 'ArrowLeft') stepObserved(-1, ORDER)
@@ -380,12 +411,15 @@ export function ObservatoryUI() {
   const timeline = useMemo(() => discoveryTimeline(discovered), [discovered])
   const world = progress.worlds.find((w) => w.planet.id === observed)!
   const most = progress.mostExplored
+  const expeditions = useMemo(() => expeditionStates(discovered), [discovered])
+  const expeditionsDone = expeditions.filter((e) => e.completedAt !== null).length
+  const expeditionsTotal = expeditions.length
   // New entries stagger among themselves.
   const fresh = open ? timeline.filter((t) => t.at > visit.seenBefore).map((t) => t.discovery.id) : []
   const scrollTo = (id: string) => scroller.current?.querySelector(`#${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 
   return (
-    <div className="observatory" data-visible={open || undefined} aria-hidden={!open}>
+    <div className="observatory" data-visible={open || undefined} aria-hidden={!open} inert={!open}>
       <div ref={chartFade} className="obs-chart-fade">
         {open && <Chart progress={progress.worlds} />}
       </div>
@@ -401,6 +435,9 @@ export function ObservatoryUI() {
               A record of everything discovered beyond the known.
             </p>
             <nav className="obs-nav obs-reveal" style={{ ['--d' as string]: '1s' }} aria-label="Observatory sections">
+              <button type="button" className="obs-nav-link" onClick={() => scrollTo('obs-sky')} tabIndex={open ? 0 : -1}>
+                Sky
+              </button>
               <button type="button" className="obs-nav-link" onClick={() => scrollTo('obs-worlds')} tabIndex={open ? 0 : -1}>
                 Worlds
               </button>
@@ -428,12 +465,13 @@ export function ObservatoryUI() {
               <dt>Discoveries</dt>
               <dd className="tabular-nums">
                 {progress.found} of {progress.total}
+                {progress.hiddenFound > 0 && <span className="obs-hidden-count"> · {progress.hiddenFound} hidden</span>}
               </dd>
             </div>
             <div>
-              <dt>Hidden</dt>
+              <dt>Expeditions</dt>
               <dd className="tabular-nums">
-                {progress.hiddenFound} of {progress.hiddenTotal}
+                {expeditionsDone} of {expeditionsTotal}
               </dd>
             </div>
             <div>
@@ -455,6 +493,9 @@ export function ObservatoryUI() {
             Galaxy
           </button>
         </section>
+
+        {/* Phase 9: the simulation, its events, the selected world's orbital record. */}
+        <ObservatorySky observed={observed} active={open} />
 
         {/* The archive: all six worlds. */}
         <section id="obs-worlds" className="obs-section" aria-labelledby="obs-worlds-title">

@@ -7,6 +7,7 @@ import { surfaceCam } from '../scene/surface/SurfaceRig'
 import { surface } from '../scene/surface/world'
 import { useExploration } from '../state/exploration'
 import { useExperience } from '../state/useExperience'
+import { noteDiscovery, suspendStory } from './storyDirector'
 
 /**
  * Phase 6 scanner. One scan at a time: the camera turns to the target and
@@ -96,7 +97,10 @@ export function startScan(id: string) {
 function complete(id: string) {
   stopTone = null
   // The store decides: true only the first time this id is recorded.
+  const before = useExploration.getState().discovered
   const isNew = useExploration.getState().discover(id)
+  // Phase 8: queue any story this discovery unlocked (it plays after the record closes).
+  if (isNew) noteDiscovery(before, useExploration.getState().discovered)
   if (isNew) sound.chime()
   if (isNew && DISCOVERY_BY_ID[id].kind === 'signal') {
     gsap.fromTo(signalFx, { bloom: reduced() ? 0.4 : 1 }, { bloom: 0, duration: reduced() ? 0.8 : 1.6, ease: 'power2.out' })
@@ -133,6 +137,7 @@ export function closeCard() {
 
 /** Clears scanner state when the camera leaves (flight, climb, new world). */
 export function resetScanner() {
+  suspendStory()
   timeline?.kill()
   stopTone?.()
   stopTone = null
