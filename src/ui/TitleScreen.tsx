@@ -45,6 +45,8 @@ function useCinemaShortcut() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return
+      // Typing in a field (the Observatory search) is not a shortcut.
+      if (e.target instanceof Element && e.target.closest('input, textarea, select')) return
       if (e.key === 'h' || e.key === 'H') toggleCinema()
       const st = useExperience.getState()
       // J opens and closes the Expedition Journal wherever exploring happens (Phase 8).

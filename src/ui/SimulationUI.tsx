@@ -1,4 +1,5 @@
 import gsap from 'gsap'
+import { showEvent } from './skyActions'
 import { ChevronsLeft, ChevronsRight, Orbit, Pause, Play, RotateCcw } from 'lucide-react'
 import { useEffect, useMemo, useRef } from 'react'
 import { ASTRONOMY, formatAU, formatDay, formatDuration } from '../data/astronomy'
@@ -50,26 +51,6 @@ function Until({ day }: { day: number }) {
 }
 
 // ---- Actions ---------------------------------------------------------------
-
-/** Takes the clock to an event's peak (a short time‑lapse), pauses, and marks it on the dial. */
-function showEvent(e: CelestialEvent) {
-  const sky = useSky.getState()
-  useSimulation.getState().setPlaying(false)
-  sky.setFocus(e)
-  gsap.killTweensOf(sim)
-  const reduced = useExperience.getState().reducedMotion
-  if (reduced) {
-    sim.day = e.peak
-    return
-  }
-  sim.jumping = true
-  gsap.to(sim, {
-    day: e.peak,
-    duration: Math.min(2.4, 0.9 + Math.log10(1 + Math.abs(e.peak - sim.day)) * 0.45),
-    ease: 'power2.inOut',
-    onComplete: () => void (sim.jumping = false),
-  })
-}
 
 function reset() {
   gsap.killTweensOf(sim)

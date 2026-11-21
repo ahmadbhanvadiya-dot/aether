@@ -58,6 +58,13 @@ interface ExperienceState {
   storyQueue: string[]
   story: string | null
   journal: boolean
+  /**
+   * Phase 12: what the Observatory's record shows when it is not a world — a moon,
+   * place, discovery, event, expedition or story record (chosen from the search).
+   * Choosing a world on the dial clears it.
+   */
+  obsFocus: ObsFocus | null
+  setObsFocus: (focus: ObsFocus | null, planet?: PlanetId | null) => void
   /** Phase 10: something failed (a chunk, WebGL, a slow start); shown by FaultUI. */
   fault: Fault | null
   setFault: (fault: Fault | null) => void
@@ -79,6 +86,12 @@ interface ExperienceState {
   queueStory: (ids: string[]) => void
   setStory: (id: string | null) => void
   setJournal: (open: boolean) => void
+}
+
+/** Phase 12: a non-world selection in the Observatory. */
+export interface ObsFocus {
+  kind: 'moon' | 'location' | 'discovery' | 'event' | 'expedition' | 'record'
+  id: string
 }
 
 /** A failure the visitor should know about, with the one action that helps. */
@@ -121,6 +134,9 @@ export const useExperience = create<ExperienceState>((set) => ({
   storyQueue: [],
   story: null,
   journal: false,
+  obsFocus: null,
+  // Turning the dial to the item's world and showing the item are one update.
+  setObsFocus: (obsFocus, planet) => set(planet ? { obsFocus, observed: planet } : { obsFocus }),
   fault: null,
   setFault: (fault) => set({ fault }),
   setPhase: (phase) => set({ phase }),
@@ -139,7 +155,7 @@ export const useExperience = create<ExperienceState>((set) => ({
   setLocation: (location) => set({ location }),
   setSignalHovered: (signalHovered) => set({ signalHovered }),
   setNotice: (notice) => set({ notice }),
-  setObserved: (observed) => set({ observed }),
+  setObserved: (observed) => set({ observed, obsFocus: null }),
   setScanning: (scanning) => set({ scanning }),
   setCard: (card) => set(card ? { card, cardAt: Date.now() } : { card }),
   detect: (id) => set((s) => (s.detected[id] ? s : { detected: { ...s.detected, [id]: true } })),

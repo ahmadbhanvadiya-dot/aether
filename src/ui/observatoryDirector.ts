@@ -1,4 +1,5 @@
 import gsap from 'gsap'
+import { LOCATION_BY_ID } from '../data/locations'
 import { CHUNK_FAULT, loadObservatoryUI, observatoryUnavailable } from '../system/chunks'
 import { sound } from '../audio/sound'
 import { DISCOVERY_BY_ID } from '../data/discoveries'
@@ -89,6 +90,12 @@ export function closeObservatory() {
 /** Straight to a world's surface: orbit it, then descend. */
 export function exploreFromObservatory(planet: PlanetId) {
   leave(planet)
+}
+
+/** Phase 12: land at one place (from the Observatory's record of it). */
+export function exploreLocation(location: string) {
+  const l = LOCATION_BY_ID[location]
+  if (l) leave(l.planet, { location })
 }
 
 /**
