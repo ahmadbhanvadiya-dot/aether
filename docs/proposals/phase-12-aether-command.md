@@ -1,7 +1,7 @@
 # Phase 12 — AETHER Command (proposal)
 
-Status: **proposal for review.** Nothing here is implemented, and DESIGN.md is not changed
-until this is agreed.
+Status: **12a–d implemented** (see DESIGN.md §16), with the name kept as Observatory and search
+naming only what has been found. 12e (the universe navigator) waits for Phase 11.
 
 ## Recommendation first
 

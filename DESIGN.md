@@ -29,11 +29,12 @@ Status labels used throughout:
 13. [Phase 9 — Universe simulation](#13-phase-9--universe-simulation) (Implemented)
 14. [Phase 10 — Production polish](#14-phase-10--production-polish) (Implemented)
 15. [Planet exploration overhaul](#15-planet-exploration-overhaul) (Implemented)
-16. [Technical architecture](#16-technical-architecture) (Implemented)
-17. [Rules for future work](#17-rules-for-future-work) (Planned)
-18. [Known limitations](#18-known-limitations)
-19. [Decision log](#19-decision-log)
-20. [Roadmap](#20-roadmap)
+16. [Phase 12 — The Observatory as command (first part)](#16-phase-12--the-observatory-as-command-first-part) (Partly implemented)
+17. [Technical architecture](#17-technical-architecture) (Implemented)
+18. [Rules for future work](#18-rules-for-future-work) (Planned)
+19. [Known limitations](#19-known-limitations)
+20. [Decision log](#20-decision-log)
+21. [Roadmap](#21-roadmap)
 
 ---
 
@@ -381,7 +382,7 @@ limited to 0.15 … π − 0.15. Auto‑rotate is off when motion is paused or r
 
 ## 4. The six worlds
 
-**Status: Implemented.** All six share one pipeline (§16) and differ through a *kind* recipe
+**Status: Implemented.** All six share one pipeline (§17) and differ through a *kind* recipe
 in the bake and surface shaders (`scene/galaxy/shaders.ts`), plus per‑world data.
 
 | World | Kind | Accent | Atmosphere day / night | Shell | Clouds | Rings |
@@ -1866,7 +1867,85 @@ Not verified:
 
 ---
 
-## 16. Technical architecture
+## 16. Phase 12 — The Observatory as command (first part)
+
+**Status: Partly implemented** (12a–d, not yet deployed). These are the parts of the
+Phase 12 proposal (`docs/proposals/phase-12-aether-command.md`) that do not depend on
+Phase 11. As recommended there, the Observatory is extended rather than duplicated,
+and it keeps its name. Not built yet: the universe navigator (12e, waits for Phase 11's
+map).
+
+### Contextual record (`ui/ObservatoryRecords.tsx → FocusRecord`)
+
+- The record beside the dial shows the selected world, as before, or, when something
+  else is chosen from the search, that thing. The selection is
+  `useExperience.obsFocus` (`kind`, `id`). Choosing a world on the dial, its arrows
+  or the world list clears it; Esc clears it first and closes the Observatory second;
+  a "← WORLD" button returns to the world.
+- Choosing an item turns the dial to its world in the same update.
+
+| Kind | Shows | Action (existing route) |
+|------|-------|-------------------------|
+| Discovery | Found: name, description, date, category. Unfound: the surface's "Unidentified" name and the place's hint | Revisit · or Explore the place |
+| Place | Region, world, found n of m (+ hidden), lore once something is found, else the hint | Explore the place (`exploreLocation`, new) |
+| Moon | Orbit, distance, radius; its next two eclipses | Each eclipse: show on the dial |
+| Sky event | Kind, worlds, detail | Show on the dial |
+| Expedition | Code, status, the open objective's brief | Open in journal |
+| Story record | Kind, source, first line | Play record (`replayStory`) |
+
+### Search (`state/catalog.ts`, `SearchSection`)
+
+- An index derived from the catalogues and progress, never stored: 6 worlds,
+  11 moons, 18 places, the discoveries, opened expeditions, unlocked records and the
+  sky's current and next events.
+- **It never spoils.** An unfound discovery is listed only as "Unidentified signal /
+  object" and is findable by its place, not its name. Unfound hidden discoveries and
+  sealed expeditions are not listed.
+- Every word must match. Titles starting with the query come first; found items
+  before unidentified ones. Results are grouped by kind (six shown, "Show all n").
+- `/` jumps to the field. Typed keys are not shortcuts: the global H, J, O and the
+  Observatory's arrows ignore inputs. Esc leaves the field.
+
+### Timeline milestones (`milestones` in `state/catalog.ts`)
+
+Computed facts mixed into the timeline by date, with a violet hollow dot:
+
+- first landing on each world;
+- a world fully explored (all its non-hidden discoveries);
+- all six worlds visited;
+- each expedition begun and completed.
+
+No badges, points or stored achievements.
+
+### Navigation
+
+- The section links read *Sky · Search · Worlds · Discoveries · Timeline · Journal*.
+  *Journal* opens the Expedition Journal: the journal is linked, not copied. The
+  links wrap on phones.
+- `showEvent` moved to `ui/skyActions.ts` so the record and the Sky section share it.
+
+### Verified
+
+Dev build, with test progress (three discoveries, two landings):
+
+- **Search:** "glass" finds the world (Nyx's description), the place and its
+  discoveries. "lichen" (the unfound Snow lichen) finds nothing. "kesh" finds the moon
+  and its eclipses. "listening" finds the expedition and its record.
+- **Records:** every kind renders with its action. Choosing Kesh turned the dial to
+  Solara.
+- **Keys:** Esc releases the record, then would close the Observatory. `/` focuses the
+  field; H typed there does not hide the interface; Esc there only blurs.
+- **Timeline:** milestones appear by date.
+- **Phone:** no horizontal overflow at 375 px.
+- **Checks:** `tsc`, build and lint pass, with no new warnings. The Observatory chunk
+  is 5.2 → 8.6 kB gzipped.
+
+Not verified: a screen reader; the actions that leave the Observatory (Revisit,
+Explore) beyond their existing routes, which are unchanged.
+
+---
+
+## 17. Technical architecture
 
 **Status: Implemented.** React 19 · Vite 8 · TypeScript · three 0.187 · @react-three/fiber 9 ·
 @react-three/drei 10 (PerformanceMonitor only) · @react-three/postprocessing 3 · GSAP 3
@@ -1898,6 +1977,7 @@ src/
     simulation.ts          the simulation clock (sim), speeds, attached cap, slowed rotation; persisted controls (Phase 9)
     events.ts              celestial events solved from the simulation geometry (Phase 9)
     sky.ts                 events now / next, refreshed twice a second; the event shown on the dial (Phase 9)
+    catalog.ts             the Observatory's search index and timeline milestones, derived (Phase 12)
   system/                  (Phase 10)
     chunks.ts              on-demand code with retries; surface and Observatory loaders; the chunk fault
     health.ts              WebGL 2 check, context-loss watch, slow-start watchdog
@@ -1950,7 +2030,9 @@ src/
     storyDirector.ts       story queue, calm‑moment check, framing, dismiss, suspend (Phase 8)
     StoryUI.tsx            the story event (transmission / record / log / clue) (Phase 8)
     JournalUI.tsx          the Expedition Journal (Phase 8)
-    SimulationUI.tsx       clock controls, sky line, Observatory Sky section, keys, show on the dial (Phase 9)
+    SimulationUI.tsx       clock controls, sky line, Observatory Sky section, keys (Phase 9)
+    skyActions.ts          show an event on the dial (Phase 9, shared in Phase 12)
+    ObservatoryRecords.tsx the contextual record and the search section (Phase 12)
     ScannerUI.tsx          scan markers, scanning interface, discovery record (Phase 6)
 ```
 
@@ -2089,7 +2171,7 @@ Measured on an RTX 3050 laptop (forced frames): Vael ≈ 5.3 ms at a 2000×1125 
 
 ---
 
-## 17. Rules for future work
+## 18. Rules for future work
 
 These are rules, not features. The global rules apply to all future work. The Phase 3
 and Phase 4 subsections record how the shipped implementation follows them.
@@ -2199,7 +2281,7 @@ and Phase 4 subsections record how the shipped implementation follows them.
 
 ---
 
-## 18. Known limitations
+## 19. Known limitations
 
 | Item | Status |
 |------|--------|
@@ -2250,7 +2332,7 @@ and Phase 4 subsections record how the shipped implementation follows them.
 
 ---
 
-## 19. Decision log
+## 20. Decision log
 
 Superseded Phase 1 decisions, kept so nobody reintroduces them by accident.
 
@@ -2305,7 +2387,7 @@ Superseded Phase 1 decisions, kept so nobody reintroduces them by accident.
 
 ---
 
-## 20. Roadmap
+## 21. Roadmap
 
 | Phase | Name | Status | Scope |
 |-------|------|--------|-------|
@@ -2322,4 +2404,4 @@ Superseded Phase 1 decisions, kept so nobody reintroduces them by accident.
 | 10 | Production polish | **Complete** (not yet deployed) | Audit, failure handling, surface memory leak, adaptive resolution to 0.75, layout and accessibility fixes, GPU measurement, production build verified at /aether/ (§14) |
 | — | Planet exploration overhaul | **Complete** (not yet deployed) | Living surface camera, shared depth (haze banks, shafts, foreground particles, weathered landmarks), each world's continuous life and events, visible lightning, discovery light wave (§15) |
 | 11 | Beyond the System | Proposal under review | Multiple star systems, deep‑space destinations, a universe map (see `docs/proposals/`) |
-| 12 | AETHER Command | Proposal under review | Navigator, mission control, celestial database, exploration log (see `docs/proposals/`) |
+| 12 | AETHER Command | **Partly complete** (12a–d, not yet deployed) | Contextual record, search, timeline milestones, journal link in the Observatory (§16); the universe navigator waits for Phase 11 |

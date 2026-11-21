@@ -1111,7 +1111,8 @@ body {
 
 .obs-nav {
   display: flex;
-  gap: 1.4rem;
+  flex-wrap: wrap;
+  gap: 0.6rem 1.4rem;
   margin-top: 1.3rem;
 }
 
@@ -3220,4 +3221,169 @@ body {
   .world-index {
     bottom: calc(env(safe-area-inset-bottom) + var(--gutter) + 76px);
   }
+}
+
+/* ==========================================================================
+   Phase 12: the Observatory's contextual record, search and milestones
+   ========================================================================== */
+
+.obs-focus {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  animation: obs-focus-in 420ms var(--ease-out-ui) both;
+}
+
+@keyframes obs-focus-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .obs-focus {
+    animation: none;
+  }
+}
+
+.obs-focus-kind {
+  font-size: 0.8125rem;
+  letter-spacing: 0.06em;
+  color: var(--color-ion);
+}
+
+.obs-focus-title {
+  font-size: clamp(1.9rem, 3vw, 2.6rem);
+  line-height: 1.05;
+}
+
+.obs-focus-note {
+  font-size: 0.8125rem;
+  color: var(--color-haze);
+}
+
+.obs-focus-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.875rem;
+}
+
+.obs-focus-back {
+  align-self: flex-start;
+  margin: 0.8rem 0 0 -0.75rem;
+  font-size: 0.8125rem;
+}
+
+.obs-search-field {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  max-width: 560px;
+  padding: 0.65rem 0;
+  border-bottom: 1px solid rgb(233 237 249 / 0.22);
+  color: var(--color-haze);
+  transition: border-color 200ms ease;
+}
+
+.obs-search-field:focus-within {
+  border-color: var(--color-ion);
+  color: var(--color-starlight);
+}
+
+.obs-search-field input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: 0;
+  outline: none;
+  font-size: 1rem;
+  color: var(--color-starlight);
+}
+
+.obs-search-field input::placeholder {
+  color: rgb(138 147 184 / 0.75);
+}
+
+.obs-search-counts,
+.obs-search-empty {
+  margin-top: 1rem;
+  font-size: 0.875rem;
+  color: var(--color-haze);
+}
+
+.obs-search-results {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1.6rem 3rem;
+  margin-top: 1.8rem;
+}
+
+.obs-search-kind {
+  margin-bottom: 0.4rem;
+  font-size: 0.8125rem;
+  letter-spacing: 0.06em;
+  color: var(--color-ion);
+}
+
+.obs-search-kind span {
+  margin-left: 0.4rem;
+  color: var(--color-haze);
+}
+
+.obs-search-hit {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr);
+  column-gap: 0.7rem;
+  align-items: baseline;
+  width: 100%;
+  padding: 0.55rem 0;
+  border-top: 1px solid rgb(233 237 249 / 0.08);
+  text-align: left;
+  cursor: pointer;
+}
+
+.obs-search-hit .obs-accent-dot {
+  grid-row: 1;
+  align-self: center;
+}
+
+.obs-search-title {
+  grid-column: 2;
+  font-size: 0.95rem;
+  color: var(--color-starlight);
+}
+
+.obs-search-sub {
+  grid-column: 2;
+  font-size: 0.8125rem;
+  color: var(--color-haze);
+}
+
+.obs-search-hit:focus-visible {
+  outline: 1px solid var(--color-ion);
+  outline-offset: 3px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .obs-search-hit:hover .obs-search-title {
+    color: var(--color-ion);
+  }
+}
+
+.obs-search-more {
+  margin: 0.3rem 0 0 -0.75rem;
+  font-size: 0.8125rem;
+}
+
+/* Milestones in the timeline: violet, quieter than a discovery. */
+.obs-event[data-milestone] .obs-event-dot {
+  background: transparent;
+  box-shadow: none;
+  border: 1px solid var(--color-violet);
+}
+
+.obs-milestone-kind {
+  color: var(--color-violet);
 }

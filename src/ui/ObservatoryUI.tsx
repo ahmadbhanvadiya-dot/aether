@@ -13,6 +13,8 @@ import { CATEGORY_ICON, unknownName } from './ScannerUI'
 import { expeditionsFor } from '../data/expeditions'
 import { expeditionStates } from '../state/expeditions'
 import { ObservatorySky } from './SimulationUI'
+import { FocusRecord, SearchSection } from './ObservatoryRecords'
+import { milestones } from '../state/catalog'
 import { useSky } from '../state/sky'
 
 const ORDER = PLANETS.map((p) => p.id)
@@ -350,6 +352,9 @@ export function ObservatoryUI() {
   const markSeen = useExploration((s) => s.markObservatorySeen)
   const open = phase === 'observatory'
   const scroller = useRef<HTMLDivElement>(null)
+  // Phase 12: a non-world selection (from the search) and the search field.
+  const obsFocus = useExperience((s) => s.obsFocus)
+  const searchInput = useRef<HTMLInputElement>(null)
   const chartFade = useRef<HTMLDivElement>(null)
 
   // One record per visit: the previous visit's mark (nothing is "new" on a
@@ -391,7 +396,20 @@ export function ObservatoryUI() {
       if (e.metaKey || e.ctrlKey || e.altKey) return
       // A story or the journal has the keyboard (Phase 8).
       if (useExperience.getState().story || useExperience.getState().journal) return
-      if (e.key === 'Escape') closeObservatory()
+      // Typing in the search: its own keys, except Esc, which leaves the field.
+      if (e.target instanceof HTMLInputElement) {
+        if (e.key === 'Escape') e.target.blur()
+        return
+      }
+      if (e.key === '/') {
+        e.preventDefault()
+        searchInput.current?.closest('section')?.scrollIntoView({ behavior: quality.coarse ? 'auto' : 'smooth', block: 'start' })
+        searchInput.current?.focus({ preventScroll: true })
+        return
+      }
+      // Esc first lets go of a selected record, then leaves the Observatory.
+      if (e.key === 'Escape' && useExperience.getState().obsFocus) useExperience.getState().setObsFocus(null)
+      else if (e.key === 'Escape') closeObservatory()
       else if (e.key === 'ArrowRight') stepObserved(1, ORDER)
       else if (e.key === 'ArrowLeft') stepObserved(-1, ORDER)
     }
@@ -413,6 +431,8 @@ export function ObservatoryUI() {
   const most = progress.mostExplored
   const expeditions = useMemo(() => expeditionStates(discovered), [discovered])
   const expeditionsDone = expeditions.filter((e) => e.completedAt !== null).length
+  // Phase 12: milestones (first landings, worlds fully explored, expeditions) join the timeline.
+  const marks = useMemo(() => milestones(discovered, visited, expeditions), [discovered, visited, expeditions])
   const expeditionsTotal = expeditions.length
   // New entries stagger among themselves.
   const fresh = open ? timeline.filter((t) => t.at > visit.seenBefore).map((t) => t.discovery.id) : []
@@ -438,6 +458,9 @@ export function ObservatoryUI() {
               <button type="button" className="obs-nav-link" onClick={() => scrollTo('obs-sky')} tabIndex={open ? 0 : -1}>
                 Sky
               </button>
+              <button type="button" className="obs-nav-link" onClick={() => scrollTo('obs-search')} tabIndex={open ? 0 : -1}>
+                Search
+              </button>
               <button type="button" className="obs-nav-link" onClick={() => scrollTo('obs-worlds')} tabIndex={open ? 0 : -1}>
                 Worlds
               </button>
@@ -447,11 +470,14 @@ export function ObservatoryUI() {
               <button type="button" className="obs-nav-link" onClick={() => scrollTo('obs-timeline')} tabIndex={open ? 0 : -1}>
                 Timeline
               </button>
+              <button type="button" className="obs-nav-link" onClick={() => useExperience.getState().setJournal(true)} tabIndex={open ? 0 : -1}>
+                Journal
+              </button>
             </nav>
           </header>
 
           <div className="obs-reveal obs-reading-wrap" style={{ ['--d' as string]: '1.2s' }}>
-            <Reading world={world} active={open} />
+            {obsFocus ? <FocusRecord focus={obsFocus} active={open} /> : <Reading world={world} active={open} />}
           </div>
 
           <dl className="obs-ledger obs-reveal" style={{ ['--d' as string]: '1.4s' }} aria-label="Exploration record">
@@ -496,6 +522,13 @@ export function ObservatoryUI() {
 
         {/* Phase 9: the simulation, its events, the selected world's orbital record. */}
         <ObservatorySky observed={observed} active={open} />
+
+        {/* Phase 12: search everything the Observatory knows. */}
+        <SearchSection
+          active={open}
+          input={searchInput}
+          onPick={() => scroller.current?.scrollTo({ top: 0, behavior: quality.coarse ? 'auto' : 'smooth' })}
+        />
 
         {/* The archive: all six worlds. */}
         <section id="obs-worlds" className="obs-section" aria-labelledby="obs-worlds-title">
@@ -624,7 +657,27 @@ export function ObservatoryUI() {
             </div>
           ) : (
             <ol ref={timelineEl} className="obs-timeline" data-inview={visit.timelineSeen || undefined}>
-              {timeline.map((t) => {
+              {[...timeline.map((t) => ({ at: t.at, t, m: null })), ...marks.map((m) => ({ at: m.at, t: null, m }))]
+                .sort((a, b) => a.at - b.at)
+                .map(({ t, m }) => {
+                if (m) {
+                  const when = formatWhen(m.at)
+                  return (
+                    <li key={m.id} className="obs-event" data-milestone style={{ ['--accent' as string]: m.planet ? PLANET_BY_ID[m.planet].accent : 'var(--color-violet)' }}>
+                      <time className="obs-event-when tabular-nums" dateTime={when.iso}>
+                        <span>{when.date}</span>
+                        <span>{when.time}</span>
+                      </time>
+                      <span className="obs-event-dot" aria-hidden />
+                      <div className="obs-event-body">
+                        <p className="obs-event-detail obs-milestone-kind">Milestone</p>
+                        <p className="obs-event-name">{m.title}</p>
+                        <p className="obs-event-region">{m.detail}</p>
+                      </div>
+                    </li>
+                  )
+                }
+                t = t!
                 const when = formatWhen(t.at)
                 const order = fresh.indexOf(t.discovery.id)
                 const isNew = order >= 0
