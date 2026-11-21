@@ -658,11 +658,13 @@ attribute float aSize;
 attribute vec3 aColor;
 uniform float uPixelRatio;
 uniform float uFade;
+uniform float uMap;
 varying vec3 vColor;
 void main() {
   vec4 mv = modelViewMatrix * vec4(position, 1.0);
   gl_Position = projectionMatrix * mv;
-  gl_PointSize = clamp(aSize * uPixelRatio * (320.0 / -mv.z), 1.0, 6.0 * uPixelRatio);
+  // Phase 11: on the universe map the whole disc is far away; stars keep a size that reads as arms.
+  gl_PointSize = clamp(aSize * uPixelRatio * (320.0 / -mv.z) * (1.0 + uMap * 2.2), 1.0, 6.0 * uPixelRatio);
   vColor = aColor * uFade;
 }
 `

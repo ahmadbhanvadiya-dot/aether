@@ -1,4 +1,5 @@
-import { BookOpen, Eye, EyeOff, Pause, Play, Telescope, Volume2, VolumeX } from 'lucide-react'
+import { BookOpen, Eye, EyeOff, Map as MapIcon, Pause, Play, Telescope, Volume2, VolumeX } from 'lucide-react'
+import { openMap } from './mapDirector'
 import { useEffect, useMemo, useRef } from 'react'
 import { telemetry } from '../state/director'
 import { sound } from '../audio/sound'
@@ -19,6 +20,7 @@ const STATUS: Record<Phase, string> = {
   surface: 'Exploring',
   ascending: 'Returning to orbit',
   observatory: 'The Observatory',
+  map: 'The galaxy',
 }
 
 /** Live readout, written straight to the DOM from whichever camera rig is active. */
@@ -162,6 +164,13 @@ export function Hud() {
             {unseen > 0 && <span className="hud-new-dot" aria-label={`${unseen} new ${unseen === 1 ? 'record' : 'records'}`} />}
           </button>
         )}
+        {inGalaxy && !focus && (
+          <button type="button" className="quiet-button ui-hideable px-3" onClick={openMap} title="The galaxy map (U)">
+            <MapIcon size={15} strokeWidth={1.5} aria-hidden />
+            <span className="hidden sm:inline">Map</span>
+            <span className="sr-only sm:hidden">Galaxy map</span>
+          </button>
+        )}
         {canObserve && (
           <button
             type="button"
@@ -233,6 +242,7 @@ export function Hud() {
         className="hud-corner ui-hideable hud-status flex flex-col"
         data-obs={inObservatory || undefined}
         data-panel={(inGalaxy && focus !== null) || undefined}
+        data-map={phase === 'map' || undefined}
         style={{
           bottom: 'calc(env(safe-area-inset-bottom) + var(--gutter))',
           left: 'calc(env(safe-area-inset-left) + var(--gutter))',
@@ -256,6 +266,7 @@ export function Hud() {
         className="hud-corner ui-hideable hud-hint text-right"
         data-obs={inObservatory || undefined}
         data-panel={(inGalaxy && focus !== null) || undefined}
+        data-map={phase === 'map' || undefined}
         style={{
           bottom: 'calc(env(safe-area-inset-bottom) + var(--gutter))',
           right: 'calc(env(safe-area-inset-right) + var(--gutter))',

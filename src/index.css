@@ -3387,3 +3387,160 @@ body {
 .obs-milestone-kind {
   color: var(--color-violet);
 }
+
+/* ==========================================================================
+   Phase 11: the universe map (its own view)
+   ========================================================================== */
+
+.map-ui {
+  position: absolute;
+  inset: 0;
+  z-index: 9;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 600ms ease 0s;
+}
+
+.map-ui[data-open] {
+  opacity: 1;
+  transition-delay: 1.6s;
+}
+
+.map-ui[data-open] .map-mark,
+.map-ui[data-open] .map-panel,
+.map-ui[data-open] .map-close {
+  pointer-events: auto;
+}
+
+.map-marks {
+  position: absolute;
+  inset: 0;
+}
+
+.map-mark {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: -10px 0 0 -10px;
+  padding: 0.25rem 0.5rem 0.25rem 0;
+  font-size: 0.8125rem;
+  letter-spacing: 0.04em;
+  color: rgb(233 237 249 / 0.8);
+  text-shadow: 0 0 12px rgb(2 3 10 / 0.9);
+  cursor: pointer;
+  will-change: transform;
+}
+
+.map-mark-dot {
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  border: 1px solid var(--star);
+  box-shadow: 0 0 14px var(--star);
+  position: relative;
+}
+
+.map-mark-dot::after {
+  content: '';
+  position: absolute;
+  inset: 7px;
+  border-radius: 999px;
+  background: var(--star);
+}
+
+.map-mark[data-sealed] .map-mark-dot {
+  border-style: dashed;
+  box-shadow: none;
+  opacity: 0.75;
+}
+
+.map-mark[data-sealed] .map-mark-dot::after {
+  opacity: 0.5;
+}
+
+.map-mark[data-selected] .map-mark-name {
+  color: var(--color-starlight);
+}
+
+.map-mark:focus-visible {
+  outline: 1px solid var(--color-ion);
+  outline-offset: 4px;
+}
+
+.map-panel {
+  position: absolute;
+  right: calc(env(safe-area-inset-right) + var(--gutter));
+  bottom: calc(env(safe-area-inset-bottom) + var(--gutter) + 2rem);
+  width: min(380px, calc(100vw - 2 * var(--gutter)));
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  padding: 1.4rem 1.5rem 1.2rem;
+  background: linear-gradient(180deg, rgb(2 3 10 / 0.72), rgb(2 3 10 / 0.9));
+  border-top: 1px solid rgb(233 237 249 / 0.14);
+}
+
+.map-kicker {
+  font-size: 0.8125rem;
+  letter-spacing: 0.06em;
+  color: var(--color-ion);
+}
+
+.map-title {
+  font-family: var(--font-display);
+  font-size: clamp(1.8rem, 3vw, 2.4rem);
+  line-height: 1.05;
+  letter-spacing: 0.06em;
+  color: var(--color-starlight);
+}
+
+.map-copy {
+  font-size: 0.9rem;
+  line-height: 1.6;
+  font-weight: 300;
+  color: rgb(233 237 249 / 0.82);
+}
+
+.map-facts {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.map-note {
+  font-size: 0.8125rem;
+  line-height: 1.55;
+  color: var(--color-haze);
+}
+
+.map-actions {
+  margin-top: 0.3rem;
+}
+
+.map-close {
+  position: absolute;
+  top: calc(env(safe-area-inset-top) + var(--gutter) + 30px);
+  right: calc(env(safe-area-inset-right) + var(--gutter) - 10px);
+}
+
+@media (max-width: 640px) {
+  .map-panel {
+    left: var(--gutter);
+    right: var(--gutter);
+    width: auto;
+    bottom: calc(env(safe-area-inset-bottom) + var(--gutter));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .map-ui[data-open] {
+    transition-delay: 0.3s;
+  }
+}
+
+/* The map's record panel carries the status; the corners step aside. */
+.hud-corner[data-map] {
+  opacity: 0 !important;
+  pointer-events: none;
+}

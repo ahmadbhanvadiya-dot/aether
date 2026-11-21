@@ -63,7 +63,7 @@ function Clock() {
     // (the galaxy overview, the Observatory); attached to a world, it eases down.
     const { playing, speed } = useSimulation.getState()
     const { reducedMotion, phase } = useExperience.getState()
-    const free = (phase === 'galaxy' && galaxyCam.mode === 'free') || phase === 'observatory'
+    const free = (phase === 'galaxy' && galaxyCam.mode === 'free') || phase === 'observatory' || phase === 'map'
     const ground = phase === 'surface' || phase === 'descending' || phase === 'ascending'
     stepSimulation(dt, playing && !motionPaused ? SPEEDS[speed].perSec : 0, free ? Infinity : ground ? GROUND_RATE : ATTACHED_MAX, reducedMotion)
     // Wait a couple of frames so shader compilation never stalls the intro.

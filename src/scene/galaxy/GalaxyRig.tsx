@@ -1,5 +1,6 @@
 import { useFrame, useThree } from '@react-three/fiber'
 import { sceneToAU } from '../../data/astronomy'
+import { MAP_VIEW, SYSTEMS } from '../../data/systems'
 import { sim } from '../../state/simulation'
 import gsap from 'gsap'
 import { useEffect, useMemo } from 'react'
@@ -14,7 +15,7 @@ import { baseFov } from '../Warp'
 
 const baseFovFor = (aspect: number) => baseFov('galaxy', aspect)
 
-type Mode = 'intro' | 'outro' | 'free' | 'travel' | 'focus' | 'descent' | 'ascent' | 'observatory'
+type Mode = 'intro' | 'outro' | 'free' | 'travel' | 'focus' | 'descent' | 'ascent' | 'observatory' | 'map'
 
 const UP = new Vector3(0, 1, 0)
 const HOME_DIR = new Vector3(0.18, 0.44, 1).normalize()
@@ -47,6 +48,10 @@ export const galaxyCam = {
   obsFromTarget: new Vector3(),
   obsUp: new Vector3(0, 0, -1),
   obsInit: false,
+  /** Phase 11: the pose the universe map rose from. */
+  mapFrom: new Vector3(),
+  mapFromTarget: new Vector3(),
+  mapInit: false,
   /** Called once when a travel lands (used to chain Observatory → descent). */
   onArrive: null as null | (() => void),
   /** Travel path: the departure control point (relative to `from`) and whether we left moving. */
@@ -82,6 +87,25 @@ export function beginObservatory() {
   if (rig.controls) rig.controls.enabled = false
 }
 
+/** Phase 11: rise above the galaxy for the universe map (driven by director.map). */
+export function beginMap() {
+  gsap.killTweensOf(galaxyCam)
+  galaxyCam.mode = 'map'
+  galaxyCam.mapInit = false
+  if (rig.controls) rig.controls.enabled = false
+}
+
+/** Back from the map: the overview, exactly where it was left. */
+export function endMap() {
+  galaxyCam.mode = 'free'
+  galaxyCam.hasPrev = false
+  if (rig.controls) {
+    rig.controls.target.copy(galaxyCam.mapFromTarget)
+    rig.controls.enabled = true
+    rig.controls.update()
+  }
+}
+
 /**
  * Starts a camera travel from wherever the camera is: to a world's focus view,
  * or (null) back to the overview. Used by focus changes and by the Observatory.
@@ -95,8 +119,8 @@ export function beginObservatory() {
 export function startGalaxyTravel(focus: PlanetId | null) {
   const { camera, controls } = rig
   if (!camera || !controls) return
-  // Entry and climb own the camera until they finish.
-  if (galaxyCam.mode === 'descent' || galaxyCam.mode === 'ascent') return
+  // Entry, climb and the universe map own the camera until they finish.
+  if (galaxyCam.mode === 'descent' || galaxyCam.mode === 'ascent' || galaxyCam.mode === 'map') return
   const aspect = rig.width / rig.height
   if (galaxyCam.mode === 'free') {
     galaxyCam.home.copy(camera.position)
@@ -445,6 +469,26 @@ export function GalaxyRig() {
         camera.lookAt(tmpTarget)
         break
       }
+      case 'map': {
+        controls.enabled = false
+        if (!galaxyCam.mapInit) {
+          galaxyCam.mapFrom.copy(camera.position)
+          galaxyCam.mapFromTarget.copy(controls.target)
+          galaxyCam.mapInit = true
+        }
+        // Rise out of the system and above the galaxy's disc, the view turning
+        // from Elys toward the arm it lies in. Position eases later than the aim.
+        const k = director.map
+        const pos = MathUtils.smootherstep(k, 0.05, 1)
+        const aim = MathUtils.smootherstep(k, 0, 0.7)
+        tmpPos.lerpVectors(galaxyCam.mapFrom, MAP_VIEW.position, pos)
+        tmpTarget.lerpVectors(galaxyCam.mapFromTarget, MAP_VIEW.target, aim)
+        camera.position.copy(tmpPos)
+        controls.target.copy(tmpTarget)
+        camera.up.copy(UP)
+        camera.lookAt(tmpTarget)
+        break
+      }
       case 'focus': {
         const f = galaxyCam.focus!
         const P = galaxy.positions[f]
@@ -539,6 +583,18 @@ export function GalaxyRig() {
       o.active = director.observatory
     }
 
+    // ---- Universe map: projected systems ----------------------------------
+    if (galaxyCam.mode === 'map') {
+      camera.updateMatrixWorld()
+      for (const s of SYSTEMS) {
+        projected.copy(s.position).project(camera)
+        const m = telemetry.map[s.id]
+        m.x = (projected.x * 0.5 + 0.5) * size.width
+        m.y = (-projected.y * 0.5 + 0.5) * size.height
+        m.on = projected.z < 1 && Math.abs(projected.x) < 1.05 && Math.abs(projected.y) < 1.05
+      }
+    }
+
     // ---- Readout ----------------------------------------------------------
     const f = galaxyCam.focus
     const near = galaxyCam.mode === 'focus' || galaxyCam.mode === 'travel' || galaxyCam.mode === 'descent' || galaxyCam.mode === 'ascent'
@@ -547,6 +603,8 @@ export function GalaxyRig() {
       const d = camera.position.distanceTo(galaxy.positions[f])
       const alt = Math.max(0, (d / data.radius - 1) * data.radiusKm)
       telemetry.readout = `Altitude ${km.format(Math.round(alt / 100) * 100)} km`
+    } else if (galaxyCam.mode === 'map') {
+      telemetry.readout = 'Above the outer arm'
     } else {
       telemetry.readout = `${sceneToAU(camera.position.length()).toFixed(1)} AU from Elys`
     }

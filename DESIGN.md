@@ -30,11 +30,12 @@ Status labels used throughout:
 14. [Phase 10 — Production polish](#14-phase-10--production-polish) (Implemented)
 15. [Planet exploration overhaul](#15-planet-exploration-overhaul) (Implemented)
 16. [Phase 12 — The Observatory as command (first part)](#16-phase-12--the-observatory-as-command-first-part) (Partly implemented)
-17. [Technical architecture](#17-technical-architecture) (Implemented)
-18. [Rules for future work](#18-rules-for-future-work) (Planned)
-19. [Known limitations](#19-known-limitations)
-20. [Decision log](#20-decision-log)
-21. [Roadmap](#21-roadmap)
+17. [Phase 11 — Beyond the System (first steps)](#17-phase-11--beyond-the-system-first-steps) (Partly implemented)
+18. [Technical architecture](#18-technical-architecture) (Implemented)
+19. [Rules for future work](#19-rules-for-future-work) (Planned)
+20. [Known limitations](#20-known-limitations)
+21. [Decision log](#21-decision-log)
+22. [Roadmap](#22-roadmap)
 
 ---
 
@@ -382,7 +383,7 @@ limited to 0.15 … π − 0.15. Auto‑rotate is off when motion is paused or r
 
 ## 4. The six worlds
 
-**Status: Implemented.** All six share one pipeline (§17) and differ through a *kind* recipe
+**Status: Implemented.** All six share one pipeline (§18) and differ through a *kind* recipe
 in the bake and surface shaders (`scene/galaxy/shaders.ts`), plus per‑world data.
 
 | World | Kind | Accent | Atmosphere day / night | Shell | Clouds | Rings |
@@ -1948,7 +1949,75 @@ Explore) beyond their existing routes, which are unchanged.
 
 ---
 
-## 17. Technical architecture
+## 17. Phase 11 — Beyond the System (first steps)
+
+**Status: Partly implemented** (11a–b, not yet deployed). Decisions taken for Phase 11:
+
+- **Tessaly first:** a binary star with one circumbinary world.
+- **Story-gated:** a system opens when an expedition leads there.
+- **The universe map is its own view:** not part of the Observatory.
+
+The proposal (`docs/proposals/phase-11-beyond-the-system.md`) is updated to match.
+
+### Star-system registry (`data/systems.ts`)
+
+- `SYSTEMS`: Elys (home, its six worlds unchanged) and Tessaly (`unlock: 'story'`, one
+  world, no pack yet). Each has a name, an unknown name, a star, a description, a map
+  colour and a position in the scene's frame.
+- `GALAXY` holds the spiral galaxy's placement and is shared with `SpiralGalaxy.tsx`, so
+  the backdrop and the map cannot disagree. Tessaly sits 0.32 rad further round
+  Elys's arm, slightly further in.
+- **The galaxy no longer turns.** It drifted about 69° over a ten‑minute visit, which
+  would carry Elys out of its arm on the map. The overview loses a very slow ambient
+  motion.
+
+### The universe map (`ui/mapDirector.ts`, `ui/MapUI.tsx`, camera mode `map`)
+
+- Opened from the system overview: the HUD's *Map* button or `U` (no world focused).
+  Closed with Esc, *Close*, *Back to Elys* or `U`. Phase `map`.
+- **The camera rises out of the system and above the galaxy's disc** (`director.map`,
+  3.6 s, `power3.inOut`, letterboxed). The view turns toward the arm before the
+  position finishes. Closing returns to the exact overview pose it left. The view is
+  offset away from the record panel (up on narrow screens, left on wide), and the far
+  plane opens to 3,200 units while the map is up.
+- **The galaxy reads at distance:** its points grow ×3.2 and brighten while the map is
+  open.
+- **Markers** are DOM buttons on the projected systems (`telemetry.map`, written by
+  `GalaxyRig`). Elys shows a solid ring; Tessaly shows a dashed one.
+- **Tessaly is shown only after Expedition II is complete,** as "An unresolved double
+  star", not yet reachable. Before that the map shows Elys alone, with a note that the
+  galaxy beyond is uncharted.
+- **The record panel** is the Observatory's language: kicker, name, description, and
+  facts (star, worlds, explored · or status).
+- **The HUD's status corners step aside while the map is open** (`data-map`).
+- The simulation clock runs at the chosen speed on the map, as in the overview.
+
+### Not built yet (Phase 11, next)
+
+- **11c:** Tessaly itself, as its own on‑demand pack:
+  - two suns in the sky and in the light;
+  - the circumbinary world, its surfaces and discoveries;
+  - Expedition III, which opens it;
+  - the transit between systems.
+- **11d–e:** deep‑space sites; expedition routes and unexplored regions on the map.
+
+### Verified
+
+Dev build:
+
+- **Map:** opened from the overview (HUD button and `U`). The camera rose to the map
+  pose (far plane 3,200, offset 0.95). Both markers sit clear of the panel on a
+  636 × 722 view. Choosing the sealed star shows its record.
+- **Closing:** Esc returned to the overview in free mode, with the offset, far plane and
+  HUD corners restored and the camera back at its starting pose.
+- **Checks:** `tsc` and build pass. Lint has one net new warning, the same
+  exported‑function pattern `GalaxyRig` already has.
+
+Not verified: phones (portrait) and reduced motion, beyond the code paths.
+
+---
+
+## 18. Technical architecture
 
 **Status: Implemented.** React 19 · Vite 8 · TypeScript · three 0.187 · @react-three/fiber 9 ·
 @react-three/drei 10 (PerformanceMonitor only) · @react-three/postprocessing 3 · GSAP 3
@@ -1969,6 +2038,7 @@ src/
     locations.ts           LOCATIONS (18), SURFACES (per-world surface recipe), types (Phase 3)
     discoveries.ts         the catalogue: 60 discoveries, categories, placements, leads (Phase 6)
     expeditions.ts         expeditions, objectives and story fragments; integrity checks (Phase 8)
+    systems.ts             star systems, the galaxy's placement, the map's view (Phase 11)
     astronomy.ts           Elys, Kepler-derived distances and moon periods, positions, fact rows, sceneToAU (Phase 9)
   state/
     useExperience.ts       Zustand store; quality tier; debugShot (?shot=)
@@ -2036,6 +2106,8 @@ src/
     SimulationUI.tsx       clock controls, sky line, Observatory Sky section, keys (Phase 9)
     skyActions.ts          show an event on the dial (Phase 9, shared in Phase 12)
     ObservatoryRecords.tsx the contextual record and the search section (Phase 12)
+    MapUI.tsx              the universe map's markers and record panel (Phase 11)
+    mapDirector.ts         open / close the universe map (Phase 11)
     ScannerUI.tsx          scan markers, scanning interface, discovery record (Phase 6)
 ```
 
@@ -2174,7 +2246,7 @@ Measured on an RTX 3050 laptop (forced frames): Vael ≈ 5.3 ms at a 2000×1125 
 
 ---
 
-## 18. Rules for future work
+## 19. Rules for future work
 
 These are rules, not features. The global rules apply to all future work. The Phase 3
 and Phase 4 subsections record how the shipped implementation follows them.
@@ -2284,7 +2356,7 @@ and Phase 4 subsections record how the shipped implementation follows them.
 
 ---
 
-## 19. Known limitations
+## 20. Known limitations
 
 | Item | Status |
 |------|--------|
@@ -2335,7 +2407,7 @@ and Phase 4 subsections record how the shipped implementation follows them.
 
 ---
 
-## 20. Decision log
+## 21. Decision log
 
 Superseded Phase 1 decisions, kept so nobody reintroduces them by accident.
 
@@ -2390,7 +2462,7 @@ Superseded Phase 1 decisions, kept so nobody reintroduces them by accident.
 
 ---
 
-## 21. Roadmap
+## 22. Roadmap
 
 | Phase | Name | Status | Scope |
 |-------|------|--------|-------|
@@ -2406,5 +2478,5 @@ Superseded Phase 1 decisions, kept so nobody reintroduces them by accident.
 | 9 | Universe Simulation | **Complete** (not yet deployed) | One simulation clock, Kepler‑consistent orbits, slowed rotation, 11 moons, controls, solved conjunctions, oppositions, alignments, transits and eclipses, Observatory Sky section (§13) |
 | 10 | Production polish | **Complete** (not yet deployed) | Audit, failure handling, surface memory leak, adaptive resolution to 0.75, layout and accessibility fixes, GPU measurement, production build verified at /aether/ (§14) |
 | — | Planet exploration overhaul | **Complete** (not yet deployed) | Living surface camera, shared depth (haze banks, shafts, foreground particles, weathered landmarks), each world's continuous life and events, visible lightning, discovery light wave (§15) |
-| 11 | Beyond the System | Proposal under review | Multiple star systems, deep‑space destinations, a universe map (see `docs/proposals/`) |
+| 11 | Beyond the System | **Partly complete** (11a–b, not yet deployed) | Star-system registry, universe map as its own view, Tessaly sealed (§17); next: Tessaly itself (two suns, a circumbinary world, Expedition III, the transit) |
 | 12 | AETHER Command | **Partly complete** (12a–d, not yet deployed) | Contextual record, search, timeline milestones, journal link in the Observatory (§16); the universe navigator waits for Phase 11 |
