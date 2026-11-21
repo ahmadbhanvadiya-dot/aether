@@ -4,7 +4,7 @@ import { Bloom, EffectComposer, Noise, ToneMapping, Vignette } from '@react-thre
 import { BlendFunction, ToneMappingMode, type BloomEffect } from 'postprocessing'
 import { lazy, Suspense, useEffect, useRef, useState, type RefObject } from 'react'
 import { director, pointer } from '../state/director'
-import { ATTACHED_MAX, SPEEDS, stepSimulation, useSimulation } from '../state/simulation'
+import { ATTACHED_MAX, GROUND_RATE, SPEEDS, stepSimulation, useSimulation } from '../state/simulation'
 import { quality, useExperience } from '../state/useExperience'
 import { watchContext } from '../system/health'
 import { Atmosphere } from './Atmosphere'
@@ -64,7 +64,8 @@ function Clock() {
     const { playing, speed } = useSimulation.getState()
     const { reducedMotion, phase } = useExperience.getState()
     const free = (phase === 'galaxy' && galaxyCam.mode === 'free') || phase === 'observatory'
-    stepSimulation(dt, playing && !motionPaused ? SPEEDS[speed].perSec : 0, free ? Infinity : ATTACHED_MAX, reducedMotion)
+    const ground = phase === 'surface' || phase === 'descending' || phase === 'ascending'
+    stepSimulation(dt, playing && !motionPaused ? SPEEDS[speed].perSec : 0, free ? Infinity : ground ? GROUND_RATE : ATTACHED_MAX, reducedMotion)
     // Wait a couple of frames so shader compilation never stalls the intro.
     if (frames.current < 3 && ++frames.current === 3) setSceneReady()
   })

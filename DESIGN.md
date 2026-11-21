@@ -1547,8 +1547,9 @@ scene draws. The values are fictional; their relationships are real.
   per second. Play/pause, slower/faster, back to the epoch, orbits on/off. Speed and the
   orbit toggle persist (`aether-simulation`); the time does not — every visit starts at
   the epoch. *Pause motion* also stops the clock.
-- **Attached to a world, the clock eases down** to at most 5 days/s (flying to it, focused,
-  descending, on its surface, climbing back), quickly (τ 0.1 s) so a destination never runs
+- **Attached to a world, the clock eases down** to at most 5 days/s (flying to it, focused);
+  **on the ground** (descending, on a surface, climbing back) it runs at real time, so the
+  sky's moons stand where the simulation has them; quickly (τ 0.1 s) so a destination never runs
   away; it eases back up (τ 0.45 s) in the overview and the Observatory. The controls say
   "slowed to … near a world" when that happens. Reduced motion: changes snap.
 - **Rotation is drawn slowed.** True rotation would strobe at any speed that shows orbits,
@@ -1715,7 +1716,9 @@ frame call.
   section and an event jump, in the production build; a deleted surface chunk produced
   three retries, the abort to orbit and the fault.
 - Deployment: `.github/workflows/deploy.yml` builds on every push to `main` (Node 22,
-  `npm ci`, `npm run build`) and publishes `dist` to GitHub Pages.
+  `npm ci`, `npm run build`) and publishes `dist` to GitHub Pages. Actions: `checkout@v7`,
+  `setup-node@v7`, `upload-pages-artifact@v5`, `deploy-pages@v5` (all on the Node 24
+  runtime; the earlier versions were deprecated).
 
 ### Verified
 
@@ -2318,11 +2321,11 @@ and Phase 4 subsections record how the shipped implementation follows them.
 | Living Universe: ambience and lightning sound were verified structurally (graph, levels, mute), not by ear on real speakers | Open |
 | Living Universe: frame cost measured only by reasoning and build size; needs a real laptop and phone measurement | Measured in Phase 10 on one discrete GPU (§14); integrated GPUs and phones still unmeasured |
 | Expeditions: the story queue is in memory; after a reload, unseen fragments wait in the journal (marked New) instead of playing | By design |
-| Expeditions: Expedition II was tested up to its opening; its four objectives were verified by data checks, not played through | Open |
+| Expeditions: Expedition II was tested up to its opening; its four objectives were verified by data checks, not played through | Resolved: played through end to end in the dev build (unlit eye → ghost moon → mirage towers → ring spokes; 2 of 2 complete, 12 records) |
 | Expeditions: the journal and story were not tested with a screen reader or on a real phone | Open |
 | Simulation: orbits are circular; distances are drawn compressed (true angles, not true spacing), so worlds look closer together than they are | By design |
 | Simulation: rotation is drawn slowed (true rotation would strobe); fast moons become rings | By design |
-| Simulation: surface skies (Phase 7 day–night drift) are not driven by the simulation clock; a world's sky does not show its moons' or neighbours' true positions | Open |
+| Simulation: surface skies (Phase 7 day–night drift) are not driven by the simulation clock; a world's sky does not show its moons' or neighbours' true positions | Moons resolved (`scene/surface/skyMoons.ts`): each stands where the simulation has it, at its true angle from Elys (so its phase is true); the sun keeps the location's authored drift, latitude is not modelled (pole fixed 45° up), and neighbouring worlds are not drawn |
 | Simulation: a solar eclipse is listed and lunar eclipses darken the moon, but a moon's shadow is not drawn on a world's surface | Open |
 | Simulation: the time is not saved; every visit starts at the epoch | By design |
 | Simulation: frame cost of the moons and the event solve measured only in the throttled test pane | Measured in Phase 10 (§14): galaxy 2.2 ms GPU, solve ~50 ms twice a second at most |
