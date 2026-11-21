@@ -11,7 +11,9 @@ import type { SurfaceUniforms } from './env'
  *
  * The frame: Elys's direction maps to the local sun; the world's spin axis maps
  * to a celestial pole 45° up in the local north (latitudes are not modelled).
- * Moons are seen from the world's centre (their distances are tens of radii).
+ * Moons are seen from the surface: the observer stands where the location's own
+ * zenith points, carried into the system frame by the same mapping, so close moons
+ * shift with parallax and an eclipse is seen where its shadow actually falls.
  */
 
 const S = new Vector3()
@@ -21,6 +23,7 @@ const E3 = new Vector3()
 const F2 = new Vector3()
 const F3 = new Vector3()
 const POLE_LOCAL = new Vector3(0, Math.SQRT1_2, -Math.SQRT1_2)
+const OBS = new Vector3()
 const pole = new Map<PlanetId, Vector3>()
 
 function spinAxis(id: PlanetId) {
@@ -34,24 +37,34 @@ function spinAxis(id: PlanetId) {
   return v
 }
 
-/** Writes this frame's moon directions into the sky's `uMoons` (sizes are kept). */
+/** Elys's drawn angular radius in the sky shader (its disc edge, mu ≈ 0.9998). */
+const SUN_RADIUS = 0.02
+
+/**
+ * Writes this frame's moon directions into the sky's `uMoons` (sizes are kept) and
+ * returns how much of Elys's disc the moons cover (0 → 1): an eclipse seen from
+ * the ground, which the scene then dims.
+ */
 export function placeMoons(u: SurfaceUniforms, planet: PlanetId, day: number, count: number) {
   const moons = ASTRONOMY[planet].moons
-  if (!count || !moons.length) return
+  if (!count || !moons.length) return 0
   // System frame: e1 toward Elys, e2 the spin axis made perpendicular to it.
   planetKm(planet, day, S).multiplyScalar(-1).normalize()
   E2.copy(spinAxis(planet)).addScaledVector(S, -spinAxis(planet).dot(S))
-  if (E2.lengthSq() < 1e-6) return
+  if (E2.lengthSq() < 1e-6) return 0
   E2.normalize()
   E3.crossVectors(S, E2)
   // Local frame: f1 the sky's sun, f2 the pole made perpendicular to it.
   const f1 = u.uSunDir.value
   F2.copy(POLE_LOCAL).addScaledVector(f1, -POLE_LOCAL.dot(f1))
-  if (F2.lengthSq() < 1e-6) return
+  if (F2.lengthSq() < 1e-6) return 0
   F2.normalize()
   F3.crossVectors(f1, F2)
+  // The observer: the local zenith (0, 1, 0) expressed in the system frame, at the surface.
+  OBS.copy(S).multiplyScalar(f1.y).addScaledVector(E2, F2.y).addScaledVector(E3, F3.y).normalize().multiplyScalar(PLANET_BY_ID[planet].radiusKm)
+  let covered = 0
   for (let i = 0; i < Math.min(count, moons.length, 4); i++) {
-    moonOffsetKm(moons[i], day, M).normalize()
+    moonOffsetKm(moons[i], day, M).sub(OBS).normalize()
     const a = M.dot(S)
     const b = M.dot(E2)
     const c = M.dot(E3)
@@ -59,5 +72,11 @@ export function placeMoons(u: SurfaceUniforms, planet: PlanetId, day: number, co
     slot.x = f1.x * a + F2.x * b + F3.x * c
     slot.y = f1.y * a + F2.y * b + F3.y * c
     slot.z = f1.z * a + F2.z * b + F3.z * c
+    // Overlap of the two discs (a simple linear estimate), capped by their area ratio.
+    const sep = Math.acos(Math.max(-1, Math.min(1, a)))
+    const rm = slot.w
+    const overlap = Math.min(1, Math.max(0, (SUN_RADIUS + rm - sep) / (2 * Math.min(SUN_RADIUS, rm))))
+    covered = Math.max(covered, overlap * Math.min(1, (rm / SUN_RADIUS) ** 2))
   }
+  return covered
 }

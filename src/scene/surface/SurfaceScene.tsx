@@ -128,7 +128,9 @@ export default function SurfaceScene({ planet }: { planet: PlanetId }) {
       })
       applyEnv(uniforms, env)
       // The sky's moons stand where the simulation has them (after the sun is set).
-      placeMoons(uniforms, planet, sim.day, settings.moons)
+      const covered = placeMoons(uniforms, planet, sim.day, settings.moons)
+      // An eclipse seen from the ground: the light falls with the covered part of Elys.
+      if (covered > 0) uniforms.uSunColor.value.multiplyScalar(1 - 0.88 * covered)
     }
     uniforms.uTime.value = director.time
   })

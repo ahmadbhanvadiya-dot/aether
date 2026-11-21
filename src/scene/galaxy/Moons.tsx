@@ -1,6 +1,6 @@
 import { useFrame } from '@react-three/fiber'
 import { useMemo, useRef } from 'react'
-import { BufferGeometry, Color, LineBasicMaterial, LineLoop, Mesh, MathUtils, ShaderMaterial, Vector3 } from 'three'
+import { BufferGeometry, Color, LineBasicMaterial, LineLoop, MathUtils, Mesh, ShaderMaterial, Vector3, Vector4 } from 'three'
 import { ASTRONOMY, ELYS, moonLocal, moonOffsetKm, planetKm, type MoonInfo } from '../../data/astronomy'
 import { PLANET_BY_ID, type PlanetData } from '../../data/planets'
 import { director } from '../../state/director'
@@ -42,6 +42,7 @@ void main() {
 `
 
 const P = new Vector3()
+const world = new Vector3()
 const M = new Vector3()
 const U = new Vector3()
 const tmp = new Vector3()
@@ -60,7 +61,7 @@ function inShadow(m: MoonInfo, day: number) {
   return 1 - MathUtils.smoothstep(perp, umbra - m.radiusKm, umbra + m.radiusKm)
 }
 
-export function Moons({ data }: { data: PlanetData }) {
+export function Moons({ data, shadows }: { data: PlanetData; shadows: Vector4[] }) {
   const moons = ASTRONOMY[data.id].moons
   const meshes = useRef<(Mesh | null)[]>([])
 
@@ -110,6 +111,14 @@ export function Moons({ data }: { data: PlanetData }) {
       u.uOpacity.value = (1 - blur) * intro
       u.uShade.value = 1 - 0.88 * inShadow(p.m, day)
       mesh.visible = u.uOpacity.value > 0.01
+      // Its shadow for the world's eclipses (none while it is only a trail).
+      const sh = shadows[i]
+      if (sh) {
+        if (mesh.visible && blur < 0.5) {
+          mesh.getWorldPosition(world)
+          sh.set(world.x, world.y, world.z, p.size)
+        } else sh.w = 0
+      }
       const lm = p.line.material as LineBasicMaterial
       // From inside a moon's orbit the line would cut across the world: let it go.
       const outside = MathUtils.smoothstep(dist, p.r * 1.3, p.r * 2.6)

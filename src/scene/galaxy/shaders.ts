@@ -123,6 +123,24 @@ export const worldFragment = /* glsl */ `
 ${kindDefines}
 uniform vec3 uSunPos;
 uniform vec3 uSunColor;
+// Eclipses: a moon between this point and Elys casts a soft shadow (world space,
+// the moons as drawn). Positions and radii come from Moons.tsx; w = 0 is unused.
+uniform vec4 uMoonShadow[5];
+float moonShade(vec3 p, vec3 L) {
+  float s = 1.0;
+  for (int i = 0; i < 5; i++) {
+    vec4 m = uMoonShadow[i];
+    if (m.w <= 0.0) continue;
+    vec3 toM = m.xyz - p;
+    float t = dot(toM, L);
+    if (t <= 0.0) continue;
+    float d = length(toM - L * t);
+    float pen = m.w * 0.35 + t * 0.012;
+    s *= mix(0.1, 1.0, smoothstep(m.w - pen, m.w + pen, d));
+  }
+  return s;
+}
+
 uniform sampler2D uTerrain;
 uniform vec2 uTexel;
 uniform mat3 uModelRot;
@@ -359,6 +377,10 @@ void main() {
 #else
   float through = 1.0;
 #endif
+  // A moon's shadow on the day side (eclipses).
+  float eclipse = moonShade(vWorldPos, L);
+  diffuse *= eclipse;
+  through *= eclipse;
 
   vec3 H = normalize(L + V);
   float spec = pow(max(dot(N, H), 0.0), rough) * water * dayMask * through;
@@ -394,6 +416,24 @@ void main() {
 export const worldCloudFragment = /* glsl */ `
 uniform vec3 uSunPos;
 uniform vec3 uSunColor;
+// Eclipses: a moon between this point and Elys casts a soft shadow (world space,
+// the moons as drawn). Positions and radii come from Moons.tsx; w = 0 is unused.
+uniform vec4 uMoonShadow[5];
+float moonShade(vec3 p, vec3 L) {
+  float s = 1.0;
+  for (int i = 0; i < 5; i++) {
+    vec4 m = uMoonShadow[i];
+    if (m.w <= 0.0) continue;
+    vec3 toM = m.xyz - p;
+    float t = dot(toM, L);
+    if (t <= 0.0) continue;
+    float d = length(toM - L * t);
+    float pen = m.w * 0.35 + t * 0.012;
+    s *= mix(0.1, 1.0, smoothstep(m.w - pen, m.w + pen, d));
+  }
+  return s;
+}
+
 uniform sampler2D uTerrain;
 uniform float uTime;
 uniform float uSpeed;
@@ -440,7 +480,7 @@ void main() {
   vec3 L = normalize(uSunPos - vWorldPos);
   vec3 V = normalize(cameraPosition - vWorldPos);
   float NdL = dot(N, L);
-  float lit = smoothstep(-0.08, 0.45, NdL);
+  float lit = smoothstep(-0.08, 0.45, NdL) * moonShade(vWorldPos, L);
   float forward = pow(max(dot(-V, L), 0.0), 4.0) * pow(1.0 - max(dot(N, V), 0.0), 2.0);
 
   vec3 col = mix(vec3(0.006, 0.01, 0.025), uCloudColor * uSunColor, lit);

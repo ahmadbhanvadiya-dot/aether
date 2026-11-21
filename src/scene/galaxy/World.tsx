@@ -21,6 +21,7 @@ import {
   ShaderMaterial,
   Vector2,
   Vector3,
+  Vector4,
   WebGLRenderTarget,
 } from 'three'
 import { orbitAngle } from '../../data/astronomy'
@@ -195,6 +196,9 @@ export function World({ data, seed }: { data: PlanetData; seed: number }) {
     const atmoDay = new Color(data.atmosphere.day)
     const atmoNight = new Color(data.atmosphere.night)
     const sunPos = new Vector3(0, 0, 0)
+    // Eclipses: the moons' positions and radii, written by Moons each frame.
+    // (w = 0 marks an unused slot; Vector4 defaults w to 1, which would be a moon at Elys.)
+    const moonShadow = Array.from({ length: 5 }, () => new Vector4(0, 0, 0, 0))
     const surface = new ShaderMaterial({
       vertexShader: worldVertex,
       fragmentShader: worldFragment,
@@ -220,6 +224,7 @@ export function World({ data, seed }: { data: PlanetData; seed: number }) {
         uIon: { value: palette.ion },
         uViolet: { value: palette.violet },
         uHighlight: { value: 0 },
+        uMoonShadow: { value: moonShadow },
       },
     })
 
@@ -236,6 +241,7 @@ export function World({ data, seed }: { data: PlanetData; seed: number }) {
             uCloudColor: { value: new Color(data.clouds.color) },
             uOpacity: { value: data.clouds.opacity },
             uAtmoDay: { value: atmoDay },
+            uMoonShadow: { value: moonShadow },
             // Phase 7: turning cyclones (Thalassa's storm belt; a few on Aurelis).
             uStorms: { value: data.kind === 'ocean' ? 1 : data.kind === 'terrestrial' ? 0.5 : 0 },
           },
@@ -285,7 +291,7 @@ export function World({ data, seed }: { data: PlanetData; seed: number }) {
         })
       : null
 
-    return { surface, clouds, atmosphere, rings }
+    return { surface, clouds, atmosphere, rings, moonShadow }
   }, [data, terrain])
 
   useEffect(() => {
@@ -375,7 +381,7 @@ export function World({ data, seed }: { data: PlanetData; seed: number }) {
               </mesh>
             )}
           </group>
-          <Moons data={data} />
+          <Moons data={data} shadows={materials.moonShadow} />
           {materials.rings && data.rings && (
             <mesh material={materials.rings} rotation={[Math.PI / 2, 0, 0]} renderOrder={3}>
               <ringGeometry args={[data.rings.inner * data.radius, data.rings.outer * data.radius, 192, 1]} />

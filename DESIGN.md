@@ -2304,7 +2304,7 @@ and Phase 4 subsections record how the shipped implementation follows them.
 | Observatory: first‑landing dates for progress saved before Phase 4 are inferred from the earliest discovery; worlds landed on without a discovery then show "Not yet" | Accepted |
 | Observatory: portraits bake on the first opening (a brief hairline placeholder) | Accepted |
 | Observatory: on small phones the inner orbits are tight; labels can overlap each other at some orbital phases (they stay legible on their backing) | Open |
-| Observatory: the narrow dial position is solved once at opening; rotating the phone while it is open keeps the old offset until reopened | Open |
+| Observatory: the narrow dial position is solved once at opening; rotating the phone while it is open keeps the old offset until reopened | Resolved: the dial re‑centres on resize and rotation (`relayoutObservatory`); negative view offsets (tall phones) are now applied instead of ignored, so the dial sits in its reserved room, not at screen centre |
 | Observatory: not tested on a real phone or with a screen reader | Open |
 | Journey: orbital and surface terrain are not the same data; continuity is in horizon, motion, speed and colour, and the switch happens inside the haze | By design |
 | Journey: the entry sweeps toward the day side; a world whose focus view is near local noon barely sweeps | Accepted |
@@ -2326,7 +2326,7 @@ and Phase 4 subsections record how the shipped implementation follows them.
 | Simulation: orbits are circular; distances are drawn compressed (true angles, not true spacing), so worlds look closer together than they are | By design |
 | Simulation: rotation is drawn slowed (true rotation would strobe); fast moons become rings | By design |
 | Simulation: surface skies (Phase 7 day–night drift) are not driven by the simulation clock; a world's sky does not show its moons' or neighbours' true positions | Moons resolved (`scene/surface/skyMoons.ts`): each stands where the simulation has it, at its true angle from Elys (so its phase is true); the sun keeps the location's authored drift, latitude is not modelled (pole fixed 45° up), and neighbouring worlds are not drawn |
-| Simulation: a solar eclipse is listed and lunar eclipses darken the moon, but a moon's shadow is not drawn on a world's surface | Open |
+| Simulation: a solar eclipse is listed and lunar eclipses darken the moon, but a moon's shadow is not drawn on a world's surface | Resolved. **From orbit:** each world's surface and cloud shaders test its drawn moons against the line to Elys (`moonShade`, `uMoonShadow` written by `Moons.tsx`; none while a moon is only a trail). Verified: at Kesh's eclipse peak a shadow spot darkens Solara's day side to 10 %, absent half a day later. **On the ground:** sky moons are placed from the observer's point on the surface (parallax), so a moon crosses Elys's disc where its shadow falls; the light dims with the covered fraction (verified on the Amber Sea: Kesh within 0.13° of Elys, sunlight 0.63 → 0.18; 42 crossings in 120 days there) |
 | Simulation: the time is not saved; every visit starts at the epoch | By design |
 | Simulation: frame cost of the moons and the event solve measured only in the throttled test pane | Measured in Phase 10 (§14): galaxy 2.2 ms GPU, solve ~50 ms twice a second at most |
 | Production: R3F logs a `THREE.Clock` deprecation warning (inside the library) | Accepted until R3F updates |

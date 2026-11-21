@@ -38,7 +38,8 @@ export function Projection() {
     camera.far = surface ? 6000 : 1200
 
     const shift = director.panelShift
-    if (shift > 0.001) {
+    // Either sign: on tall phones the dial's room can lie below the centre (negative).
+    if (Math.abs(shift) > 0.001) {
       const w = size.width
       const h = size.height
       if (aspect < 0.9 || w <= 900) camera.setViewOffset(w, h, 0, h * 0.26 * shift, w, h)

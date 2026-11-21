@@ -8,7 +8,7 @@ import { telemetry } from '../state/director'
 import { useExploration } from '../state/exploration'
 import { discoveryTimeline, formatWhen, systemProgress, type WorldProgress } from '../state/progress'
 import { quality, useExperience } from '../state/useExperience'
-import { closeObservatory, exploreFromObservatory, revisitDiscovery, stepObserved } from './observatoryDirector'
+import { closeObservatory, exploreFromObservatory, relayoutObservatory, revisitDiscovery, stepObserved } from './observatoryDirector'
 import { CATEGORY_ICON, unknownName } from './ScannerUI'
 import { expeditionsFor } from '../data/expeditions'
 import { expeditionStates } from '../state/expeditions'
@@ -352,6 +352,20 @@ export function ObservatoryUI() {
   const markSeen = useExploration((s) => s.markObservatorySeen)
   const open = phase === 'observatory'
   const scroller = useRef<HTMLDivElement>(null)
+  // Resizing or rotating while open re-centres the dial (after the layout settles).
+  useEffect(() => {
+    if (!open) return
+    let t = 0
+    const onResize = () => {
+      clearTimeout(t)
+      t = window.setTimeout(relayoutObservatory, 180)
+    }
+    window.addEventListener('resize', onResize)
+    return () => {
+      clearTimeout(t)
+      window.removeEventListener('resize', onResize)
+    }
+  }, [open])
   // Phase 12: a non-world selection (from the search) and the search field.
   const obsFocus = useExperience((s) => s.obsFocus)
   const searchInput = useRef<HTMLInputElement>(null)
