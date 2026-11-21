@@ -25,6 +25,8 @@ export type Phase =
   | 'surface'
   | 'ascending'
   | 'observatory'
+  /** Phase 11: the universe map, above the galaxy. */
+  | 'map'
 
 interface ExperienceState {
   phase: Phase

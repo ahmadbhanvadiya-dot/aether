@@ -35,7 +35,8 @@ export function Projection() {
     // Surfaces reach the horizon; space scenes don't need the depth range.
     const surface = director.space === 'surface'
     camera.near = surface ? 0.3 : 0.05
-    camera.far = surface ? 6000 : 1200
+    // The universe map looks across the whole galaxy (Phase 11).
+    camera.far = surface ? 6000 : director.map > 0.001 ? 3200 : 1200
 
     const shift = director.panelShift
     // Either sign: on tall phones the dial's room can lie below the centre (negative).

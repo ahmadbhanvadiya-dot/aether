@@ -1,7 +1,8 @@
 # Phase 11 — Beyond the System (proposal)
 
-Status: **proposal for review.** Nothing here is implemented, and DESIGN.md is not changed
-until this is agreed.
+Status: **agreed, in progress.** Decisions: **Tessaly first** (binary star, one circumbinary world),
+**story-gated** unlocking, the **universe map as its own view**. Built so far: 11a (registry) and 11b
+(read-only map) — see DESIGN.md §17. Next: 11c, Tessaly.
 
 ## The idea in one paragraph
 

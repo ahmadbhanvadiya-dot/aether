@@ -47,6 +47,8 @@ export const director = {
   landing: 0,
   /** Observatory: 0 → galaxy view, 1 → zenith dial above Elys */
   observatory: 0,
+  /** Phase 11: the universe map, 0 → in the system, 1 → above the galaxy. */
+  map: 0,
   /** Atmospheric haze density during entry and climb (both spaces): 0 → clear, 1 → inside the air */
   atmo: 0,
   /** Field-of-view breathing with travel speed, in degrees (rigs write it, damped). */
@@ -83,6 +85,11 @@ export const telemetry = {
       ['aurelis', 'nyx', 'solara', 'vesper', 'thalassa', 'orion'].map((id) => [id, { x: 0, y: 0, radiusPx: 0 }]),
     ) as Record<string, { x: number; y: number; radiusPx: number }>,
   },
+  /** Phase 11: the universe map's markers, projected (CSS px; `on` when in front and on screen). */
+  map: {
+    elys: { x: 0, y: 0, on: false },
+    tessaly: { x: 0, y: 0, on: false },
+  } as Record<string, { x: number; y: number; on: boolean }>,
   /** Ithra's projected screen position in CSS pixels. */
   ithra: { x: 0, y: 0, visible: false },
 }

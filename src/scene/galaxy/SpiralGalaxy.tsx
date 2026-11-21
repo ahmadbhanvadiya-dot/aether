@@ -1,6 +1,7 @@
 import { useFrame, useThree } from '@react-three/fiber'
 import { useMemo, useRef } from 'react'
 import { AdditiveBlending, BufferAttribute, BufferGeometry, Color, Points, ShaderMaterial } from 'three'
+import { GALAXY } from '../../data/systems'
 import { director } from '../../state/director'
 import { quality } from '../../state/useExperience'
 import { galaxyDiscFragment, galaxyDiscVertex } from './shaders'
@@ -19,7 +20,7 @@ function gaussian(rand: () => number) {
   return Math.sqrt(-2 * Math.log(rand() + 1e-9)) * Math.cos(2 * Math.PI * rand())
 }
 
-const RADIUS = 360
+const RADIUS = GALAXY.radius
 const ARMS = 4
 const TWIST = 3.4
 
@@ -88,7 +89,7 @@ export function SpiralGalaxy() {
       new ShaderMaterial({
         vertexShader: galaxyDiscVertex,
         fragmentShader: galaxyDiscFragment,
-        uniforms: { uPixelRatio: { value: 1 }, uFade: { value: 0 } },
+        uniforms: { uPixelRatio: { value: 1 }, uFade: { value: 0 }, uMap: { value: 0 } },
         transparent: true,
         depthWrite: false,
         blending: AdditiveBlending,
@@ -98,13 +99,15 @@ export function SpiralGalaxy() {
 
   useFrame(() => {
     material.uniforms.uPixelRatio.value = dpr
-    material.uniforms.uFade.value = 0.35 + director.galaxyIntro * 0.65
-    if (points.current) points.current.rotation.y = director.time * 0.002
+    material.uniforms.uFade.value = 0.35 + director.galaxyIntro * 0.65 + director.map * 0.35
+    material.uniforms.uMap.value = director.map
   })
 
   // Core off to one side and below, the disc tipped so its arms cross the sky.
+  // (Phase 11: it no longer turns — Elys and the other systems keep their places in
+  // its arms on the universe map. The placement is shared with data/systems.ts.)
   return (
-    <group position={[-250, -70, -330]} rotation={[0.42, 0.6, 0.18]}>
+    <group position={GALAXY.position} rotation={GALAXY.rotation}>
       <points ref={points} geometry={geometry} material={material} frustumCulled={false} />
     </group>
   )

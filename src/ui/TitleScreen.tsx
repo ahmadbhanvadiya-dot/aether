@@ -17,6 +17,8 @@ import type { PlanetId } from '../data/planets'
 import { Hud } from './Hud'
 import { JournalUI } from './JournalUI'
 import { SimulationKeys } from './SimulationUI'
+import { MapUI } from './MapUI'
+import { closeMap, openMap } from './mapDirector'
 import { StoryUI } from './StoryUI'
 import { OrbitLabel } from './OrbitLabel'
 import { Wordmark } from './Wordmark'
@@ -55,6 +57,12 @@ function useCinemaShortcut() {
         return
       }
       if (st.story || st.journal) return
+      // Phase 11: the galaxy map, from the system overview.
+      if (e.key === 'u' || e.key === 'U') {
+        if (st.phase === 'galaxy' && !st.focus) openMap()
+        else if (st.phase === 'map') closeMap()
+        return
+      }
       if (e.key === 'o' || e.key === 'O') {
         const phase = useExperience.getState().phase
         if (phase === 'galaxy' || phase === 'surface') openObservatory()
@@ -340,6 +348,7 @@ export function TitleScreen() {
       <JournalUI />
       <StoryUI />
       <SimulationKeys />
+      <MapUI />
 
       <div className="pointer-events-auto">
         <Hud />
