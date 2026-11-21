@@ -82,6 +82,17 @@ function narrowShift() {
   return (h / 2 - centre) / (h * 0.26)
 }
 
+/**
+ * Re-centres the dial after a resize or a phone rotation while the Observatory is
+ * open (it used to keep the offset solved at opening).
+ */
+export function relayoutObservatory() {
+  if (useExperience.getState().phase !== 'observatory') return
+  const narrow = window.innerWidth <= 900 || window.innerWidth / window.innerHeight < 0.9
+  const shift = narrow ? narrowShift() : 1
+  gsap.to(director, { panelShift: shift, duration: useExperience.getState().reducedMotion ? 0 : 0.5, ease: 'power2.out', overwrite: 'auto' })
+}
+
 /** Back to the galaxy overview. */
 export function closeObservatory() {
   leave(null)
