@@ -33,6 +33,8 @@ import { ScanTargets } from './ScanTargets'
 import { sound } from '../../audio/sound'
 import { surfaceCam } from './SurfaceRig'
 import { scanFx } from '../motion'
+import { sim } from '../../state/simulation'
+import { placeMoons } from './skyMoons'
 import { applyEnv, createSurfaceUniforms, type SurfaceUniforms } from './env'
 import {
   beaconCoreFragment,
@@ -125,6 +127,8 @@ export default function SurfaceScene({ planet }: { planet: PlanetId }) {
         paused: motionPaused,
       })
       applyEnv(uniforms, env)
+      // The sky's moons stand where the simulation has them (after the sun is set).
+      placeMoons(uniforms, planet, sim.day, settings.moons)
     }
     uniforms.uTime.value = director.time
   })

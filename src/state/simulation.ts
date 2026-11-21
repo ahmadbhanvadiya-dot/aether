@@ -30,6 +30,12 @@ export const DEFAULT_SPEED = 2
  */
 export const ATTACHED_MAX = 5
 
+/**
+ * On the ground (descending, on a surface, climbing back) time runs at its real
+ * pace: the sky's moons stand where the simulation has them and barely move.
+ */
+export const GROUND_RATE = 1 / 86_400
+
 /** Fastest drawn rotation (Orion's), radians per second: true rotation would strobe. */
 const SPIN_SHOWN = 0.3
 
