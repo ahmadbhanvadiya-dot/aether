@@ -1,6 +1,6 @@
 import { useFrame, useThree } from '@react-three/fiber'
 import { sceneToAU } from '../../data/astronomy'
-import { MAP_VIEW, SYSTEM_BY_ID, SYSTEMS } from '../../data/systems'
+import { MAP_VIEW, SYSTEM_BY_ID, SYSTEMS, type SystemId } from '../../data/systems'
 import { sim } from '../../state/simulation'
 import gsap from 'gsap'
 import { useEffect, useMemo } from 'react'
@@ -95,6 +95,26 @@ export function beginMap() {
   galaxyCam.mode = 'map'
   galaxyCam.mapInit = false
   if (rig.controls) rig.controls.enabled = false
+}
+
+/**
+ * Phase 11: each system keeps its own overview. When the transit switches
+ * systems under the map, the pose the map will return to is swapped: the
+ * destination's last overview, or, on a first visit to Tessaly, a closer one
+ * that frames its small system (Liris orbits at 24, Elys's outer world at ~90).
+ */
+const overviews: Partial<Record<SystemId, { pos: Vector3; target: Vector3 }>> = {}
+const FIRST_OVERVIEW: Partial<Record<SystemId, number>> = { tessaly: 58 }
+export function switchMapReturn(from: SystemId, to: SystemId) {
+  overviews[from] = { pos: galaxyCam.mapFrom.clone(), target: galaxyCam.mapFromTarget.clone() }
+  const saved = overviews[to]
+  if (saved) {
+    galaxyCam.mapFrom.copy(saved.pos)
+    galaxyCam.mapFromTarget.copy(saved.target)
+  } else if (FIRST_OVERVIEW[to]) {
+    galaxyCam.mapFromTarget.set(0, 0, 0)
+    galaxyCam.mapFrom.setLength(FIRST_OVERVIEW[to])
+  }
 }
 
 /** Back from the map: the overview, exactly where it was left. */

@@ -78,6 +78,16 @@ export function expeditionStates(found: Found): ExpeditionState[] {
   return EXPEDITIONS.map((e) => byId[e.id])
 }
 
+/**
+ * Phase 11: what the expeditions have opened on the map. Tessaly is hinted at
+ * (unnamed) once Expedition II is complete, and reachable once Expedition III is.
+ */
+export function mapAccess(found: Found) {
+  const states = expeditionStates(found)
+  const done = (id: string) => states.find((s) => s.expedition.id === id)?.completedAt != null
+  return { tessalyKnown: done('exp-second-sky'), tessalyOpen: done('exp-double-star') }
+}
+
 /** Every story fragment the visitor has unlocked, oldest first. */
 export function unlockedFragments(states: ExpeditionState[]): UnlockedFragment[] {
   const out: UnlockedFragment[] = []

@@ -1951,7 +1951,7 @@ Explore) beyond their existing routes, which are unchanged.
 
 ## 17. Phase 11 — Beyond the System (first steps)
 
-**Status: Partly implemented** (11a–b, not yet deployed). Decisions taken for Phase 11:
+**Status: Partly implemented** (11a–c, deployed). Decisions taken for Phase 11:
 
 - **Tessaly first:** a binary star with one circumbinary world.
 - **Story-gated:** a system opens when an expedition leads there.
@@ -1992,7 +1992,7 @@ The proposal (`docs/proposals/phase-11-beyond-the-system.md`) is updated to matc
 - **The HUD's status corners step aside while the map is open** (`data-map`).
 - The simulation clock runs at the chosen speed on the map, as in the overview.
 
-### Tessaly in orbit (11c, first stage — development only)
+### Tessaly in orbit (11c, first stage)
 
 - **One system at a time, always at the origin.** `useExperience.activeSystem` chooses
   what `GalaxySystem` mounts: Elys's star and six worlds, or Tessaly's own chunk
@@ -2020,15 +2020,15 @@ The proposal (`docs/proposals/phase-11-beyond-the-system.md`) is updated to matc
   - discovery counts.
 
   The readout gives AU from the twin suns.
-- **Reachable only through `?shot=tessaly` in development** (story‑gated: Expedition III
-  and the transit come next). Production ignores the shot.
+- **Reached through the story:** Expedition III opens it and the map's transit goes
+  there (fourth stage, below). `?shot=tessaly` still lands directly, in development only. Production ignores the shot.
 - **Verified in the dev build:**
   - both suns move with the clock;
   - Liris's three materials carry the second light;
   - the map opened from Tessaly frames the same sky;
   - Elys is unchanged (star colours, world index, sky line, counts).
 
-### Liris: focus and landing (11c, second stage — development only)
+### Liris: focus and landing (11c, second stage)
 
 - **Navigation is typed by world, not by Elys planet.** `focus`, `hovered` and
   `exploring` are `WorldId`; `WORLD_BY_ID` names any world and `isElysWorld` guards
@@ -2063,7 +2063,7 @@ The proposal (`docs/proposals/phase-11-beyond-the-system.md`) is updated to matc
   → return to orbit around Liris. Elys: Aurelis compiles without `SUN2`, the second
   light is black, *0 of 54 discoveries*, scan guide shown, no console errors.
 
-### Liris's discoveries (11c, third stage — development only)
+### Liris's discoveries (11c, third stage)
 
 - **Its own catalogue, the same shape as an Elys world:** three signals (one per
   place), six points of interest and one hidden find, all about living under two suns:
@@ -2104,12 +2104,54 @@ The proposal (`docs/proposals/phase-11-beyond-the-system.md`) is updated to matc
   - Caught and fixed in testing: the discovery card looked up Elys's location table
     and crashed the interface on a Liris find.
 
+### Opening Tessaly: Expedition III and the transit (11c, fourth stage)
+
+- **Expedition III, The Double Star**, opens when Expedition II closes. It follows the
+  second sky's light to its source, through four Elys finds no expedition used before:
+  1. **Two shadows:** the Nyx slab's second shadow (`nyx-quiet-caldera.second-shadow`);
+  2. **A star that is gone:** the watcher's ring behind Halvard Ridge
+     (`aurelis-halvard-ridge.watchers-ring`, a hidden find);
+  3. **A baseline:** Solara's survey rings, a parallax baseline
+     (`solara-salt-mirror.survey-rings`);
+  4. **Twice the stars:** the frozen lake, where the star resolves into two
+     (`nyx-quiet-caldera.frozen-lake`).
+
+  The last record names Tessaly; the closing says to open the map. Content only:
+  progress is still derived from `discovered`, so nothing new is stored.
+- **What the map has opened** comes from one function, `mapAccess(discovered)`:
+  Tessaly is *known* (shown, unnamed, sealed) after Expedition II and *open* after
+  Expedition III. Sealed, its record points to Expedition III in the Journal. Open,
+  it is named, has its own description (`openDescription`), and Explored is Liris's.
+- **The transit** (`travelTo` in `mapDirector`). The map is the same picture from either
+  system (the galaxy and the map's view both shift with the active system), so:
+  - select a reachable system, *Travel to …*;
+  - a marker crosses the arm along a dashed route (3.2 s, with a swell);
+  - the active system switches, unseen, under the map;
+  - the map closes into the new system's overview.
+
+  Reduced motion switches at once. Tessaly's code is fetched when it is selected.
+  The map opens on the system you are in, marked *You are here* (the ring alone on
+  narrow screens), and offers *Back to* it.
+- **Each system keeps its own overview** (`switchMapReturn`): leaving saves the pose
+  the map would return to, arriving restores the destination's. A first visit to
+  Tessaly frames it from 58 units (its system is small), not from Elys's distance.
+- **Narrow screens:** the map image lifts further (shift 1.4, was 0.95) so Tessaly,
+  below Elys in this view, stays above the record panel and can be tapped.
+- **Not stored:** the active system. A reload starts at Vael, in Elys.
+- **Verified in the dev build:**
+  - Expeditions I–II and III's first three finds seeded; the last scanned for real.
+    The card names Expedition III, then *Resolved* and the closing play in turn.
+  - The map names Tessaly. Travel: route and marker, arrival at 3.2 AU with both
+    suns and Liris. Back: *Travel to Elys*, Elys's own overview (14.4 AU), its
+    counts and world index restored.
+  - Phone (375 × 812): Tessaly above the panel and tappable.
+  - Expedition II only: *An unresolved double star*, *Not yet reachable*, no Travel.
+  - No errors. Test progress cleared afterwards.
+
 ### Not built yet (Phase 11, next)
 
 - **11c, remaining stages:**
   - Liris in the Observatory and the journal (its own archive and record);
-  - Expedition III, which opens Tessaly;
-  - the transit from Elys;
   - drawn double shadows, and a palette of its own (Liris uses the terrestrial
     recipe with its own seed, colours and atmosphere).
 - **11d–e:** deep‑space sites; expedition routes and unexplored regions on the map.
@@ -2591,5 +2633,5 @@ Superseded Phase 1 decisions, kept so nobody reintroduces them by accident.
 | 9 | Universe Simulation | **Complete** (not yet deployed) | One simulation clock, Kepler‑consistent orbits, slowed rotation, 11 moons, controls, solved conjunctions, oppositions, alignments, transits and eclipses, Observatory Sky section (§13) |
 | 10 | Production polish | **Complete** (not yet deployed) | Audit, failure handling, surface memory leak, adaptive resolution to 0.75, layout and accessibility fixes, GPU measurement, production build verified at /aether/ (§14) |
 | — | Planet exploration overhaul | **Complete** (not yet deployed) | Living surface camera, shared depth (haze banks, shafts, foreground particles, weathered landmarks), each world's continuous life and events, visible lightning, discovery light wave (§15) |
-| 11 | Beyond the System | **Partly complete** (11a–b, not yet deployed) | Star-system registry, universe map as its own view, Tessaly sealed (§17); next: Tessaly itself (two suns, a circumbinary world, Expedition III, the transit) |
+| 11 | Beyond the System | **Partly complete** (11a–c, deployed) | Star-system registry, universe map, Tessaly: two suns, Liris (landing, 10 discoveries), Expedition III and the transit (§17); next: Liris in the Observatory and journal, deep-space sites |
 | 12 | AETHER Command | **Partly complete** (12a–d, not yet deployed) | Contextual record, search, timeline milestones, journal link in the Observatory (§16); the universe navigator waits for Phase 11 |
