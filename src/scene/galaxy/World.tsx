@@ -10,6 +10,7 @@ import {
   DoubleSide,
   Group,
   HalfFloatType,
+  type IUniform,
   LinearFilter,
   Matrix3,
   Mesh,
@@ -25,7 +26,8 @@ import {
   WebGLRenderTarget,
 } from 'three'
 import { orbitAngle } from '../../data/astronomy'
-import type { PlanetData, PlanetKind } from '../../data/planets'
+import { isElysWorld, type PlanetData, type PlanetKind, type WorldData } from '../../data/planets'
+import { ASTRONOMY } from '../../data/astronomy'
 import { director, palette } from '../../state/director'
 import { galaxy } from '../../state/galaxy'
 import { sim, useSimulation } from '../../state/simulation'
@@ -179,7 +181,17 @@ function useOrbitPath(radius: number, color: Color) {
 
 const center = new Vector3()
 
-export function World({ data, seed }: { data: PlanetData; seed: number }) {
+/** Phase 11: a world lit by two suns (Tessaly). The vectors are updated by the system each frame. */
+export interface TwoSuns {
+  a: Vector3
+  colorA: Color
+  b: Vector3
+  colorB: Color
+}
+
+export function World({ data, seed, light, interactive = true }: { data: WorldData; seed: number; light?: TwoSuns; interactive?: boolean }) {
+  // Elys's worlds have astronomy (moons) and take part in focus, hover and the Observatory.
+  const elysWorld = data.id in ASTRONOMY
   const orbitGroup = useRef<Group>(null)
   const body = useRef<Group>(null)
   const spin = useRef<Group>(null)
@@ -195,7 +207,10 @@ export function World({ data, seed }: { data: PlanetData; seed: number }) {
   const materials = useMemo(() => {
     const atmoDay = new Color(data.atmosphere.day)
     const atmoNight = new Color(data.atmosphere.night)
-    const sunPos = new Vector3(0, 0, 0)
+    const sunPos = light ? light.a : new Vector3(0, 0, 0)
+    const sunColor = light ? light.colorA : palette.sun
+    const two = light ? { SUN2: 1 } : {}
+    const sun2: Record<string, IUniform> = light ? { uSun2Pos: { value: light.b }, uSun2Color: { value: light.colorB } } : {}
     // Eclipses: the moons' positions and radii, written by Moons each frame.
     // (w = 0 marks an unused slot; Vector4 defaults w to 1, which would be a moon at Elys.)
     const moonShadow = Array.from({ length: 5 }, () => new Vector4(0, 0, 0, 0))
@@ -207,6 +222,7 @@ export function World({ data, seed }: { data: PlanetData; seed: number }) {
         BUMP: BUMP[data.kind].toFixed(3),
         HAZE: HAZE[data.kind].toFixed(2),
         ...(data.rings ? { RINGS: 1 } : {}),
+        ...two,
       },
       uniforms: {
         // Rings cast their shadow on the planet (ringed worlds only; see ringShadow).
@@ -214,7 +230,8 @@ export function World({ data, seed }: { data: PlanetData; seed: number }) {
         uRingInner: { value: data.rings ? data.rings.inner * data.radius : 0 },
         uRingOuter: { value: data.rings ? data.rings.outer * data.radius : 0 },
         uSunPos: { value: sunPos },
-        uSunColor: { value: palette.sun },
+        uSunColor: { value: sunColor },
+        ...sun2,
         uTerrain: { value: terrain },
         uTexel: { value: new Vector2(1 / TEX[0], 1 / TEX[1]) },
         uModelRot: { value: new Matrix3() },
@@ -232,9 +249,11 @@ export function World({ data, seed }: { data: PlanetData; seed: number }) {
       ? new ShaderMaterial({
           vertexShader: worldVertex,
           fragmentShader: worldCloudFragment,
+          defines: two,
           uniforms: {
             uSunPos: { value: sunPos },
-            uSunColor: { value: palette.sun },
+            uSunColor: { value: sunColor },
+            ...sun2,
             uTerrain: { value: terrain },
             uTime: { value: 0 },
             uSpeed: { value: data.clouds.speed },
@@ -253,6 +272,7 @@ export function World({ data, seed }: { data: PlanetData; seed: number }) {
     const atmosphere = new ShaderMaterial({
       vertexShader: worldVertex,
       fragmentShader: worldAtmosphereFragment,
+      defines: two,
       uniforms: {
         uCenter: { value: new Vector3() },
         uRadius: { value: data.radius },
@@ -262,6 +282,7 @@ export function World({ data, seed }: { data: PlanetData; seed: number }) {
         uDay: { value: atmoDay },
         uNight: { value: atmoNight },
         uIntensity: { value: data.atmosphere.intensity },
+        ...sun2,
       },
       side: BackSide,
       blending: AdditiveBlending,
@@ -341,6 +362,7 @@ export function World({ data, seed }: { data: PlanetData; seed: number }) {
   })
 
   const onOver = (e: ThreeEvent<PointerEvent>) => {
+    if (!interactive) return
     e.stopPropagation()
     setHovered(data.id)
     document.body.style.cursor = 'pointer'
@@ -350,13 +372,14 @@ export function World({ data, seed }: { data: PlanetData; seed: number }) {
     document.body.style.cursor = ''
   }
   const onClick = (e: ThreeEvent<MouseEvent>) => {
+    if (!interactive) return
     e.stopPropagation()
     // Ignore the click that ends a drag-to-rotate.
     if (e.delta > 6) return
     const st = useExperience.getState()
     // In the Observatory a world on the dial is selected, not flown to.
     if (st.phase === 'observatory') {
-      st.setObserved(data.id)
+      if (isElysWorld(data.id)) st.setObserved(data.id)
       return
     }
     if (st.phase !== 'galaxy') return
@@ -381,7 +404,7 @@ export function World({ data, seed }: { data: PlanetData; seed: number }) {
               </mesh>
             )}
           </group>
-          <Moons data={data} shadows={materials.moonShadow} />
+          {elysWorld && <Moons data={data as PlanetData} shadows={materials.moonShadow} />}
           {materials.rings && data.rings && (
             <mesh material={materials.rings} rotation={[Math.PI / 2, 0, 0]} renderOrder={3}>
               <ringGeometry args={[data.rings.inner * data.radius, data.rings.outer * data.radius, 192, 1]} />

@@ -1,8 +1,17 @@
+import { LIRIS } from './tessaly'
 /**
  * The six worlds of the Aether system, in orbital order around Elys.
  * `kind` selects the surface recipe in scene/galaxy/shaders.ts.
  */
 export type PlanetId = 'aurelis' | 'nyx' | 'solara' | 'vesper' | 'thalassa' | 'orion'
+
+/**
+ * Phase 11: every world the scene can draw — Elys's six, and worlds of other
+ * systems (Tessaly's Liris). Elys-only data (astronomy, surfaces, discoveries)
+ * stays keyed by PlanetId; the scene's own maps are keyed by WorldId.
+ */
+export type WorldId = PlanetId | 'liris'
+export type WorldData = Omit<PlanetData, 'id'> & { id: WorldId }
 
 export type PlanetKind = 'terrestrial' | 'dark' | 'desert' | 'cloud' | 'ocean' | 'giant'
 
@@ -253,3 +262,7 @@ export const PLANET_BY_ID = Object.fromEntries(PLANETS.map((p) => [p.id, p])) as
 >
 
 export const ORDINALS = ['First', 'Second', 'Third', 'Fourth', 'Fifth', 'Sixth']
+
+/** Every world the interface can name, Elys's and beyond (Phase 11). */
+export const WORLD_BY_ID = { ...PLANET_BY_ID, liris: LIRIS } as Record<WorldId, WorldData>
+export const isElysWorld = (id: WorldId): id is PlanetId => id !== 'liris'

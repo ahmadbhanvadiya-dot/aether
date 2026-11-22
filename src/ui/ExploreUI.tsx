@@ -2,8 +2,8 @@ import { Orbit, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { sound } from '../audio/sound'
 import { CATEGORIES } from '../data/discoveries'
-import { LOCATION_BY_ID, locationsFor } from '../data/locations'
-import { PLANET_BY_ID } from '../data/planets'
+import { locationsFor, PLACE_BY_ID } from '../data/locations'
+import { isElysWorld, PLANET_BY_ID, WORLD_BY_ID } from '../data/planets'
 import { surfaceCam } from '../scene/surface/SurfaceRig'
 import { discoveredCount, hiddenCount, useExploration } from '../state/exploration'
 import { locationProgress, worldProgress } from '../state/progress'
@@ -98,7 +98,7 @@ function ScanList({ location, onSurface }: { location: string; onSurface: boolea
   const discovered = useExploration((s) => s.discovered)
   const scanning = useExperience((s) => s.scanning)
   const targets = useScannable(location)
-  const accent = PLANET_BY_ID[LOCATION_BY_ID[location].planet].accent
+  const accent = WORLD_BY_ID[PLACE_BY_ID[location].planet].accent
   return (
     <ul className="scan-list" aria-label="Here">
       {targets.map((d) => {
@@ -186,11 +186,12 @@ export function ExploreUI() {
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
-  const loc = location ? LOCATION_BY_ID[location] : null
+  const loc = location ? PLACE_BY_ID[location] : null
   const locs = exploring ? locationsFor(exploring) : []
-  const world = exploring ? PLANET_BY_ID[exploring] : null
+  const world = exploring ? WORLD_BY_ID[exploring] : null
   const signalFound = loc ? !!discovered[loc.id] : false
-  const progress = world ? worldProgress(world, discovered, visited) : null
+  // Discovery progress is Elys's; Liris's ground is uncharted for now (Phase 11).
+  const progress = exploring && isElysWorld(exploring) ? worldProgress(PLANET_BY_ID[exploring], discovered, visited) : null
 
   return (
     <>
@@ -221,7 +222,7 @@ export function ExploreUI() {
           <span className="max-[479px]:hidden">Return to orbit</span>
         </button>
 
-        {loc && world && progress && (
+        {loc && world && (
           <aside className="location-panel ui-hideable" aria-live="polite">
             <p className="text-[0.8125rem] text-haze">{loc.region}</p>
             <h2 className="location-name">{loc.name}</h2>
@@ -229,10 +230,14 @@ export function ExploreUI() {
               {signalFound ? loc.lore : loc.hint}
             </p>
             <ScanList location={loc.id} onSurface={onSurface} />
-            <p className="text-[0.8125rem] text-haze tabular-nums">
-              {progress.found} of {progress.total} discoveries on {world.name}
-              {progress.hiddenFound > 0 && `, ${progress.hiddenFound} hidden`}
-            </p>
+            {progress ? (
+              <p className="text-[0.8125rem] text-haze tabular-nums">
+                {progress.found} of {progress.total} discoveries on {world.name}
+                {progress.hiddenFound > 0 && `, ${progress.hiddenFound} hidden`}
+              </p>
+            ) : (
+              <p className="text-[0.8125rem] text-haze">First landing on {world.name}. Nothing here is charted yet.</p>
+            )}
           </aside>
         )}
 
@@ -259,9 +264,11 @@ export function ExploreUI() {
                       aria-hidden
                     />
                     {l.name}
-                    <span className="sr-only">
-                      , {p.found} of {p.total} discoveries found
-                    </span>
+                    {p.total > 0 && (
+                      <span className="sr-only">
+                        , {p.found} of {p.total} discoveries found
+                      </span>
+                    )}
                   </button>
                 </li>
               )
@@ -270,7 +277,8 @@ export function ExploreUI() {
         </nav>
 
         <ScannerUI />
-        <ScanGuide onSurface={onSurface} />
+        {/* Nothing to scan beyond Elys yet (Phase 11). */}
+        {exploring && isElysWorld(exploring) && <ScanGuide onSurface={onSurface} />}
         <DiscoveryNotice />
       </div>
     </>

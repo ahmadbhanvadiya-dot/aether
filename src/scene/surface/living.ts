@@ -1,5 +1,5 @@
 import { Color, Vector2 } from 'three'
-import type { PlanetId } from '../../data/planets'
+import type { WorldId } from '../../data/planets'
 import { lerpEnv, sunVector, type EnvState, type SurfaceUniforms } from './env'
 
 /**
@@ -18,17 +18,18 @@ import { lerpEnv, sunVector, type EnvState, type SurfaceUniforms } from './env'
  */
 
 /** Prevailing winds in noise units per second (direction and strength per world). */
-const WIND: Record<PlanetId, [number, number]> = {
+const WIND: Record<WorldId, [number, number]> = {
   aurelis: [0.012, 0.004],
   nyx: [0.006, -0.003],
   solara: [0.021, 0.006],
   vesper: [0.016, -0.006],
   thalassa: [0.014, 0.009],
   orion: [0.024, 0.0],
+  liris: [0.01, 0.007],
 }
 
 /** Each world starts its cycle somewhere different, so they never feel in sync. */
-const PHASE: Record<PlanetId, number> = { aurelis: 0.4, nyx: 2.1, solara: 1.2, vesper: 3.3, thalassa: 4.6, orion: 5.4 }
+const PHASE: Record<WorldId, number> = { aurelis: 0.4, nyx: 2.1, solara: 1.2, vesper: 3.3, thalassa: 4.6, orion: 5.4, liris: 0.9 }
 
 const CYCLE = 420 // seconds
 
@@ -47,13 +48,13 @@ const lowLight = new Color()
 export function liveEnv(
   env: EnvState,
   u: SurfaceUniforms,
-  planet: PlanetId,
+  planet: WorldId,
   time: number,
   dt: number,
   options: { reduced: boolean; paused: boolean },
 ): EnvState {
   // Copy (never mutate the stored environment).
-  if (!scratch) scratch = { ...env, sunDir: env.sunDir.clone(), sunColor: env.sunColor.clone(), zenith: env.zenith.clone(), horizon: env.horizon.clone(), ground: env.ground.clone(), cloudColor: env.cloudColor.clone() }
+  if (!scratch) scratch = { ...env, sunDir: env.sunDir.clone(), sunColor: env.sunColor.clone(), sun2Dir: env.sun2Dir.clone(), sun2Color: env.sun2Color.clone(), zenith: env.zenith.clone(), horizon: env.horizon.clone(), ground: env.ground.clone(), cloudColor: env.cloudColor.clone() }
   const out = lerpEnv(env, env, 0, scratch)
 
   // Wind: prevailing direction, gusting strength, integrated into a drift.
@@ -75,6 +76,16 @@ export function liveEnv(
   let e = elev + amp * Math.sin(ph)
   e = elev >= 0 ? Math.max(e, 0.02) : Math.min(e, -0.02)
   sunVector(e, az + 0.28 * Math.sin(ph * 0.5 + 0.7), out.sunDir)
+  // A second sun crosses the sky with the first (the same day passing), keeping
+  // their authored separation but for a slight wobble: Tessaly's pair turning.
+  if (out.sun2Color.r + out.sun2Color.g + out.sun2Color.b > 0) {
+    const e2 = Math.asin(Math.max(-1, Math.min(1, out.sun2Dir.y)))
+    const az2 = Math.atan2(out.sun2Dir.x, -out.sun2Dir.z)
+    const amp2 = Math.min(0.07, Math.max(0.015, Math.abs(e2) * 0.45))
+    let f = e2 + amp2 * Math.sin(ph + 0.6)
+    f = e2 >= 0 ? Math.max(f, 0.02) : Math.min(f, -0.02)
+    sunVector(f, az2 + 0.28 * Math.sin(ph * 0.5 + 0.7) + 0.06 * Math.sin(ph * 1.7), out.sun2Dir)
+  }
 
   // As Elys lowers the light warms toward its own colour at the horizon; higher, it brightens a touch.
   const k = Math.sin(ph)

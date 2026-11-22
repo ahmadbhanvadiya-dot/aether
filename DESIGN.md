@@ -1992,13 +1992,86 @@ The proposal (`docs/proposals/phase-11-beyond-the-system.md`) is updated to matc
 - **The HUD's status corners step aside while the map is open** (`data-map`).
 - The simulation clock runs at the chosen speed on the map, as in the overview.
 
+### Tessaly in orbit (11c, first stage — development only)
+
+- **One system at a time, always at the origin.** `useExperience.activeSystem` chooses
+  what `GalaxySystem` mounts: Elys's star and six worlds, or Tessaly's own chunk
+  (`systems/tessaly`, 1.1 kB gzipped, `loadTessaly` with retries). The spiral galaxy
+  and the map's view are shifted by the active system's position, so every camera move
+  works unchanged and the map frames the same sky from either system.
+- **Tessaly** (`data/tessaly.ts`, in the main bundle so the interface can name Liris): two suns orbit their common centre every 14
+  standard days on the simulation clock, each at a distance inverse to its mass:
+  - **A** is white, 1.1 solar masses;
+  - **B** is gold, 0.75 solar masses.
+
+  **Liris** circles both at 24 units (1.33 AU, 410‑day year), 3.4 × the suns'
+  separation, a stable circumbinary orbit.
+- **Two‑sun lighting:** behind a `SUN2` define (Elys's shaders compile exactly as
+  before), Liris's surface, clouds and atmosphere take a second moving light in its own
+  colour. From Liris the suns are up to ~14° apart, a coloured fringe at the terminator
+  more than two separate edges.
+- `Star` takes a look (radius, photosphere colours in linear RGB, corona); Elys's look
+  is the old built‑in values, verified identical.
+- **Types:** `WorldId` (Elys's six + `liris`) for the scene's maps (`galaxy.positions`,
+  `materials`); Elys‑only data stays keyed by `PlanetId`. Liris has no moons.
+- **In Tessaly the Elys‑only parts step aside:**
+  - Elys's world index, *Return to Vael* and sky line;
+  - the Observatory (button and `O`);
+  - discovery counts.
+
+  The readout gives AU from the twin suns.
+- **Reachable only through `?shot=tessaly` in development** (story‑gated: Expedition III
+  and the transit come next). Production ignores the shot.
+- **Verified in the dev build:**
+  - both suns move with the clock;
+  - Liris's three materials carry the second light;
+  - the map opened from Tessaly frames the same sky;
+  - Elys is unchanged (star colours, world index, sky line, counts).
+
+### Liris: focus and landing (11c, second stage — development only)
+
+- **Navigation is typed by world, not by Elys planet.** `focus`, `hovered` and
+  `exploring` are `WorldId`; `WORLD_BY_ID` names any world and `isElysWorld` guards
+  every Elys‑only lookup (astronomy, discoveries, the Observatory, the sky's moons).
+  The type checker found each place Liris could reach an Elys table.
+- **Elys's numbers cannot move.** Liris's places are their own list
+  (`LIRIS_LOCATIONS`); `LOCATIONS`, `LOCATION_BY_ID`, the 54 discoveries and every
+  percentage stay Elys's. The surface reads `PLACE_BY_ID` / `Place`
+  (`LocationData<WorldId>`), Elys's code keeps `LocationData` (`PlanetId`). A Liris
+  visit is remembered (`visited.liris`) but no progress reads it yet.
+- **Focus:** Liris is clickable. Its panel reads *The one world of Tessaly*, shows its
+  own day, year and facts (`planetFacts` takes any world), says *Uncharted*, has no
+  previous / next (there is nowhere to step), and returns *to Tessaly*.
+- **Landing:** *Explore Liris* descends as on any world, through its violet limb.
+  Three places, each a different moment of a twice‑lit day:
+  - **The Twofold Shore:** both suns low over the bay, behind the stacks;
+  - **The Long Noon:** both high over the violet steppe, an arch;
+  - **Between Days:** the white sun set, the gold one low over the peaks, first stars.
+- **Two suns on the ground:** `LocationEnv` takes an optional `sun2` / `sun2Color`;
+  the environment blends a second sun (black where there is none). Behind `SUN2`
+  (only `SurfaceSettings.twoSuns` compiles it) the sky draws a second, smaller disc
+  and glow (dimmer in the disc so its gold holds), and terrain, water (glint and body),
+  clouds and landmarks take its light. The living drift moves both suns together,
+  keeping their spacing with a slight wobble.
+- **What Liris does not have yet:** signals and discoveries (no beacon, no scan guide,
+  *First landing on Liris. Nothing here is charted yet.*), the sky's moons, true cast
+  shadows (the "two shadows" are told, not drawn). Its sound bed is its own: warm wind,
+  a two‑note pad, surf on the shore.
+- **Development shots:** `?shot=liris-twofold-shore` (and the other two places) land
+  directly and set Tessaly as the active system.
+- **Verified in the dev build:** select Liris → panel → *Explore* → descent → the
+  Twofold Shore with both suns in frame (desktop width) → travel to the other places
+  → return to orbit around Liris. Elys: Aurelis compiles without `SUN2`, the second
+  light is black, *0 of 54 discoveries*, scan guide shown, no console errors.
+
 ### Not built yet (Phase 11, next)
 
-- **11c:** Tessaly itself, as its own on‑demand pack:
-  - two suns in the sky and in the light;
-  - the circumbinary world, its surfaces and discoveries;
-  - Expedition III, which opens it;
-  - the transit between systems.
+- **11c, remaining stages:**
+  - Liris's discoveries and its own record (counts, the Observatory, the journal);
+  - Expedition III, which opens Tessaly;
+  - the transit from Elys;
+  - drawn double shadows, and a palette of its own (Liris uses the terrestrial
+    recipe with its own seed, colours and atmosphere).
 - **11d–e:** deep‑space sites; expedition routes and unexplored regions on the map.
 
 ### Verified

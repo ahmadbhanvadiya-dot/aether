@@ -35,5 +35,8 @@ export const CHUNK_FAULT = {
 
 export const loadObservatoryUI = memoImport(() => import('../ui/ObservatoryUI'))
 
+/** Phase 11: other star systems, each its own chunk. */
+export const loadTessaly = memoImport(() => import('../systems/tessaly/TessalySystem'))
+
 /** Set when the Observatory's interface failed to mount; opening it then reports the fault. */
 export const observatoryUnavailable = { current: false }

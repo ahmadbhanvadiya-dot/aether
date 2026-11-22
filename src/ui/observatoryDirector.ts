@@ -3,7 +3,7 @@ import { LOCATION_BY_ID } from '../data/locations'
 import { CHUNK_FAULT, loadObservatoryUI, observatoryUnavailable } from '../system/chunks'
 import { sound } from '../audio/sound'
 import { DISCOVERY_BY_ID } from '../data/discoveries'
-import type { PlanetId } from '../data/planets'
+import { isElysWorld, type PlanetId } from '../data/planets'
 import { beginObservatory, galaxyCam, startGalaxyTravel } from '../scene/galaxy/GalaxyRig'
 import { director } from '../state/director'
 import { useExploration } from '../state/exploration'
@@ -22,6 +22,8 @@ const bars = () => document.querySelectorAll<HTMLElement>('[data-letterbox]')
 let timeline: gsap.core.Timeline | null = null
 
 export function openObservatory() {
+  // The Observatory knows Elys only (Phase 11: other systems keep their own records later).
+  if (useExperience.getState().activeSystem !== 'elys') return
   // Phase 10: the Observatory's interface loads on demand; open only once it is here.
   const fail = () => useExperience.getState().setFault({ id: `observatory-${Date.now()}`, ...CHUNK_FAULT })
   if (observatoryUnavailable.current) return fail()
@@ -41,7 +43,7 @@ function enterObservatory() {
   // Start on the world in focus, else the most explored, else the first.
   const { discovered, visited } = useExploration.getState()
   const best = systemProgress(discovered, visited).mostExplored[0]?.id
-  st.setObserved(st.focus ?? best ?? st.observed)
+  st.setObserved((st.focus && isElysWorld(st.focus) ? st.focus : null) ?? best ?? st.observed)
 
   beginObservatory()
   if (st.focus) st.setFocus(null)

@@ -8,6 +8,8 @@ import { terrainGLSL } from './terrain'
 export const envGLSL = /* glsl */ `
 uniform vec3 uSunDir;
 uniform vec3 uSunColor;
+uniform vec3 uSun2Dir;
+uniform vec3 uSun2Color;
 uniform vec3 uZenith;
 uniform vec3 uHorizon;
 uniform vec3 uGround;
@@ -55,6 +57,8 @@ vec3 revealLight(vec3 p) {
 }
 
 float sunVisible() { return smoothstep(-0.08, 0.06, uSunDir.y); }
+// Phase 11: a second sun (Liris). Compiled only where there is one.
+float sun2Visible() { return smoothstep(-0.08, 0.06, uSun2Dir.y); }
 
 /**
  * Phase 7: the cloud layer's shadow on whatever is below it. Samples the same
@@ -83,6 +87,12 @@ vec3 skyBase(vec3 d) {
   float vis = smoothstep(-0.2, 0.05, uSunDir.y);
   col += uSunColor * (pow(mu, 6.0) * 0.16 + pow(mu, 48.0) * 0.3) * vis;
   col += uSunColor * pow(mu, 2.0) * 0.06 * (1.0 - clamp(abs(y) * 4.0, 0.0, 1.0)) * vis;
+#ifdef SUN2
+  float mu2 = max(dot(d, uSun2Dir), 0.0);
+  float vis2 = smoothstep(-0.2, 0.05, uSun2Dir.y);
+  col += uSun2Color * (pow(mu2, 6.0) * 0.16 + pow(mu2, 48.0) * 0.3) * vis2;
+  col += uSun2Color * pow(mu2, 2.0) * 0.07 * (1.0 - clamp(abs(y) * 4.0, 0.0, 1.0)) * vis2;
+#endif
   // Overhaul: lightning lights its own part of the sky; the whole frame lifts only a little.
   col += vec3(0.62, 0.66, 0.95) * uFlash * (pow(max(dot(d, uFlashDir), 0.0), 24.0) * 0.6 + pow(max(dot(d, uFlashDir), 0.0), 6.0) * 0.1 + 0.03);
   return col;
@@ -157,6 +167,12 @@ void main() {
 
   // Elys
   col += uSunColor * smoothstep(0.99955, 0.9998, mu) * 8.0 * smoothstep(-0.06, 0.02, uSunDir.y + 0.03);
+#ifdef SUN2
+  // The second sun: smaller in the sky, and gold.
+  float mu2d = dot(d, uSun2Dir);
+  // Dimmer than the first in the disc, so its colour holds instead of clipping to white.
+  col += uSun2Color * smoothstep(0.99972, 0.99988, mu2d) * 3.2 * smoothstep(-0.06, 0.02, uSun2Dir.y + 0.03);
+#endif
 
   // Stars
   if (uStars > 0.0 && d.y > -0.05) {
@@ -552,6 +568,11 @@ void main() {
   vec3 V = normalize(cameraPosition - p);
   vec3 Hh = normalize(L + V);
   col += uSunColor * pow(max(dot(n, Hh), 0.0), 60.0) * specAmt * diff;
+#ifdef SUN2
+  float diff2 = max((dot(n, uSun2Dir) + wrap) / (1.0 + wrap), 0.0) * sun2Visible();
+  col += albedo * uSun2Color * diff2 * 1.3;
+  col += uSun2Color * pow(max(dot(n, normalize(uSun2Dir + V)), 0.0), 60.0) * specAmt * diff2;
+#endif
 
 #if SKIND == 2
   // The Salt Mirror: flat salt reflects the sky
@@ -635,10 +656,17 @@ void main() {
   float shade = cloudShadow(p);
   float glint = pow(max(dot(Rv, uSunDir), 0.0), 300.0) * sunVisible() * shade;
   refl += uSunColor * glint * 6.0;
+#ifdef SUN2
+  refl += uSun2Color * pow(max(dot(Rv, uSun2Dir), 0.0), 300.0) * sun2Visible() * 6.0;
+#endif
 
   float depth = max(vDepth, 0.0);
   vec3 body = mix(uWaterShallow, uWaterDeep, smoothstep(0.0, 14.0, depth));
+#ifdef SUN2
+  body *= uSunColor * max(uSunDir.y, 0.0) * 0.9 * shade + uSun2Color * max(uSun2Dir.y, 0.0) * 0.8 + ambient(vec3(0.0, 1.0, 0.0));
+#else
   body *= uSunColor * max(uSunDir.y, 0.0) * 0.9 * shade + ambient(vec3(0.0, 1.0, 0.0));
+#endif
 
   // Bioluminescent currents
   // Bioluminescent currents: thin ribbons along noise contours, drifting and flickering.
@@ -686,6 +714,9 @@ void main() {
   float dens = smoothstep(1.0 - uCloudCover, 1.0 - uCloudCover + 0.22, c * 0.8 + c2 * 0.2);
   bool above = cameraPosition.y > p.y;
   vec3 lit = uCloudColor * (uSunColor * max(uSunDir.y + 0.15, 0.0) * 1.2 + ambient(vec3(0.0, 1.0, 0.0)) * 1.2);
+#ifdef SUN2
+  lit += uCloudColor * uSun2Color * max(uSun2Dir.y + 0.15, 0.0) * 1.0;
+#endif
   vec3 under = uCloudColor * ambient(vec3(0.0, -1.0, 0.0)) * 0.8;
   vec3 col = above ? lit : under;
   // Overhaul: texture even under full cover — thick masses darker from below and
@@ -694,6 +725,9 @@ void main() {
   float rolls = fbm2(q * 6.0 - uDrift * 3.0, 2) * 0.5 + 0.5;
   col *= above ? 0.85 + 0.3 * thick : 1.25 - 0.7 * smoothstep(0.35, 0.85, thick) + 0.18 * rolls;
   col += uSunColor * pow(max(dot(normalize(p - cameraPosition), uSunDir), 0.0), 8.0) * 0.4 * dens * sunVisible();
+#ifdef SUN2
+  col += uSun2Color * pow(max(dot(normalize(p - cameraPosition), uSun2Dir), 0.0), 8.0) * 0.4 * dens * sun2Visible();
+#endif
   col += vec3(0.7, 0.7, 1.0) * uFlash * (0.12 + 0.5 * pow(max(dot(normalize(p - cameraPosition), uFlashDir), 0.0), 6.0));
   dens *= smoothstep(2.0, 25.0, abs(cameraPosition.y - p.y));
   // Overhaul: most haze lies below the cloud base, so the layer is fogged as if
@@ -833,6 +867,10 @@ void main() {
   vec3 col = rock * (uSunColor * diff * 1.5 + ambient(n) * occl + uZenith * max(n.y, 0.0) * 0.18);
   float wet = foot * (0.4 + 0.6 * pow(1.0 - max(dot(n, V), 0.0), 2.0));
   col += uSunColor * pow(max(dot(n, normalize(uSunDir + V)), 0.0), mix(40.0, 120.0, wet)) * (0.25 + wet * 0.9) * diff;
+#ifdef SUN2
+  float diff2 = max(dot(n, uSun2Dir), 0.0) * sun2Visible();
+  col += rock * uSun2Color * diff2 * 1.3;
+#endif
   float rim = pow(1.0 - max(dot(n, V), 0.0), 3.0);
   float seam = uSeam * smoothstep(0.93, 0.98, fract(vLocal.y / max(uHeight / 5.0, 1.0)));
   float pulse = 0.75 + 0.25 * sin(uTime * 0.8 + vLocal.y * 0.1);

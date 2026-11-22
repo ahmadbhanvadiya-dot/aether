@@ -1,9 +1,9 @@
 import { useFrame, useThree } from '@react-three/fiber'
 import { useMemo, useRef } from 'react'
 import { AdditiveBlending, BufferAttribute, BufferGeometry, Color, Points, ShaderMaterial } from 'three'
-import { GALAXY } from '../../data/systems'
+import { GALAXY, SYSTEM_BY_ID } from '../../data/systems'
+import { quality, useExperience } from '../../state/useExperience'
 import { director } from '../../state/director'
-import { quality } from '../../state/useExperience'
 import { galaxyDiscFragment, galaxyDiscVertex } from './shaders'
 
 function mulberry32(seed: number) {
@@ -106,8 +106,11 @@ export function SpiralGalaxy() {
   // Core off to one side and below, the disc tipped so its arms cross the sky.
   // (Phase 11: it no longer turns — Elys and the other systems keep their places in
   // its arms on the universe map. The placement is shared with data/systems.ts.)
+  // The active system sits at the scene's origin; the galaxy is placed around it.
+  const active = useExperience((s) => s.activeSystem)
+  const position = useMemo(() => GALAXY.position.clone().sub(SYSTEM_BY_ID[active].position), [active])
   return (
-    <group position={GALAXY.position} rotation={GALAXY.rotation}>
+    <group position={position} rotation={GALAXY.rotation}>
       <points ref={points} geometry={geometry} material={material} frustumCulled={false} />
     </group>
   )

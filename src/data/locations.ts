@@ -1,4 +1,4 @@
-import type { PlanetId } from './planets'
+import type { PlanetId, WorldId } from './planets'
 
 /**
  * Phase 3 exploration content. Each world has one continuous surface and three
@@ -44,11 +44,14 @@ export interface LocationEnv {
   motes: number
   /** Orion only: the observer's latitude, for the ring view. */
   ringLat: number
+  /** Phase 11: a second sun (Liris, under Tessaly's pair): elevation, azimuth; its light. */
+  sun2?: [number, number]
+  sun2Color?: string
 }
 
-export interface LocationData {
+export interface LocationData<P extends WorldId = PlanetId> {
   id: string
-  planet: PlanetId
+  planet: P
   name: string
   region: string
   /** Shown before discovery. */
@@ -588,10 +591,117 @@ export const LOCATIONS: LocationData[] = [
   },
 ]
 
+/**
+ * Phase 11: Liris, under Tessaly's two suns. Kept apart from LOCATIONS so Elys's
+ * discoveries, totals and percentages stay exactly Elys's; its places have no
+ * signals yet (their discoveries come with the expedition that leads there).
+ * Tessaly A is the white sun, Tessaly B the gold one.
+ */
+export const LIRIS_LOCATIONS: LocationData<'liris'>[] = [
+  {
+    id: 'liris-twofold-shore',
+    planet: 'liris',
+    name: 'The Twofold Shore',
+    region: 'Western shore of Liris',
+    hint: 'Both suns are low over the bay, and everything on the sand casts two shadows, one blue, one amber.',
+    lore: 'Both suns are low over the bay, and everything on the sand casts two shadows, one blue, one amber.',
+    finding: '',
+    center: [0, 0],
+    terrain: { radius: 320, lift: -10, rough: 0.2, shape: 'coast', a: 0.14, b: 0.4 },
+    camera: { at: [50, 10], eye: 2.2, pitch: 0.0 },
+    landmark: { kind: 'spires', at: [-90, -60], scale: 0.9, y: -5 },
+    signalHeight: 28,
+    env: {
+      ...base,
+      // Both suns out over the bay, behind the stacks, as you land.
+      sun: [0.2, -1.42],
+      sunColor: '#F2F4FF',
+      sun2: [0.11, -0.95],
+      sun2Color: '#FFB46E',
+      zenith: '#2C3484',
+      horizon: '#D8BFEA',
+      ground: '#5C4F78',
+      fog: 0.0012,
+      cloudHeight: 170,
+      cloudCover: 0.3,
+      cloudColor: '#FFF1EC',
+      motes: 0.2,
+    },
+  },
+  {
+    id: 'liris-long-noon',
+    planet: 'liris',
+    name: 'The Long Noon',
+    region: 'Central steppe of Liris',
+    hint: 'Two noons a day: the white sun high overhead, the gold one a hand’s width away, and the grass never quite in shade.',
+    lore: 'Two noons a day: the white sun high overhead, the gold one a hand’s width away, and the grass never quite in shade.',
+    finding: '',
+    center: [900, 420],
+    terrain: { radius: 360, lift: 22, rough: 0.55, shape: 'none', a: 0, b: 0 },
+    camera: { at: [0, 0], eye: 2.3, pitch: 0.05 },
+    landmark: { kind: 'arch', at: [-60, -110], scale: 0.85 },
+    signalHeight: 16,
+    env: {
+      ...base,
+      sun: [0.95, 1.9],
+      sunColor: '#F6F7FF',
+      sun2: [0.62, 2.9],
+      sun2Color: '#FFC487',
+      zenith: '#3A4CB0',
+      horizon: '#E4D3F2',
+      ground: '#6A5C84',
+      fog: 0.001,
+      cloudHeight: 210,
+      cloudCover: 0.42,
+      cloudColor: '#FFF6F0',
+      motes: 0.25,
+    },
+  },
+  {
+    id: 'liris-between-days',
+    planet: 'liris',
+    name: 'Between Days',
+    region: 'Eastern uplands of Liris',
+    hint: 'The white sun has set. The gold one is still above the hills, so night here is only a long amber dusk.',
+    lore: 'The white sun has set. The gold one is still above the hills, so night here is only a long amber dusk.',
+    finding: '',
+    center: [-760, 880],
+    terrain: { radius: 340, lift: 58, rough: 0.95, shape: 'none', a: 0, b: 0 },
+    camera: { at: [0, 0], eye: 2.5, pitch: 0.04 },
+    landmark: { kind: 'monolith', at: [-30, -70], scale: 0.6 },
+    signalHeight: 12,
+    env: {
+      ...base,
+      sun: [-0.14, 4.3],
+      sunColor: '#C8D2FF',
+      sun2: [0.07, 0.75],
+      sun2Color: '#FF9A55',
+      zenith: '#151A4C',
+      horizon: '#E9A27A',
+      ground: '#3A2E4E',
+      fog: 0.0011,
+      stars: 0.55,
+      cloudHeight: 190,
+      cloudCover: 0.25,
+      cloudColor: '#F7C9B0',
+      motes: 0.2,
+    },
+  },
+]
+
+/** Elys's locations (discoveries, the Observatory and progress read these). */
 export const LOCATION_BY_ID = Object.fromEntries(LOCATIONS.map((l) => [l.id, l])) as Record<string, LocationData>
 
-export function locationsFor(planet: PlanetId) {
-  return LOCATIONS.filter((l) => l.planet === planet)
+/** A place on any world's surface: what the surface and its camera need. */
+export type Place = LocationData<WorldId>
+
+/** Every place, Elys's and beyond, for the surface (Phase 11). */
+export const PLACE_BY_ID = Object.fromEntries([...LOCATIONS, ...LIRIS_LOCATIONS].map((l) => [l.id, l])) as Record<string, Place>
+
+export function locationsFor(planet: PlanetId): LocationData[]
+export function locationsFor(planet: WorldId): Place[]
+export function locationsFor(planet: WorldId): Place[] {
+  return (planet === 'liris' ? LIRIS_LOCATIONS : LOCATIONS).filter((l) => l.planet === planet)
 }
 
 export const TOTAL_LOCATIONS = LOCATIONS.length
@@ -614,9 +724,11 @@ export interface SurfaceSettings {
   /** Landmark material. */
   rock: string
   glow: string
+  /** Phase 11: lit by two suns (compiles the second-sun shader paths). */
+  twoSuns?: boolean
 }
 
-export const SURFACES: Record<PlanetId, SurfaceSettings> = {
+export const SURFACES: Record<WorldId, SurfaceSettings> = {
   aurelis: {
     seed: 11,
     kind: 'terrestrial',
@@ -706,5 +818,21 @@ export const SURFACES: Record<PlanetId, SurfaceSettings> = {
     rings: true,
     rock: '#EADCC0',
     glow: '#E8C79A',
+  },
+  liris: {
+    seed: 79,
+    kind: 'terrestrial',
+    water: true,
+    waterDeep: '#18163E',
+    waterShallow: '#4A7CA8',
+    // pale shore, violet moss, ochre upland, slate, frost
+    palette: ['#D9C6A4', '#4E4374', '#86705A', '#625A70', '#F3EEF8'],
+    motes: 'dust',
+    moteColor: '#FFE4CC',
+    moons: 0,
+    rings: false,
+    rock: '#B4A6C6',
+    glow: '#C8B2FF',
+    twoSuns: true,
   },
 }

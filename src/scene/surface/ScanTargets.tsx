@@ -2,7 +2,7 @@ import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import { AdditiveBlending, Color, DoubleSide, Mesh, MathUtils, PlaneGeometry, ShaderMaterial, Vector3 } from 'three'
 import { discoveriesFor, type DiscoveryData } from '../../data/discoveries'
-import { PLANET_BY_ID, type PlanetId } from '../../data/planets'
+import { WORLD_BY_ID, type WorldId } from '../../data/planets'
 import { director, telemetry } from '../../state/director'
 import { useExploration } from '../../state/exploration'
 import { useExperience } from '../../state/useExperience'
@@ -113,9 +113,9 @@ function blocked(from: Vector3, to: Vector3) {
   return false
 }
 
-export function ScanTargets({ planet }: { planet: PlanetId }) {
+export function ScanTargets({ planet }: { planet: WorldId }) {
   const size = useThree((s) => s.size)
-  const accent = useMemo(() => new Color(PLANET_BY_ID[planet].accent).lerp(new Color('#ffffff'), 0.35), [planet])
+  const accent = useMemo(() => new Color(WORLD_BY_ID[planet].accent).lerp(new Color('#ffffff'), 0.35), [planet])
 
   const glints = useMemo<Glint[]>(
     () =>

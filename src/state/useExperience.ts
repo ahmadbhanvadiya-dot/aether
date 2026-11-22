@@ -1,6 +1,7 @@
 import { create } from 'zustand'
-import { LOCATION_BY_ID } from '../data/locations'
-import { PLANETS, type PlanetId } from '../data/planets'
+import type { SystemId } from '../data/systems'
+import { LOCATION_BY_ID, PLACE_BY_ID } from '../data/locations'
+import { isElysWorld, PLANETS, type PlanetId, type WorldId } from '../data/planets'
 
 /**
  * boot      → shaders compiling, screen is black
@@ -36,11 +37,11 @@ interface ExperienceState {
   /** Cinema mode hides the interface so only the scene remains. */
   cinema: boolean
   /** The world the camera is travelling to or orbiting. */
-  focus: PlanetId | null
+  focus: WorldId | null
   /** The world under the pointer (or highlighted from the index). */
-  hovered: PlanetId | null
+  hovered: WorldId | null
   /** The world whose surface is mounted (from descent start until ascent ends). */
-  exploring: PlanetId | null
+  exploring: WorldId | null
   /** The surface location the camera is at or travelling to. */
   location: string | null
   /** The signal under the pointer on the surface. */
@@ -66,6 +67,9 @@ interface ExperienceState {
    * Choosing a world on the dial clears it.
    */
   obsFocus: ObsFocus | null
+  /** Phase 11: the star system the scene shows (Elys, or another once it is reached). */
+  activeSystem: SystemId
+  setActiveSystem: (id: SystemId) => void
   setObsFocus: (focus: ObsFocus | null, planet?: PlanetId | null) => void
   /** Phase 10: something failed (a chunk, WebGL, a slow start); shown by FaultUI. */
   fault: Fault | null
@@ -74,10 +78,10 @@ interface ExperienceState {
   setSceneReady: () => void
   toggleMotion: () => void
   toggleCinema: () => void
-  setFocus: (id: PlanetId | null) => void
+  setFocus: (id: WorldId | null) => void
   stepFocus: (direction: 1 | -1) => void
-  setHovered: (id: PlanetId | null) => void
-  setExploring: (id: PlanetId | null) => void
+  setHovered: (id: WorldId | null) => void
+  setExploring: (id: WorldId | null) => void
   setLocation: (id: string | null) => void
   setSignalHovered: (v: boolean) => void
   setNotice: (n: Notice | null) => void
@@ -137,6 +141,8 @@ export const useExperience = create<ExperienceState>((set) => ({
   story: null,
   journal: false,
   obsFocus: null,
+  activeSystem: 'elys',
+  setActiveSystem: (activeSystem) => set({ activeSystem, focus: null, hovered: null }),
   // Turning the dial to the item's world and showing the item are one update.
   setObsFocus: (obsFocus, planet) => set(planet ? { obsFocus, observed: planet } : { obsFocus }),
   fault: null,
@@ -148,6 +154,8 @@ export const useExperience = create<ExperienceState>((set) => ({
   setFocus: (focus) => set({ focus, hovered: null }),
   stepFocus: (direction) =>
     set((s) => {
+      // Stepping walks Elys's worlds; a lone world elsewhere has nowhere to step.
+      if (!s.focus || !isElysWorld(s.focus)) return {}
       const index = PLANETS.findIndex((p) => p.id === s.focus)
       const next = (index + direction + PLANETS.length) % PLANETS.length
       return { focus: PLANETS[next].id, hovered: null }
@@ -174,8 +182,12 @@ export const debugShot = (() => {
   if (typeof window === 'undefined') return null
   const shot = new URLSearchParams(window.location.search).get('shot')
   if (shot === 'orbit' || shot === 'galaxy' || shot === 'observatory') return shot
+  // Phase 11: Tessaly is story-gated; until its expedition exists, only development can reach it.
+  if (shot === 'tessaly' && import.meta.env.DEV) return shot
   if (shot && PLANETS.some((p) => p.id === shot)) return shot as PlanetId
   if (shot && LOCATION_BY_ID[shot]) return `loc:${shot}` as const
+  // Liris's places, like Tessaly itself, only in development for now.
+  if (shot && import.meta.env.DEV && PLACE_BY_ID[shot]) return `loc:${shot}` as const
   return null
 })()
 
