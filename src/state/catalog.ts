@@ -1,8 +1,9 @@
 import { MOONS, formatDuration } from '../data/astronomy'
-import { DISCOVERIES, CATEGORIES } from '../data/discoveries'
+import { DISCOVERIES, CATEGORIES, discoveriesFor } from '../data/discoveries'
 import { FRAGMENT_KINDS } from '../data/expeditions'
 import { LOCATIONS, LOCATION_BY_ID } from '../data/locations'
-import { PLANETS, PLANET_BY_ID, type PlanetId } from '../data/planets'
+import { PLANETS, PLANET_BY_ID, type PlanetId, type WorldId } from '../data/planets'
+import { LIRIS } from '../data/tessaly'
 import type { CelestialEvent } from './events'
 import { unlockedFragments, type ExpeditionState } from './expeditions'
 
@@ -113,16 +114,17 @@ export interface Milestone {
   at: number
   title: string
   detail: string
-  planet: PlanetId | null
+  planet: WorldId | null
 }
 
-export function milestones(found: Record<string, number>, visited: Partial<Record<PlanetId, number>>, states: ExpeditionState[]): Milestone[] {
+export function milestones(found: Record<string, number>, visited: Partial<Record<WorldId, number>>, states: ExpeditionState[]): Milestone[] {
   const out: Milestone[] = []
-  for (const p of PLANETS) {
+  // Elys's six, and Liris (Phase 11).
+  for (const p of [...PLANETS, LIRIS]) {
     const at = visited[p.id]
     if (at) out.push({ id: `land-${p.id}`, at, title: `First landing on ${p.name}`, detail: p.classification, planet: p.id })
     // Every catalogued (not hidden) discovery on a world found.
-    const own = DISCOVERIES.filter((d) => d.planet === p.id && d.kind !== 'secret')
+    const own = discoveriesFor(p.id).filter((d) => d.kind !== 'secret')
     if (own.length && own.every((d) => found[d.id])) {
       out.push({ id: `explored-${p.id}`, at: Math.max(...own.map((d) => found[d.id])), title: `${p.name} fully explored`, detail: `All ${own.length} discoveries`, planet: p.id })
     }

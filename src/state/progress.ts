@@ -1,4 +1,5 @@
 import {
+  ALL_FINDS,
   CATEGORY_ORDER,
   DISCOVERIES,
   discoveriesAt,
@@ -9,8 +10,8 @@ import {
   type DiscoveryData,
   type Find,
 } from '../data/discoveries'
-import { LOCATION_BY_ID, locationsFor, type LocationData, type Place } from '../data/locations'
-import { PLANET_BY_ID, PLANETS, type PlanetData, type PlanetId, type WorldData, type WorldId } from '../data/planets'
+import { LOCATION_BY_ID, locationsFor, PLACE_BY_ID, type LocationData, type Place } from '../data/locations'
+import { PLANET_BY_ID, PLANETS, WORLD_BY_ID, type PlanetData, type PlanetId, type WorldData, type WorldId } from '../data/planets'
 
 /**
  * Pure derivations of progress from the exploration store. Every number the
@@ -148,4 +149,19 @@ const timeFmt = new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2
 export function formatWhen(at: number) {
   const d = new Date(at)
   return { date: dateFmt.format(d), time: timeFmt.format(d), iso: d.toISOString() }
+}
+
+/** A find on any world, with its place and world (Phase 11: the Observatory's timeline). */
+export interface FindEntry {
+  discovery: Find
+  location: Place
+  planet: WorldData
+  at: number
+}
+
+/** Every discovery made on every world, oldest first (Elys's and Liris's). */
+export function fullTimeline(discovered: Found): FindEntry[] {
+  return ALL_FINDS.filter((d) => discovered[d.id])
+    .map((d) => ({ discovery: d, location: PLACE_BY_ID[d.location], planet: WORLD_BY_ID[d.planet], at: discovered[d.id] }))
+    .sort((a, b) => a.at - b.at)
 }

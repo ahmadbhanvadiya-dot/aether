@@ -5,8 +5,9 @@ import { FRAGMENT_KINDS } from '../data/expeditions'
 import { LOCATION_BY_ID } from '../data/locations'
 import { PLANET_BY_ID } from '../data/planets'
 import { useExploration } from '../state/exploration'
-import { expeditionStates, unlockedFragments, unlockLine, type ExpeditionState } from '../state/expeditions'
-import { formatWhen } from '../state/progress'
+import { expeditionStates, mapAccess, unlockedFragments, unlockLine, type ExpeditionState } from '../state/expeditions'
+import { formatWhen, worldProgress } from '../state/progress'
+import { LIRIS } from '../data/tessaly'
 import { useExperience } from '../state/useExperience'
 import { unknownName } from './ScannerUI'
 import { replayStory } from './storyDirector'
@@ -94,6 +95,54 @@ function ExpeditionEntry({ s, active }: { s: ExpeditionState; active: boolean })
   )
 }
 
+/**
+ * Phase 11: the survey of Liris. Not an expedition (no story gates it), but the
+ * same kind of goal: its three places and what each still holds. Shown once
+ * Tessaly is open or anything is known there.
+ */
+function SurveyEntry() {
+  const discovered = useExploration((st) => st.discovered)
+  const visited = useExploration((st) => st.visited)
+  const w = useMemo(() => worldProgress(LIRIS, discovered, visited), [discovered, visited])
+  const done = w.found === w.total
+  return (
+    <article className="journal-expedition" data-status={done ? 'complete' : 'open'}>
+      <p className="journal-code">
+        <span>Survey · Tessaly</span>
+        <span className="journal-status">
+          {done ? 'Complete' : w.visitedAt ? `Under way · landed ${formatWhen(w.visitedAt).date}` : 'Not yet landed'}
+        </span>
+      </p>
+      <h3 className="journal-title">{LIRIS.name}</h3>
+      <p className="journal-copy">
+        {w.visitedAt ? LIRIS.teaser : 'Travel to Tessaly from the galaxy map, and land on its one world.'}
+      </p>
+      <div className="journal-progress" aria-label={`${w.found} of ${w.total} discoveries`}>
+        {w.locations.map((lp) => (
+          <span key={lp.location.id} data-done={(lp.total > 0 && lp.found >= lp.total) || undefined} data-open={(lp.found > 0 && lp.found < lp.total) || undefined} />
+        ))}
+        <span className="journal-progress-count tabular-nums">
+          {w.found} of {w.total}
+          {w.hiddenFound > 0 && `, ${w.hiddenFound} hidden`}
+        </span>
+      </div>
+      <ul className="journal-places">
+        {w.locations.map((lp) => (
+          <li key={lp.location.id} data-found={(lp.total > 0 && lp.found >= lp.total) || undefined}>
+            <span className="signal-dot" data-found={(lp.found >= lp.total) || undefined} data-partial={(lp.found > 0 && lp.found < lp.total) || undefined} style={{ ['--accent' as string]: LIRIS.accent }} aria-hidden />
+            <span>
+              {lp.location.name} · {lp.location.region}
+            </span>
+            <span className="journal-place-state tabular-nums">
+              {lp.found} of {lp.total}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </article>
+  )
+}
+
 export function JournalUI() {
   const open = useExperience((s) => s.journal)
   const setJournal = useExperience((s) => s.setJournal)
@@ -105,6 +154,8 @@ export function JournalUI() {
   const fragments = useMemo(() => unlockedFragments(states).slice().reverse(), [states])
   const sorted = useMemo(() => states.slice().sort((a, b) => ORDER[statusOf(a)] - ORDER[statusOf(b)]), [states])
   const complete = states.filter((s) => s.completedAt !== null).length
+  const visitedLiris = useExploration((s) => !!s.visited.liris)
+  const showSurvey = mapAccess(discovered).tessalyOpen || visitedLiris
 
   useEffect(() => {
     if (!open) return
@@ -143,6 +194,12 @@ export function JournalUI() {
             <ExpeditionEntry key={s.expedition.id} s={s} active={open} />
           ))}
         </section>
+
+        {showSurvey && (
+          <section aria-label="Surveys">
+            <SurveyEntry />
+          </section>
+        )}
 
         <section className="journal-records" aria-labelledby="journal-records-title">
           <h3 id="journal-records-title" className="journal-section-title">
