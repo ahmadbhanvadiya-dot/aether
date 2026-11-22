@@ -2,16 +2,17 @@ import { ArrowLeft, ChevronLeft, ChevronRight, CornerDownRight } from 'lucide-re
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { CATEGORIES, CATEGORY_ORDER, discoveriesAt, type Find } from '../data/discoveries'
 import { LOCATIONS } from '../data/locations'
-import { PLANET_BY_ID, PLANETS, type PlanetId } from '../data/planets'
+import { isElysWorld, PLANET_BY_ID, PLANETS, WORLD_BY_ID, type PlanetId } from '../data/planets'
+import { LIRIS } from '../data/tessaly'
 import { useThumbs } from '../scene/galaxy/Thumbnails'
 import { telemetry } from '../state/director'
 import { useExploration } from '../state/exploration'
-import { discoveryTimeline, formatWhen, systemProgress, type WorldProgress } from '../state/progress'
+import { formatWhen, fullTimeline, systemProgress, worldProgress, type WorldProgress } from '../state/progress'
 import { quality, useExperience } from '../state/useExperience'
 import { closeObservatory, exploreFromObservatory, relayoutObservatory, revisitDiscovery, stepObserved } from './observatoryDirector'
 import { CATEGORY_ICON, unknownName } from './ScannerUI'
 import { expeditionsFor } from '../data/expeditions'
-import { expeditionStates } from '../state/expeditions'
+import { expeditionStates, mapAccess } from '../state/expeditions'
 import { ObservatorySky } from './SimulationUI'
 import { FocusRecord, SearchSection } from './ObservatoryRecords'
 import { milestones } from '../state/catalog'
@@ -304,11 +305,14 @@ function ArchiveEntry({ d, at, accent, active }: { d: Find; at: number | undefin
             <span className="signal-dot" data-found style={{ ['--accent' as string]: accent }} aria-hidden />
             Discovered <time dateTime={when!.iso}>{when!.date}, {when!.time}</time>
           </p>
-          <button type="button" className="obs-entry-revisit quiet-button" onClick={() => revisitDiscovery(d.id)} tabIndex={active ? 0 : -1}>
-            <CornerDownRight size={13} strokeWidth={1.5} aria-hidden />
-            Revisit
-            <span className="sr-only"> {d.name}</span>
-          </button>
+          {/* Revisiting flies to the find; beyond Elys that is a transit, from the map. */}
+          {isElysWorld(d.planet) && (
+            <button type="button" className="obs-entry-revisit quiet-button" onClick={() => revisitDiscovery(d.id)} tabIndex={active ? 0 : -1}>
+              <CornerDownRight size={13} strokeWidth={1.5} aria-hidden />
+              Revisit
+              <span className="sr-only"> {d.name}</span>
+            </button>
+          )}
         </>
       ) : hidden ? (
         <>
@@ -386,8 +390,7 @@ export function ObservatoryUI() {
   }, [open, markSeen])
 
   const timelineEl = useRef<HTMLOListElement>(null)
-  // Elys's timeline only: finds beyond Elys (Liris) are not on it yet.
-  const hasTimeline = useMemo(() => discoveryTimeline(discovered).length > 0, [discovered])
+  const hasTimeline = Object.keys(discovered).length > 0
   useEffect(() => {
     const el = timelineEl.current
     if (!open || !el) return
@@ -441,8 +444,20 @@ export function ObservatoryUI() {
   }
 
   const progress = useMemo(() => systemProgress(discovered, visited), [discovered, visited])
-  const timeline = useMemo(() => discoveryTimeline(discovered), [discovered])
+  // Every world's finds, Elys's and Liris's, in the order they were made (Phase 11).
+  const timeline = useMemo(() => fullTimeline(discovered), [discovered])
   const world = progress.worlds.find((w) => w.planet.id === observed)!
+  // Phase 11: Liris, beyond Elys. Its row and archive appear once Tessaly is open or anything is known there.
+  const liris = useMemo(() => worldProgress(LIRIS, discovered, visited), [discovered, visited])
+  const showLiris = mapAccess(discovered).tessalyOpen || !!visited.liris || liris.found + liris.hiddenFound > 0
+  const [archiveLiris, setArchiveLiris] = useState(false)
+  // Selecting a world on the dial (or stepping) brings the archive back to it.
+  const [archiveFor, setArchiveFor] = useState(observed)
+  if (observed !== archiveFor) {
+    setArchiveFor(observed)
+    setArchiveLiris(false)
+  }
+  const archive: WorldProgress<typeof LIRIS> = archiveLiris && showLiris ? liris : world
   const most = progress.mostExplored
   const expeditions = useMemo(() => expeditionStates(discovered), [discovered])
   const expeditionsDone = expeditions.filter((e) => e.completedAt !== null).length
@@ -594,12 +609,59 @@ export function ObservatoryUI() {
           </ol>
         </section>
 
+        {/* Phase 11: worlds beyond Elys. Not on the dial (that is Elys's sky); reached from the galaxy map. */}
+        {showLiris && (
+          <section id="obs-beyond" className="obs-section" aria-labelledby="obs-beyond-title">
+            <h2 id="obs-beyond-title" className="obs-section-title">
+              Beyond Elys
+            </h2>
+            <ol className="obs-worlds">
+              <li data-selected={archiveLiris || undefined}>
+                <button
+                  type="button"
+                  className="obs-world-row"
+                  onClick={() => {
+                    setArchiveLiris(true)
+                    scrollTo('obs-discoveries')
+                  }}
+                  tabIndex={open ? 0 : -1}
+                  aria-label={`Show the ${LIRIS.name} archive`}
+                >
+                  <span className="obs-portrait obs-portrait-liris" style={{ width: 64, height: 64 }} aria-hidden />
+                  <span className="obs-world-main">
+                    <span className="obs-world-name">{LIRIS.name}</span>
+                    <span className="obs-world-class">{LIRIS.classification} · Tessaly</span>
+                    <span className="obs-world-teaser">{LIRIS.teaser}</span>
+                  </span>
+                  <span className="obs-world-stat">
+                    <span className="obs-stat-label">Visited</span>
+                    <span>{liris.visitedAt ? formatWhen(liris.visitedAt).date : 'Not yet'}</span>
+                  </span>
+                  <span className="obs-world-stat">
+                    <span className="obs-stat-label">Explored</span>
+                    <span className="tabular-nums">{liris.percent}%</span>
+                  </span>
+                  <span className="obs-world-stat">
+                    <span className="obs-stat-label">Found</span>
+                    <span className="tabular-nums">
+                      {liris.found} of {liris.total}
+                      {liris.hiddenFound > 0 && <span className="obs-hidden-count"> +{liris.hiddenFound}</span>}
+                    </span>
+                  </span>
+                </button>
+                <p className="obs-beyond-note">Reached from the galaxy map</p>
+              </li>
+            </ol>
+          </section>
+        )}
+
         {/* The planet archives: everything found on the selected world, and what remains. */}
         <section id="obs-discoveries" className="obs-section" aria-labelledby="obs-disc-title">
           <h2 id="obs-disc-title" className="obs-section-title">
             Archives
           </h2>
           <p className="obs-section-note tabular-nums">
+            {showLiris && 'In the Aether system: '}
             {progress.found} of {progress.total} discoveries, {progress.hiddenFound} of {progress.hiddenTotal} hidden. Unscanned
             objects keep their secrets until you reach them.
           </p>
@@ -625,9 +687,12 @@ export function ObservatoryUI() {
                 key={w.planet.id}
                 type="button"
                 className="obs-archive-tab"
-                aria-pressed={w.planet.id === observed}
-                data-selected={w.planet.id === observed || undefined}
-                onClick={() => setObserved(w.planet.id)}
+                aria-pressed={w.planet.id === observed && !archiveLiris}
+                data-selected={(w.planet.id === observed && !archiveLiris) || undefined}
+                onClick={() => {
+                  setArchiveLiris(false)
+                  setObserved(w.planet.id)
+                }}
                 tabIndex={open ? 0 : -1}
                 style={{ ['--accent' as string]: w.planet.accent }}
               >
@@ -637,9 +702,25 @@ export function ObservatoryUI() {
                 </span>
               </button>
             ))}
+            {showLiris && (
+              <button
+                type="button"
+                className="obs-archive-tab"
+                aria-pressed={archiveLiris}
+                data-selected={archiveLiris || undefined}
+                onClick={() => setArchiveLiris(true)}
+                tabIndex={open ? 0 : -1}
+                style={{ ['--accent' as string]: LIRIS.accent }}
+              >
+                {LIRIS.name}
+                <span className="tabular-nums">
+                  {liris.found}/{liris.total}
+                </span>
+              </button>
+            )}
           </div>
-          <div role="region" aria-label={`${world.planet.name} archive`}>
-            {world.locations.map((lp) => (
+          <div role="region" aria-label={`${archive.planet.name} archive`}>
+            {archive.locations.map((lp) => (
               <div key={lp.location.id} className="obs-collection-world">
                 <h3 className="obs-collection-name">
                   {lp.location.name}
@@ -649,7 +730,7 @@ export function ObservatoryUI() {
                 </h3>
                 <ul className="obs-collection">
                   {discoveriesAt(lp.location.id).map((d) => (
-                    <ArchiveEntry key={d.id} d={d} at={discovered[d.id]} accent={world.planet.accent} active={open} />
+                    <ArchiveEntry key={d.id} d={d} at={discovered[d.id]} accent={archive.planet.accent} active={open} />
                   ))}
                 </ul>
               </div>
@@ -678,7 +759,7 @@ export function ObservatoryUI() {
                 if (m) {
                   const when = formatWhen(m.at)
                   return (
-                    <li key={m.id} className="obs-event" data-milestone style={{ ['--accent' as string]: m.planet ? PLANET_BY_ID[m.planet].accent : 'var(--color-violet)' }}>
+                    <li key={m.id} className="obs-event" data-milestone style={{ ['--accent' as string]: m.planet ? WORLD_BY_ID[m.planet].accent : 'var(--color-violet)' }}>
                       <time className="obs-event-when tabular-nums" dateTime={when.iso}>
                         <span>{when.date}</span>
                         <span>{when.time}</span>

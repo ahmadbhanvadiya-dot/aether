@@ -2148,10 +2148,33 @@ The proposal (`docs/proposals/phase-11-beyond-the-system.md`) is updated to matc
   - Expedition II only: *An unresolved double star*, *Not yet reachable*, no Travel.
   - No errors. Test progress cleared afterwards.
 
+### Liris in the Observatory and the Journal (11c, fifth stage)
+
+- **The Observatory stays Elys's room:** its dial, sky, totals (*of 54*), categories
+  and search are Elys's, and it opens only at Elys. Liris joins it where a record
+  of everything belongs, once Tessaly is open or anything is known there:
+  - **Beyond Elys:** a row for Liris under the six worlds (a lit disc in its
+    colours, since it has no rendered thumbnail), with visited, explored and found;
+    *Reached from the galaxy map*. Selecting it opens its archive.
+  - **Archives:** a LIRIS tab beside the six. Its three places and finds, unscanned
+    ones redacted as on Elys; no *Revisit* (that is a transit, from the map).
+    Selecting a world on the dial brings the archive back to it. The totals line
+    says *In the Aether system:* while Liris is shown.
+  - **Timeline:** every world's finds (`fullTimeline`), so Liris's appear in order,
+    and the milestones *First landing on LIRIS* and *LIRIS fully explored*.
+- **The Journal** opens in Tessaly too (HUD button; `J` already did). A **Survey**
+  entry for Liris sits after the expeditions: landed or not, *n of 9* (and hidden),
+  its three places with their counts. Not an expedition: no story gates it.
+- **Verified in the dev build:** with Expedition III, a Liris landing and three
+  Liris finds seeded: Beyond Elys row, LIRIS archive (three found, no Revisit),
+  timeline with the landing milestone and the finds, Elys's totals unchanged
+  (*In the Aether system: 9 of 54*), the survey in the Journal, the Journal in
+  Tessaly. A new player sees the Observatory as before. No errors.
+
 ### Not built yet (Phase 11, next)
 
 - **11c, remaining stages:**
-  - Liris in the Observatory and the journal (its own archive and record);
+  - Liris in the Observatory's search;
   - drawn double shadows, and a palette of its own (Liris uses the terrestrial
     recipe with its own seed, colours and atmosphere).
 - **11d–e:** deep‑space sites; expedition routes and unexplored regions on the map.

@@ -3595,3 +3595,21 @@ body {
     display: none;
   }
 }
+
+/* Phase 11: Liris has no rendered thumbnail (it is not in Elys's scene); a lit disc in its colours. */
+.obs-portrait-liris {
+  border-radius: 999px;
+  background:
+    radial-gradient(circle at 34% 30%, #fff3ea 0%, #c8b2ff 26%, #5a4e8a 58%, #1a1638 82%),
+    #1a1638;
+  box-shadow:
+    0 0 0 1px rgb(200 178 255 / 0.35),
+    0 0 18px rgb(185 164 255 / 0.35);
+}
+
+.obs-beyond-note {
+  font-size: 0.8125rem;
+  color: var(--color-haze, #8a93b8);
+  padding-inline: 1rem;
+  align-self: center;
+}

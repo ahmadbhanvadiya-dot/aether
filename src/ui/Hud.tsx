@@ -157,7 +157,7 @@ export function Hud() {
         data-reveal
         data-hud
       >
-        {(canObserve || inObservatory) && (
+        {(inGalaxy || onSurface || inObservatory) && (
           <button
             type="button"
             className="quiet-button ui-hideable px-3"
