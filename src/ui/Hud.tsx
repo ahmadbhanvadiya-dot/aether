@@ -6,7 +6,7 @@ import { sound } from '../audio/sound'
 import { openObservatory } from './observatoryDirector'
 import { WORLD_BY_ID } from '../data/planets'
 import { expeditionStates, unlockedFragments } from '../state/expeditions'
-import { discoveredCount, hiddenCount, TOTAL_DISCOVERIES, useExploration } from '../state/exploration'
+import { discoveredCount, hiddenCount, PER_WORLD, TOTAL_DISCOVERIES, useExploration } from '../state/exploration'
 import { quality, useExperience, type Phase } from '../state/useExperience'
 
 const STATUS: Record<Phase, string> = {
@@ -99,8 +99,8 @@ export function Hud() {
   const inGalaxy = phase === 'galaxy'
   const onSurface = phase === 'surface'
   const inObservatory = phase === 'observatory'
-  // Discovery counts are Elys's; elsewhere they wait for that system's own record.
-  const showTotal = (inGalaxy || onSurface || inObservatory) && atElys
+  // Elys's counts at Elys; in Tessaly, Liris's own (Phase 11).
+  const showTotal = inGalaxy || onSurface || inObservatory
   const canObserve = (inGalaxy || onSurface) && atElys
   const hint = motionPaused
     ? 'Motion paused'
@@ -108,10 +108,6 @@ export function Hud() {
       ? quality.coarse
         ? 'Tap a world on the dial'
         : 'Select a world on the dial'
-      : onSurface && !atElys
-      ? quality.coarse
-        ? 'Drag to look around'
-        : 'Drag to look around, use the arrows to travel'
       : onSurface
       ? signalFound
         ? quality.coarse
@@ -265,7 +261,13 @@ export function Hud() {
           {status}
         </span>
         <Readout />
-        {showTotal && (
+        {showTotal && !atElys && (
+          <span className="tabular-nums">
+            {discoveredCount(discovered, 'liris')} of {PER_WORLD} discoveries on {WORLD_BY_ID.liris.name}
+            {hiddenCount(discovered, 'liris') > 0 && <>, {hiddenCount(discovered, 'liris')} hidden</>}
+          </span>
+        )}
+        {showTotal && atElys && (
           <span className="tabular-nums">
             {discoveredCount(discovered)} of {TOTAL_DISCOVERIES} discoveries
             {hiddenCount(discovered) > 0 && <>, {hiddenCount(discovered)} hidden</>}

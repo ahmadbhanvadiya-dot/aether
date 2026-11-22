@@ -6,7 +6,7 @@ import gsap from 'gsap'
 import { useEffect, useMemo } from 'react'
 import { MathUtils, PerspectiveCamera, Vector3 } from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
-import { WORLD_BY_ID, type WorldId } from '../../data/planets'
+import { WORLD_BY_ID, type PlanetId, type WorldId } from '../../data/planets'
 import { director, telemetry } from '../../state/director'
 import { galaxy } from '../../state/galaxy'
 import { useExperience } from '../../state/useExperience'
@@ -576,7 +576,8 @@ export function GalaxyRig() {
       projected.set(0, 0, 0).project(camera)
       o.ox = (projected.x * 0.5 + 0.5) * size.width
       o.oy = (-projected.y * 0.5 + 0.5) * size.height
-      for (const id of Object.keys(galaxy.positions) as WorldId[]) {
+      // The chart is Elys's six (galaxy.positions also holds Liris since Phase 11).
+      for (const id of Object.keys(o.worlds) as PlanetId[]) {
         projected.copy(galaxy.positions[id]).project(camera)
         const w = o.worlds[id]
         w.x = (projected.x * 0.5 + 0.5) * size.width

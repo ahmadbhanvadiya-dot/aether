@@ -1,9 +1,9 @@
 import { Landmark, Leaf, Mountain, Sparkle, Wind, X, type LucideIcon } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { CATEGORIES, DISCOVERY_BY_ID, discoveriesAt, type Category, type DiscoveryData } from '../data/discoveries'
+import { CATEGORIES, FIND_BY_ID, discoveriesAt, type Category, type Find } from '../data/discoveries'
 import { expeditionsFor } from '../data/expeditions'
-import { LOCATION_BY_ID } from '../data/locations'
-import { PLANET_BY_ID } from '../data/planets'
+import { PLACE_BY_ID } from '../data/locations'
+import { WORLD_BY_ID } from '../data/planets'
 import { scanFx } from '../scene/motion'
 import { telemetry } from '../state/director'
 import { useExploration } from '../state/exploration'
@@ -27,7 +27,7 @@ export const CATEGORY_ICON: Record<Category, LucideIcon> = {
 }
 
 /** What the visitor may know about a discovery before it is found. */
-export function unknownName(d: DiscoveryData) {
+export function unknownName(d: Find) {
   return d.kind === 'signal' ? 'Unidentified signal' : d.kind === 'secret' ? 'Hidden object' : 'Unidentified object'
 }
 
@@ -44,7 +44,7 @@ export function useScannable(location: string | null) {
   )
 }
 
-function Marker({ d, found, active }: { d: DiscoveryData; found: boolean; active: boolean }) {
+function Marker({ d, found, active }: { d: Find; found: boolean; active: boolean }) {
   const el = useRef<HTMLButtonElement>(null)
   useEffect(() => {
     let raf = 0
@@ -125,7 +125,7 @@ function ScanRing() {
     return () => cancelAnimationFrame(raf)
   }, [scanning])
 
-  const d = id ? DISCOVERY_BY_ID[id] : null
+  const d = id ? FIND_BY_ID[id] : null
   return (
     <div ref={root} className="scan-ring" data-done={done || undefined} aria-hidden style={{ opacity: 0 }}>
       <svg viewBox="-70 -70 140 140" className="scan-ring-svg">
@@ -159,11 +159,11 @@ function DiscoveryCard() {
   const [last, setLast] = useState<string | null>(null)
   if (card && card !== last) setLast(card)
   const id = card ?? last
-  const d = id ? DISCOVERY_BY_ID[id] : null
+  const d = id ? FIND_BY_ID[id] : null
   if (!d) return <aside className="discovery-card" aria-hidden />
 
   const at = discovered[d.id]
-  const world = PLANET_BY_ID[d.planet]
+  const world = WORLD_BY_ID[d.planet]
   const progress = worldProgress(world, discovered, visited)
   const Icon = CATEGORY_ICON[d.category]
   const isNew = !!at && openedAt - at < 15000
@@ -190,7 +190,7 @@ function DiscoveryCard() {
         <div>
           <dt>Where</dt>
           <dd>
-            {LOCATION_BY_ID[d.location].name}, {world.name}
+            {PLACE_BY_ID[d.location].name}, {world.name}
           </dd>
         </div>
         <div>
@@ -208,7 +208,7 @@ function DiscoveryCard() {
         </p>
       ))}
       <p className="discovery-card-archive tabular-nums">
-        Saved to the {world.name} archive · {progress.found} of {progress.total} found on {world.name}
+        {d.planet === 'liris' ? `Recorded on ${world.name}` : `Saved to the ${world.name} archive`} · {progress.found} of {progress.total} found on {world.name}
         {progress.hiddenFound > 0 && `, ${progress.hiddenFound} hidden`}
       </p>
       <button type="button" className="discovery-card-close quiet-button" onClick={closeCard} tabIndex={card ? 0 : -1}>
@@ -233,7 +233,7 @@ export function ScannerUI() {
       </div>
       <ScanRing />
       <p className="sr-only" role="status">
-        {scanning ? `Scanning ${unknownName(DISCOVERY_BY_ID[scanning]).toLowerCase()}…` : ''}
+        {scanning ? `Scanning ${unknownName(FIND_BY_ID[scanning]).toLowerCase()}…` : ''}
       </p>
       <DiscoveryCard />
     </>

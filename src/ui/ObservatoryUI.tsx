@@ -1,6 +1,6 @@
 import { ArrowLeft, ChevronLeft, ChevronRight, CornerDownRight } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { CATEGORIES, CATEGORY_ORDER, discoveriesAt, type DiscoveryData } from '../data/discoveries'
+import { CATEGORIES, CATEGORY_ORDER, discoveriesAt, type Find } from '../data/discoveries'
 import { LOCATIONS } from '../data/locations'
 import { PLANET_BY_ID, PLANETS, type PlanetId } from '../data/planets'
 import { useThumbs } from '../scene/galaxy/Thumbnails'
@@ -280,7 +280,7 @@ function Reading({ world, active }: { world: WorldProgress; active: boolean }) {
 }
 
 /** One discovery in a planet archive: its record once found; only what is safe to know before. */
-function ArchiveEntry({ d, at, accent, active }: { d: DiscoveryData; at: number | undefined; accent: string; active: boolean }) {
+function ArchiveEntry({ d, at, accent, active }: { d: Find; at: number | undefined; accent: string; active: boolean }) {
   const Icon = CATEGORY_ICON[d.category]
   const when = at ? formatWhen(at) : null
   const hidden = d.kind === 'secret'
@@ -386,7 +386,8 @@ export function ObservatoryUI() {
   }, [open, markSeen])
 
   const timelineEl = useRef<HTMLOListElement>(null)
-  const hasTimeline = Object.keys(discovered).length > 0
+  // Elys's timeline only: finds beyond Elys (Liris) are not on it yet.
+  const hasTimeline = useMemo(() => discoveryTimeline(discovered).length > 0, [discovered])
   useEffect(() => {
     const el = timelineEl.current
     if (!open || !el) return

@@ -7,9 +7,10 @@ import {
   TOTAL_DISCOVERIES,
   type Category,
   type DiscoveryData,
+  type Find,
 } from '../data/discoveries'
 import { LOCATION_BY_ID, locationsFor, type LocationData, type Place } from '../data/locations'
-import { PLANET_BY_ID, PLANETS, type PlanetData, type PlanetId } from '../data/planets'
+import { PLANET_BY_ID, PLANETS, type PlanetData, type PlanetId, type WorldData, type WorldId } from '../data/planets'
 
 /**
  * Pure derivations of progress from the exploration store. Every number the
@@ -28,8 +29,8 @@ export interface LocationProgress<L extends Place = LocationData> {
   lastAt: number
 }
 
-export interface WorldProgress {
-  planet: PlanetData
+export interface WorldProgress<W extends WorldData = PlanetData> {
+  planet: W
   found: number
   total: number
   /** 0–100, rounded, over the visible discoveries. */
@@ -39,7 +40,7 @@ export interface WorldProgress {
   visitedAt: number | null
   /** Most recent discovery on this world, for tie-breaking. */
   lastFoundAt: number
-  locations: LocationProgress[]
+  locations: LocationProgress<Place>[]
 }
 
 export interface DiscoveryEntry {
@@ -66,7 +67,7 @@ export interface SystemProgress {
 
 type Found = Record<string, number>
 
-const isFound = (discovered: Found, d: DiscoveryData) => !!discovered[d.id]
+const isFound = (discovered: Found, d: Find) => !!discovered[d.id]
 
 export function locationProgress<L extends Place>(location: L, discovered: Found): LocationProgress<L> {
   const here = discoveriesAt(location.id)
@@ -81,11 +82,11 @@ export function locationProgress<L extends Place>(location: L, discovered: Found
   }
 }
 
-export function worldProgress(
-  planet: PlanetData,
+export function worldProgress<W extends WorldData>(
+  planet: W,
   discovered: Found,
-  visited: Partial<Record<PlanetId, number>>,
-): WorldProgress {
+  visited: Partial<Record<WorldId, number>>,
+): WorldProgress<W> {
   const all = discoveriesFor(planet.id)
   const visible = all.filter((d) => d.kind !== 'secret')
   const hidden = all.filter((d) => d.kind === 'secret')

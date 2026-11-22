@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { sound } from '../audio/sound'
 import { CATEGORIES } from '../data/discoveries'
 import { locationsFor, PLACE_BY_ID } from '../data/locations'
-import { isElysWorld, PLANET_BY_ID, WORLD_BY_ID } from '../data/planets'
+import { WORLD_BY_ID } from '../data/planets'
 import { surfaceCam } from '../scene/surface/SurfaceRig'
 import { discoveredCount, hiddenCount, useExploration } from '../state/exploration'
 import { locationProgress, worldProgress } from '../state/progress'
@@ -190,8 +190,7 @@ export function ExploreUI() {
   const locs = exploring ? locationsFor(exploring) : []
   const world = exploring ? WORLD_BY_ID[exploring] : null
   const signalFound = loc ? !!discovered[loc.id] : false
-  // Discovery progress is Elys's; Liris's ground is uncharted for now (Phase 11).
-  const progress = exploring && isElysWorld(exploring) ? worldProgress(PLANET_BY_ID[exploring], discovered, visited) : null
+  const progress = world ? worldProgress(world, discovered, visited) : null
 
   return (
     <>
@@ -235,9 +234,7 @@ export function ExploreUI() {
                 {progress.found} of {progress.total} discoveries on {world.name}
                 {progress.hiddenFound > 0 && `, ${progress.hiddenFound} hidden`}
               </p>
-            ) : (
-              <p className="text-[0.8125rem] text-haze">First landing on {world.name}. Nothing here is charted yet.</p>
-            )}
+            ) : null}
           </aside>
         )}
 
@@ -277,8 +274,7 @@ export function ExploreUI() {
         </nav>
 
         <ScannerUI />
-        {/* Nothing to scan beyond Elys yet (Phase 11). */}
-        {exploring && isElysWorld(exploring) && <ScanGuide onSurface={onSurface} />}
+        <ScanGuide onSurface={onSurface} />
         <DiscoveryNotice />
       </div>
     </>

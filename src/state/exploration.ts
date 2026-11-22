@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware'
-import { DISCOVERY_BY_ID, HIDDEN, TOTAL_DISCOVERIES, VISIBLE } from '../data/discoveries'
+import { discoveriesFor, FIND_BY_ID, HIDDEN, TOTAL_DISCOVERIES, VISIBLE } from '../data/discoveries'
 import { LOCATION_BY_ID } from '../data/locations'
 import type { PlanetId, WorldId } from '../data/planets'
 
@@ -80,7 +80,7 @@ export const useExploration = create<ExplorationState>()(
       setVolume: (v) => set({ volume: Math.max(0, Math.min(1, v)) }),
       discover: (id) => {
         // Only catalogued discoveries, and each only once.
-        if (!DISCOVERY_BY_ID[id] || get().discovered[id]) return false
+        if (!FIND_BY_ID[id] || get().discovered[id]) return false
         set((s) => ({ discovered: { ...s.discovered, [id]: Date.now() } }))
         return true
       },
@@ -130,12 +130,15 @@ export const useExploration = create<ExplorationState>()(
 )
 
 /** Visible discoveries found (on one world, or everywhere). Hidden ones are counted by `hiddenCount`. */
-export function discoveredCount(discovered: Record<string, number>, planet?: PlanetId) {
-  return VISIBLE.filter((d) => (!planet || d.planet === planet) && discovered[d.id]).length
+/** Found and visible: Elys's in all (no world given), or one world's, Elys's or beyond. */
+export function discoveredCount(discovered: Record<string, number>, planet?: WorldId) {
+  const list = planet ? discoveriesFor(planet).filter((d) => d.kind !== 'secret') : VISIBLE
+  return list.filter((d) => discovered[d.id]).length
 }
 
-export function hiddenCount(discovered: Record<string, number>, planet?: PlanetId) {
-  return HIDDEN.filter((d) => (!planet || d.planet === planet) && discovered[d.id]).length
+export function hiddenCount(discovered: Record<string, number>, planet?: WorldId) {
+  const list = planet ? discoveriesFor(planet).filter((d) => d.kind === 'secret') : HIDDEN
+  return list.filter((d) => discovered[d.id]).length
 }
 
 /** Visible discoveries per world (the same on every world). */

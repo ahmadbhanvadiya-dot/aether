@@ -101,7 +101,7 @@ function InfoPanel({ focus }: { focus: WorldId | null }) {
   const open = focus !== null
   const discovered = useExploration((s) => s.discovered)
   const elys = !id || isElysWorld(id)
-  const found = id && isElysWorld(id) ? discoveredCount(discovered, id) : 0
+  const found = id ? discoveredCount(discovered, id) : 0
   const aside = useRef<HTMLElement>(null)
 
   // Every time the panel opens, start at the top (a focused button can leave it scrolled).
@@ -139,7 +139,7 @@ function InfoPanel({ focus }: { focus: WorldId | null }) {
               Explore {data.name}
             </button>
             <span className="text-[0.8125rem] text-haze tabular-nums">
-              {!elys ? 'Uncharted' : found === 0 ? `${PER_WORLD} discoveries await` : `${found} of ${PER_WORLD} discoveries`}
+              {found === 0 ? `${PER_WORLD} discoveries await` : `${found} of ${PER_WORLD} discoveries`}
             </span>
           </div>
           <div className="world-panel-actions">

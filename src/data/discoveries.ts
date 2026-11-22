@@ -1,4 +1,4 @@
-import { LOCATION_BY_ID, LOCATIONS } from './locations'
+import { LIRIS_LOCATIONS, LOCATION_BY_ID, LOCATIONS, PLACE_BY_ID } from './locations'
 import { PLANETS, type PlanetId, type WorldId } from './planets'
 
 /**
@@ -41,10 +41,10 @@ export interface Placement {
   elev?: number
 }
 
-export interface DiscoveryData {
+export interface DiscoveryData<P extends WorldId = PlanetId> {
   id: string
   kind: DiscoveryKind
-  planet: PlanetId
+  planet: P
   location: string
   name: string
   category: Category
@@ -511,6 +511,125 @@ export const VISIBLE = DISCOVERIES.filter((d) => d.kind !== 'secret')
 export const HIDDEN = DISCOVERIES.filter((d) => d.kind === 'secret')
 export const TOTAL_DISCOVERIES = VISIBLE.length
 
-/** A world's discoveries (none yet beyond Elys). */
-export const discoveriesFor = (planet: WorldId) => DISCOVERIES.filter((d) => d.planet === planet)
-export const discoveriesAt = (location: string) => DISCOVERIES.filter((d) => d.location === location)
+// ---------------------------------------------------------------------------
+// Phase 11: Liris, under Tessaly's two suns. Its own catalogue, the same shape as
+// an Elys world (three signals, six points of interest, one hidden find), kept
+// apart so Elys's 54 and every Elys total and timeline stay Elys's.
+
+/** A discovery on any world (Elys's or beyond). */
+export type Find = DiscoveryData<WorldId>
+
+const LIRIS_SIGNAL: Record<string, Category> = {
+  'liris-twofold-shore': 'structure',
+  'liris-long-noon': 'life',
+  'liris-between-days': 'anomaly',
+}
+
+const LIRIS_POIS: Record<string, Entry[]> = {
+  'liris-twofold-shore': [
+    {
+      key: 'two-coloured-sands',
+      name: 'The two-coloured sands',
+      category: 'geology',
+      description:
+        'Every grain on the beach is faceted. Turned to one sun it shows blue, to the other amber, so the shore changes colour with each step.',
+      placement: { bearing: -0.4, distance: 60, rise: 0.5 },
+    },
+    {
+      key: 'bay-skimmers',
+      name: 'Bay skimmers',
+      category: 'life',
+      description:
+        'Flat, glassy creatures riding the surface of the bay, each tilted toward whichever sun is lower. At the double sunset the whole bay turns.',
+      placement: { bearing: 0.5, distance: 140, rise: 1 },
+    },
+  ],
+  'liris-long-noon': [
+    {
+      key: 'twin-halos',
+      name: 'The twin halos',
+      category: 'atmosphere',
+      description:
+        'Ice high in the air rings each sun with its own halo. Where the two rings cross, a third, brighter arc appears.',
+      placement: { bearing: 2.6, distance: 1400, elev: 0.7 },
+    },
+    {
+      key: 'wandering-stones',
+      name: 'Wandering stones',
+      category: 'geology',
+      description:
+        'Boulders on the steppe leave long trails behind them. They move two ways in a day, pushed by the frost that each sun melts in turn.',
+      placement: { bearing: -0.6, distance: 120, rise: 1 },
+    },
+  ],
+  'liris-between-days': [
+    {
+      key: 'amber-curtain',
+      name: 'The amber curtain',
+      category: 'atmosphere',
+      description:
+        'In the short dusk a pale amber glow hangs over the peaks: the gold sun’s wind meeting the air, seen only while the white sun is down.',
+      placement: { bearing: -0.35, distance: 1200, elev: 0.35 },
+    },
+    {
+      key: 'paired-cairns',
+      name: 'Paired cairns',
+      category: 'structure',
+      description:
+        'Cairns built in pairs along the ridge, one facing each sun. No one knows who built them, or which sun they were built to watch.',
+      placement: { bearing: 0.55, distance: 160, rise: 8 },
+    },
+  ],
+}
+
+const LIRIS_SECRET: Entry & { location: string } = {
+  key: 'third-shadow',
+  location: 'liris-long-noon',
+  name: 'The third shadow',
+  category: 'anomaly',
+  description:
+    'Once a year the suns line up and the arch casts a single shadow. For a few minutes a third shadow falls behind it, pointing at nothing in the sky.',
+  lead: 'Herders on the steppe say the arch has one shadow too many. Turn your back on the suns.',
+  placement: { bearing: Math.PI, distance: 90, rise: 2 },
+}
+
+function buildLiris(): DiscoveryData<'liris'>[] {
+  const out: DiscoveryData<'liris'>[] = []
+  for (const loc of LIRIS_LOCATIONS) {
+    out.push({
+      id: loc.id,
+      kind: 'signal',
+      planet: 'liris',
+      location: loc.id,
+      name: loc.finding,
+      category: LIRIS_SIGNAL[loc.id],
+      description: loc.lore,
+    })
+    for (const { key, ...e } of LIRIS_POIS[loc.id] ?? []) {
+      out.push({ ...e, id: `${loc.id}.${key}`, kind: 'poi', planet: 'liris', location: loc.id })
+    }
+  }
+  const { key, location, ...e } = LIRIS_SECRET
+  out.push({ ...e, id: `${location}.${key}`, kind: 'secret', planet: 'liris', location })
+  return out
+}
+
+export const LIRIS_DISCOVERIES = buildLiris()
+
+/** Every discovery on every world: the scanner and the surface read these. */
+export const ALL_FINDS: Find[] = [...DISCOVERIES, ...LIRIS_DISCOVERIES]
+export const FIND_BY_ID: Record<string, Find> = Object.fromEntries(ALL_FINDS.map((d) => [d.id, d]))
+
+if (import.meta.env.DEV) {
+  if (Object.keys(FIND_BY_ID).length !== ALL_FINDS.length) throw new Error('Duplicate discovery id')
+  for (const d of LIRIS_DISCOVERIES) if (!PLACE_BY_ID[d.location]) throw new Error(`Unknown place for ${d.id}`)
+}
+
+/** A world's discoveries, Elys's or beyond. */
+export function discoveriesFor(planet: PlanetId): DiscoveryData[]
+export function discoveriesFor(planet: WorldId): Find[]
+export function discoveriesFor(planet: WorldId): Find[] {
+  return (planet === 'liris' ? LIRIS_DISCOVERIES : DISCOVERIES).filter((d) => d.planet === planet)
+}
+/** The discoveries at one place, Elys's or beyond. */
+export const discoveriesAt = (location: string): Find[] => ALL_FINDS.filter((d) => d.location === location)
