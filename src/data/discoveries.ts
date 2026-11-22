@@ -1,5 +1,5 @@
 import { LOCATION_BY_ID, LOCATIONS } from './locations'
-import { PLANETS, type PlanetId } from './planets'
+import { PLANETS, type PlanetId, type WorldId } from './planets'
 
 /**
  * Phase 6: the catalogue of everything that can be found. One static list,
@@ -511,5 +511,6 @@ export const VISIBLE = DISCOVERIES.filter((d) => d.kind !== 'secret')
 export const HIDDEN = DISCOVERIES.filter((d) => d.kind === 'secret')
 export const TOTAL_DISCOVERIES = VISIBLE.length
 
-export const discoveriesFor = (planet: PlanetId) => DISCOVERIES.filter((d) => d.planet === planet)
+/** A world's discoveries (none yet beyond Elys). */
+export const discoveriesFor = (planet: WorldId) => DISCOVERIES.filter((d) => d.planet === planet)
 export const discoveriesAt = (location: string) => DISCOVERIES.filter((d) => d.location === location)

@@ -21,8 +21,8 @@ import {
   type BufferGeometry as BG,
 } from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
-import { SURFACES, type LocationData, type SurfaceSettings } from '../../data/locations'
-import type { PlanetId } from '../../data/planets'
+import { SURFACES, type Place, type SurfaceSettings } from '../../data/locations'
+import { isElysWorld, type WorldId } from '../../data/planets'
 import { director } from '../../state/director'
 import { useExploration } from '../../state/exploration'
 import { quality, useExperience } from '../../state/useExperience'
@@ -92,7 +92,7 @@ function gridGeometry(rings: number, segments: number, first: number, ratio: num
 
 /** Mounts the surface of the world being explored (from descent to ascent). */
 /** Loaded on demand (see ./lazy.ts); mounted by SurfaceSpace in Experience. */
-export default function SurfaceScene({ planet }: { planet: PlanetId }) {
+export default function SurfaceScene({ planet }: { planet: WorldId }) {
   const s = useMemo(() => prepareSurface(planet), [planet])
   const settings = SURFACES[planet]
   const group = useRef<Group>(null)
@@ -111,7 +111,11 @@ export default function SurfaceScene({ planet }: { planet: PlanetId }) {
   }, [settings, s])
 
   // LIVE_OCT: noise octaves for the Phase 7 cloud shadows (one fewer on the low tier).
-  const defines = useMemo(() => ({ SEED: `${settings.seed}u`, SKIND: KIND_IDS[settings.kind], LIVE_OCT: HIGH ? 3 : 2 }), [settings])
+  // SUN2: a second sun's paths (Liris), compiled only where there is one (Phase 11).
+  const defines = useMemo(
+    () => ({ SEED: `${settings.seed}u`, SKIND: KIND_IDS[settings.kind], LIVE_OCT: HIGH ? 3 : 2, ...(settings.twoSuns ? { SUN2: 1 } : {}) }),
+    [settings],
+  )
 
   // Compile every surface program now (during the descent), not on first view.
   useEffect(() => {
@@ -128,7 +132,7 @@ export default function SurfaceScene({ planet }: { planet: PlanetId }) {
       })
       applyEnv(uniforms, env)
       // The sky's moons stand where the simulation has them (after the sun is set).
-      const covered = placeMoons(uniforms, planet, sim.day, settings.moons)
+      const covered = isElysWorld(planet) ? placeMoons(uniforms, planet, sim.day, settings.moons) : 0
       // An eclipse seen from the ground: the light falls with the covered part of Elys.
       if (covered > 0) uniforms.uSunColor.value.multiplyScalar(1 - 0.88 * covered)
     }
@@ -145,7 +149,8 @@ export default function SurfaceScene({ planet }: { planet: PlanetId }) {
       {s.locations.map((l) => (
         <Landmark key={l.id} loc={l} uniforms={uniforms} defines={defines} settings={settings} />
       ))}
-      <Signal settings={settings} />
+      {/* Liris has no signals yet (its discoveries come with its expedition). */}
+      {isElysWorld(planet) && <Signal settings={settings} />}
       <ScanTargets planet={planet} />
     </group>
   )
@@ -498,7 +503,7 @@ function jitter(geometry: BG, amount: number, rand: () => number) {
   return geometry
 }
 
-function buildSpires(planet: PlanetId, scale: number, rand: () => number) {
+function buildSpires(planet: WorldId, scale: number, rand: () => number) {
   const parts: BG[] = []
   const salt = planet === 'solara'
   const stacks = planet === 'aurelis'
@@ -534,7 +539,7 @@ function buildSpires(planet: PlanetId, scale: number, rand: () => number) {
   return merged
 }
 
-function buildMonolith(planet: PlanetId, scale: number) {
+function buildMonolith(planet: WorldId, scale: number) {
   let g: BG
   if (planet === 'solara') {
     g = new CylinderGeometry(1.4, 2.6, 26, 4, 1)
@@ -570,13 +575,14 @@ function buildVent(scale: number) {
   return g
 }
 
-const LANDMARK_LOOK: Record<PlanetId, { glow: number; seam: number }> = {
+const LANDMARK_LOOK: Record<WorldId, { glow: number; seam: number }> = {
   aurelis: { glow: 0.35, seam: 1 },
   nyx: { glow: 1, seam: 1 },
   solara: { glow: 0.3, seam: 0.6 },
   vesper: { glow: 0.5, seam: 0 },
   thalassa: { glow: 0.2, seam: 0 },
   orion: { glow: 0.4, seam: 0 },
+  liris: { glow: 0.4, seam: 0.5 },
 }
 
 function Landmark({
@@ -584,7 +590,7 @@ function Landmark({
   uniforms,
   defines,
   settings,
-}: MatProps & { loc: LocationData; settings: SurfaceSettings }) {
+}: MatProps & { loc: Place; settings: SurfaceSettings }) {
   const base = surface.landmarkBase[loc.id]
   const kind = loc.landmark.kind
 
@@ -633,16 +639,17 @@ function Landmark({
   )
 }
 
-const PLUME: Record<PlanetId, { color: string; opacity: number; height: number }> = {
+const PLUME: Record<WorldId, { color: string; opacity: number; height: number }> = {
   aurelis: { color: '#DDEBF5', opacity: 0.32, height: 40 },
   nyx: { color: '#9C7CFF', opacity: 0.6, height: 70 },
   solara: { color: '#F2C88C', opacity: 0.3, height: 40 },
   vesper: { color: '#E2D0FF', opacity: 0.3, height: 40 },
   thalassa: { color: '#C8D2DA', opacity: 0.34, height: 60 },
   orion: { color: '#FFE8CC', opacity: 0.3, height: 40 },
+  liris: { color: '#F2E6FF', opacity: 0.3, height: 40 },
 }
 
-function Plume({ planet, scale, height }: { planet: PlanetId; scale: number; height: number }) {
+function Plume({ planet, scale, height }: { planet: WorldId; scale: number; height: number }) {
   const dpr = useThree((st) => st.viewport.dpr)
   const { points, material } = useMemo(() => {
     const count = HIGH ? 220 : 110

@@ -1,4 +1,4 @@
-import type { LocationData, ShapeKind, SurfaceSettings } from '../../data/locations'
+import type { Place, ShapeKind, SurfaceSettings } from '../../data/locations'
 
 /**
  * Terrain height, implemented twice — GLSL for the GPU, TypeScript for the CPU —
@@ -170,7 +170,7 @@ export interface LocField {
   b: number
 }
 
-export function locFields(locations: LocationData[]): LocField[] {
+export function locFields(locations: Place[]): LocField[] {
   return locations.map((l) => ({
     cx: l.center[0],
     cz: l.center[1],

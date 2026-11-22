@@ -1,7 +1,7 @@
 import gsap from 'gsap'
 import { sound } from '../audio/sound'
-import { LOCATION_BY_ID, locationsFor } from '../data/locations'
-import { PLANET_BY_ID, type PlanetId } from '../data/planets'
+import { locationsFor, PLACE_BY_ID } from '../data/locations'
+import { isElysWorld, WORLD_BY_ID, type WorldId } from '../data/planets'
 import { beginGalaxyAscent, beginGalaxyDescent, primeGalaxyFocus } from '../scene/galaxy/GalaxyRig'
 import { atmosphereFx, climb, DURATION, entry, glide, signalFx } from '../scene/motion'
 import { loadSurfaceScene } from '../scene/surface/lazy'
@@ -51,8 +51,8 @@ function reduced() {
  * from orbit, deepening into the location's own sky (horizon and zenith), so
  * the colours on both sides of the space switch are the same.
  */
-function tintAtmosphere(planet: PlanetId, locationId: string) {
-  const p = PLANET_BY_ID[planet]
+function tintAtmosphere(planet: WorldId, locationId: string) {
+  const p = WORLD_BY_ID[planet]
   atmosphereFx.orbitLow.set(p.atmosphere.day)
   atmosphereFx.orbitHigh.set(p.atmosphere.night).multiplyScalar(0.5)
   const env = surface.envs[locationId]
@@ -81,7 +81,7 @@ export function showTitleCard(hold = 3.6) {
 }
 
 /** The first location with something still to find (else the first). */
-function firstLocationFor(planet: PlanetId) {
+function firstLocationFor(planet: WorldId) {
   const locs = locationsFor(planet)
   const found = useExploration.getState().discovered
   return (locs.find((l) => {
@@ -98,7 +98,7 @@ function firstLocationFor(planet: PlanetId) {
  * Descends to `planet`. Lands at `options.location` when given (Revisit), else
  * the first location with something left to find; `options.then` runs after landing.
  */
-export function startDescent(planet: PlanetId, options: { location?: string; then?: () => void } = {}) {
+export function startDescent(planet: WorldId, options: { location?: string; then?: () => void } = {}) {
   const st = useExperience.getState()
   if (st.phase !== 'galaxy' || st.focus !== planet) return
   sound.unlock()
@@ -108,7 +108,7 @@ export function startDescent(planet: PlanetId, options: { location?: string; the
   useExperience.setState({ detected: {} })
   afterLanding = options.then ?? null
   const first =
-    options.location && LOCATION_BY_ID[options.location]?.planet === planet ? options.location : firstLocationFor(planet)
+    options.location && PLACE_BY_ID[options.location]?.planet === planet ? options.location : firstLocationFor(planet)
   st.setLocation(first)
   st.setExploring(planet)
   st.setHovered(null)
@@ -314,9 +314,12 @@ export function stepLocation(direction: 1 | -1) {
 // ---------------------------------------------------------------------------
 
 export function jumpToLocation(id: string) {
-  const loc = LOCATION_BY_ID[id]
+  const loc = PLACE_BY_ID[id]
   if (!loc) return
   const st = useExperience.getState()
+  // Phase 11: the place's own system (Liris is Tessaly's).
+  const system = isElysWorld(loc.planet) ? 'elys' : 'tessaly'
+  if (st.activeSystem !== system) st.setActiveSystem(system)
   prepareSurface(loc.planet)
   resetScanner()
   director.space = 'surface'

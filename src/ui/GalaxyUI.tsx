@@ -1,7 +1,7 @@
 import { ChevronLeft, ChevronRight, Orbit, Undo2 } from 'lucide-react'
 import { useEffect, useRef } from 'react'
 import { planetFacts } from '../data/astronomy'
-import { ORDINALS, PLANET_BY_ID, PLANETS, type PlanetId } from '../data/planets'
+import { isElysWorld, ORDINALS, PLANETS, WORLD_BY_ID, type WorldId } from '../data/planets'
 import { telemetry } from '../state/director'
 import { discoveredCount, PER_WORLD, useExploration } from '../state/exploration'
 import { useExperience } from '../state/useExperience'
@@ -13,7 +13,7 @@ function HoverLabel() {
   const el = useRef<HTMLDivElement>(null)
   const hovered = useExperience((s) => s.hovered)
   const focus = useExperience((s) => s.focus)
-  const shown = hovered && hovered !== focus ? PLANET_BY_ID[hovered] : null
+  const shown = hovered && hovered !== focus ? WORLD_BY_ID[hovered] : null
 
   useEffect(() => {
     let raf = 0
@@ -90,17 +90,18 @@ function WorldIndex({ visible }: { visible: boolean }) {
 }
 
 /** Facts and story for the focused world. */
-function InfoPanel({ focus }: { focus: PlanetId | null }) {
+function InfoPanel({ focus }: { focus: WorldId | null }) {
   const stepFocus = useExperience((s) => s.stepFocus)
   const setFocus = useExperience((s) => s.setFocus)
-  const last = useRef<PlanetId | null>(null)
+  const last = useRef<WorldId | null>(null)
   if (focus) last.current = focus
   const id = focus ?? last.current
-  const data = id ? PLANET_BY_ID[id] : null
+  const data = id ? WORLD_BY_ID[id] : null
   const index = id ? PLANETS.findIndex((p) => p.id === id) : 0
   const open = focus !== null
   const discovered = useExploration((s) => s.discovered)
-  const found = id ? discoveredCount(discovered, id) : 0
+  const elys = !id || isElysWorld(id)
+  const found = id && isElysWorld(id) ? discoveredCount(discovered, id) : 0
   const aside = useRef<HTMLElement>(null)
 
   // Every time the panel opens, start at the top (a focused button can leave it scrolled).
@@ -112,7 +113,7 @@ function InfoPanel({ focus }: { focus: PlanetId | null }) {
     <aside ref={aside} className="world-panel ui-hideable" data-open={open || undefined} aria-hidden={!open} aria-live="polite">
       {data && (
         <div className="world-panel-body" key={data.id}>
-          <p className="text-[0.8125rem] text-haze">{ORDINALS[index]} world from Elys</p>
+          <p className="text-[0.8125rem] text-haze">{elys ? `${ORDINALS[index]} world from Elys` : 'The one world of Tessaly'}</p>
           <h2 className="world-panel-name">{data.name}</h2>
           <p className="flex items-center gap-2.5 text-[1.02rem] font-light text-starlight/85">
             <span className="h-1.5 w-1.5 rounded-full" style={{ background: data.accent, boxShadow: `0 0 10px ${data.accent}` }} aria-hidden />
@@ -138,30 +139,34 @@ function InfoPanel({ focus }: { focus: PlanetId | null }) {
               Explore {data.name}
             </button>
             <span className="text-[0.8125rem] text-haze tabular-nums">
-              {found === 0 ? `${PER_WORLD} discoveries await` : `${found} of ${PER_WORLD} discoveries`}
+              {!elys ? 'Uncharted' : found === 0 ? `${PER_WORLD} discoveries await` : `${found} of ${PER_WORLD} discoveries`}
             </span>
           </div>
           <div className="world-panel-actions">
-            <button
-              type="button"
-              className="quiet-button px-3"
-              onClick={() => stepFocus(-1)}
-              tabIndex={open ? 0 : -1}
-              aria-label="Previous world"
-              title="Previous world (←)"
-            >
-              <ChevronLeft size={16} strokeWidth={1.5} aria-hidden />
-            </button>
-            <button
-              type="button"
-              className="quiet-button px-3"
-              onClick={() => stepFocus(1)}
-              tabIndex={open ? 0 : -1}
-              aria-label="Next world"
-              title="Next world (→)"
-            >
-              <ChevronRight size={16} strokeWidth={1.5} aria-hidden />
-            </button>
+            {elys && (
+              <>
+                <button
+                  type="button"
+                  className="quiet-button px-3"
+                  onClick={() => stepFocus(-1)}
+                  tabIndex={open ? 0 : -1}
+                  aria-label="Previous world"
+                  title="Previous world (←)"
+                >
+                  <ChevronLeft size={16} strokeWidth={1.5} aria-hidden />
+                </button>
+                <button
+                  type="button"
+                  className="quiet-button px-3"
+                  onClick={() => stepFocus(1)}
+                  tabIndex={open ? 0 : -1}
+                  aria-label="Next world"
+                  title="Next world (→)"
+                >
+                  <ChevronRight size={16} strokeWidth={1.5} aria-hidden />
+                </button>
+              </>
+            )}
             <button
               type="button"
               className="quiet-button ml-auto px-4"
@@ -170,7 +175,7 @@ function InfoPanel({ focus }: { focus: PlanetId | null }) {
               title="Return to galaxy (Esc)"
             >
               <Orbit size={15} strokeWidth={1.5} aria-hidden />
-              Return to galaxy
+              {elys ? 'Return to galaxy' : 'Return to Tessaly'}
             </button>
           </div>
         </div>
@@ -198,6 +203,7 @@ function useGalaxyKeys(active: boolean) {
 export function GalaxyUI({ onReturnToVael }: { onReturnToVael: () => void }) {
   const phase = useExperience((s) => s.phase)
   const focus = useExperience((s) => s.focus)
+  const atElys = useExperience((s) => s.activeSystem) === 'elys'
   const inGalaxy = phase === 'galaxy'
   useGalaxyKeys(inGalaxy)
 
@@ -213,9 +219,9 @@ export function GalaxyUI({ onReturnToVael }: { onReturnToVael: () => void }) {
           left: 'calc(env(safe-area-inset-left) + var(--gutter) + 26px)',
         }}
         onClick={onReturnToVael}
-        tabIndex={inGalaxy && !focus ? 0 : -1}
-        inert={!inGalaxy || focus !== null}
-        data-hidden={!inGalaxy || focus !== null || undefined}
+        tabIndex={inGalaxy && !focus && atElys ? 0 : -1}
+        inert={!inGalaxy || focus !== null || !atElys}
+        data-hidden={!inGalaxy || focus !== null || !atElys || undefined}
       >
         <Undo2 size={15} strokeWidth={1.5} aria-hidden />
         {/* Icon only on phones: the top row is full there. */}
@@ -223,11 +229,12 @@ export function GalaxyUI({ onReturnToVael }: { onReturnToVael: () => void }) {
         <span className="sr-only sm:hidden">Return to Vael</span>
       </button>
 
-      <WorldIndex visible={inGalaxy && !focus} />
+      {/* Elys's worlds, sky events and the way back to Vael belong to Elys (Phase 11). */}
+      <WorldIndex visible={inGalaxy && !focus && atElys} />
       {/* Phase 9: the simulation clock, and what the sky is doing. */}
       <div className="sim-dock ui-hideable" data-visible={(inGalaxy && !focus) || undefined} inert={!inGalaxy || focus !== null}>
         <SimControls variant="galaxy" active={inGalaxy && !focus} />
-        <SkyLine />
+        {atElys && <SkyLine />}
       </div>
       <InfoPanel focus={inGalaxy ? focus : null} />
     </div>

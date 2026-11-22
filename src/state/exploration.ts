@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware'
 import { DISCOVERY_BY_ID, HIDDEN, TOTAL_DISCOVERIES, VISIBLE } from '../data/discoveries'
 import { LOCATION_BY_ID } from '../data/locations'
-import type { PlanetId } from '../data/planets'
+import type { PlanetId, WorldId } from '../data/planets'
 
 /**
  * The single source of truth for progress, persisted to localStorage:
@@ -40,7 +40,7 @@ interface ExplorationState {
   /** location id → timestamp of discovery */
   discovered: Record<string, number>
   /** world id → timestamp of the first landing on its surface */
-  visited: Partial<Record<PlanetId, number>>
+  visited: Partial<Record<WorldId, number>>
   /** When the Observatory was last opened (0 = never). Newer discoveries animate in. */
   observatorySeenAt: number
   soundOn: boolean
@@ -57,7 +57,7 @@ interface ExplorationState {
   /** Records a catalogued discovery. Returns true only the first time (never for unknown ids). */
   discover: (id: string) => boolean
   /** Records the first landing on a world. */
-  markVisited: (planet: PlanetId) => void
+  markVisited: (planet: WorldId) => void
   markObservatorySeen: () => void
   toggleSound: () => void
 }

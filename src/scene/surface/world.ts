@@ -1,7 +1,7 @@
 import { Vector3 } from 'three'
 import { discoveriesFor } from '../../data/discoveries'
-import { locationsFor, SURFACES, type LocationData, type SurfaceSettings } from '../../data/locations'
-import type { PlanetId } from '../../data/planets'
+import { locationsFor, SURFACES, type Place, type SurfaceSettings } from '../../data/locations'
+import type { WorldId } from '../../data/planets'
 import { cloneEnv, envFromLocation, type EnvState } from './env'
 import { KIND_IDS, locFields, makeHeightFn } from './terrain'
 
@@ -17,9 +17,9 @@ export interface Pose {
  * environment. Built once per descent by `prepareSurface`.
  */
 export const surface = {
-  planet: null as PlanetId | null,
+  planet: null as WorldId | null,
   settings: null as SurfaceSettings | null,
-  locations: [] as LocationData[],
+  locations: [] as Place[],
   height: (() => 0) as (x: number, z: number) => number,
   /** Ground or sea surface, whichever is higher. */
   floor: (() => 0) as (x: number, z: number) => number,
@@ -38,7 +38,7 @@ export function forward(yaw: number, pitch: number, out = new Vector3()) {
   return out.set(Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), -Math.cos(yaw) * Math.cos(pitch))
 }
 
-export function prepareSurface(planet: PlanetId) {
+export function prepareSurface(planet: WorldId) {
   if (surface.planet === planet && surface.env) return surface
   const settings = SURFACES[planet]
   const locations = locationsFor(planet)

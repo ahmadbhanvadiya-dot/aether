@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import { telemetry } from '../state/director'
 import { sound } from '../audio/sound'
 import { openObservatory } from './observatoryDirector'
-import { PLANET_BY_ID } from '../data/planets'
+import { WORLD_BY_ID } from '../data/planets'
 import { expeditionStates, unlockedFragments } from '../state/expeditions'
 import { discoveredCount, hiddenCount, TOTAL_DISCOVERIES, useExploration } from '../state/exploration'
 import { quality, useExperience, type Phase } from '../state/useExperience'
@@ -67,6 +67,8 @@ export function Hud() {
   const cinema = useExperience((s) => s.cinema)
   const toggleCinema = useExperience((s) => s.toggleCinema)
   const focus = useExperience((s) => s.focus)
+  // Phase 11: away from Elys, the Elys-only views (Observatory, journal) wait.
+  const atElys = useExperience((s) => s.activeSystem) === 'elys'
   const exploring = useExperience((s) => s.exploring)
   const location = useExperience((s) => s.location)
   const soundOn = useExploration((s) => s.soundOn)
@@ -83,26 +85,33 @@ export function Hud() {
     [discovered, seenStory],
   )
   const signalFound = location ? !!discovered[location] : false
-  const world = exploring ? PLANET_BY_ID[exploring].name : ''
+  const world = exploring ? WORLD_BY_ID[exploring].name : ''
   const status =
     phase === 'galaxy' && focus
-      ? `In orbit around ${PLANET_BY_ID[focus].name}`
+      ? `In orbit around ${WORLD_BY_ID[focus].name}`
       : phase === 'descending'
         ? `Descending to ${world}`
         : phase === 'surface'
           ? `Exploring ${world}`
-          : STATUS[phase]
+          : phase === 'galaxy' && !atElys
+            ? 'The Tessaly system'
+            : STATUS[phase]
   const inGalaxy = phase === 'galaxy'
   const onSurface = phase === 'surface'
   const inObservatory = phase === 'observatory'
-  const showTotal = inGalaxy || onSurface || inObservatory
-  const canObserve = inGalaxy || onSurface
+  // Discovery counts are Elys's; elsewhere they wait for that system's own record.
+  const showTotal = (inGalaxy || onSurface || inObservatory) && atElys
+  const canObserve = (inGalaxy || onSurface) && atElys
   const hint = motionPaused
     ? 'Motion paused'
     : inObservatory
       ? quality.coarse
         ? 'Tap a world on the dial'
         : 'Select a world on the dial'
+      : onSurface && !atElys
+      ? quality.coarse
+        ? 'Drag to look around'
+        : 'Drag to look around, use the arrows to travel'
       : onSurface
       ? signalFound
         ? quality.coarse
@@ -118,9 +127,11 @@ export function Hud() {
         ? quality.coarse
           ? 'Drag to orbit, pinch to zoom'
           : 'Drag to orbit, scroll to zoom'
-        : quality.coarse
-          ? 'Drag to rotate, tap a world'
-          : 'Drag to rotate, select a world'
+        : !atElys
+          ? 'Drag to rotate'
+          : quality.coarse
+            ? 'Drag to rotate, tap a world'
+            : 'Drag to rotate, select a world'
       : quality.coarse
         ? 'Drag to look around'
         : 'Move the cursor to drift'

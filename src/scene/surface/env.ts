@@ -1,5 +1,5 @@
 import { Color, Vector2, Vector3, Vector4 } from 'three'
-import type { LocationData, SurfaceSettings } from '../../data/locations'
+import type { Place, SurfaceSettings } from '../../data/locations'
 
 /**
  * The blended light and weather of the current surface view. Every surface
@@ -9,6 +9,9 @@ import type { LocationData, SurfaceSettings } from '../../data/locations'
 export interface EnvState {
   sunDir: Vector3
   sunColor: Color
+  /** Phase 11: a second sun (black where there is none, so it adds nothing). */
+  sun2Dir: Vector3
+  sun2Color: Color
   zenith: Color
   horizon: Color
   ground: Color
@@ -34,12 +37,14 @@ export function sunVector(elev: number, azim: number, out = new Vector3()) {
   return out.set(Math.cos(elev) * Math.sin(azim), Math.sin(elev), -Math.cos(elev) * Math.cos(azim))
 }
 
-export function envFromLocation(loc: LocationData, groundAtCamera: number): EnvState {
+export function envFromLocation(loc: Place, groundAtCamera: number): EnvState {
   const e = loc.env
   const cloudHeight = e.cloudHeight < 0 ? groundAtCamera - 34 : e.cloudHeight
   return {
     sunDir: sunVector(e.sun[0], e.sun[1]),
     sunColor: new Color(e.sunColor),
+    sun2Dir: e.sun2 ? sunVector(e.sun2[0], e.sun2[1]) : new Vector3(0, -1, 0),
+    sun2Color: new Color(e.sun2 && e.sun2Color ? e.sun2Color : '#000000'),
     zenith: new Color(e.zenith),
     horizon: new Color(e.horizon),
     ground: new Color(e.ground),
@@ -66,6 +71,8 @@ export function cloneEnv(e: EnvState): EnvState {
     ...e,
     sunDir: e.sunDir.clone(),
     sunColor: e.sunColor.clone(),
+    sun2Dir: e.sun2Dir.clone(),
+    sun2Color: e.sun2Color.clone(),
     zenith: e.zenith.clone(),
     horizon: e.horizon.clone(),
     ground: e.ground.clone(),
@@ -93,6 +100,8 @@ const NUMERIC = [
 export function lerpEnv(a: EnvState, b: EnvState, t: number, out: EnvState) {
   out.sunDir.copy(a.sunDir).lerp(b.sunDir, t).normalize()
   out.sunColor.copy(a.sunColor).lerp(b.sunColor, t)
+  out.sun2Dir.copy(a.sun2Dir).lerp(b.sun2Dir, t).normalize()
+  out.sun2Color.copy(a.sun2Color).lerp(b.sun2Color, t)
   out.zenith.copy(a.zenith).lerp(b.zenith, t)
   out.horizon.copy(a.horizon).lerp(b.horizon, t)
   out.ground.copy(a.ground).lerp(b.ground, t)
@@ -116,6 +125,8 @@ export function createSurfaceUniforms(settings: SurfaceSettings) {
   return {
     uSunDir: { value: new Vector3(0, 1, 0) },
     uSunColor: { value: new Color() },
+    uSun2Dir: { value: new Vector3(0, -1, 0) },
+    uSun2Color: { value: new Color(0, 0, 0) },
     uZenith: { value: new Color() },
     uHorizon: { value: new Color() },
     uGround: { value: new Color() },
@@ -165,6 +176,8 @@ export type SurfaceUniforms = ReturnType<typeof createSurfaceUniforms>
 export function applyEnv(u: SurfaceUniforms, e: EnvState) {
   u.uSunDir.value.copy(e.sunDir)
   u.uSunColor.value.copy(e.sunColor)
+  u.uSun2Dir.value.copy(e.sun2Dir)
+  u.uSun2Color.value.copy(e.sun2Color)
   u.uZenith.value.copy(e.zenith)
   u.uHorizon.value.copy(e.horizon)
   u.uGround.value.copy(e.ground)

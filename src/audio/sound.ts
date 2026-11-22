@@ -1,4 +1,4 @@
-import type { PlanetId } from '../data/planets'
+import type { WorldId } from '../data/planets'
 import { useExploration } from '../state/exploration'
 
 /** What a location's weather asks of its ambience (all 0 – 1). */
@@ -12,7 +12,7 @@ export interface AmbienceMix {
 
 /** One world's ambient bed: its layers and the gains the weather controls. */
 interface Bed {
-  planet: PlanetId
+  planet: WorldId
   out: GainNode
   sources: (AudioScheduledSourceNode)[]
   rain?: GainNode
@@ -281,7 +281,7 @@ class SoundEngine {
   // -------------------------------------------------------------------------
 
   /** Sets the ambience: a world and its weather, or null for silence. Call often; it only changes what differs. */
-  ambience(planet: PlanetId | null, mix?: AmbienceMix) {
+  ambience(planet: WorldId | null, mix?: AmbienceMix) {
     if (!this.ctx || !this.master || !this.noise) return
     const ctx = this.ctx
     const t = ctx.currentTime
@@ -361,7 +361,7 @@ class SoundEngine {
     return g
   }
 
-  private build(planet: PlanetId): Bed {
+  private build(planet: WorldId): Bed {
     const ctx = this.ctx!
     const out = ctx.createGain()
     out.connect(this.master!)
@@ -439,6 +439,22 @@ class SoundEngine {
         bed.rain.gain.value = 0
         rain.gain.disconnect()
         rain.gain.connect(bed.rain).connect(out)
+        break
+      }
+      case 'liris': {
+        // Phase 11: warm wind over the steppe, a soft two-note pad (one for each
+        // sun), and a little surf where the shore is.
+        const wind = this.noiseLayer(bed, 'bandpass', 640, 0.7, 0.016, gust)
+        this.lfo(bed, 0.045, 0.006, wind.gain.gain)
+        this.lfo(bed, 0.028, 140, wind.filter.frequency)
+        const pad = this.tone(bed, [196, 293.66], 'sine', 0.006, out)
+        this.lfo(bed, 0.035, 0.003, pad.gain)
+        const surf = this.noiseLayer(bed, 'lowpass', 400, 0.4, 1, out)
+        bed.surf = ctx.createGain()
+        bed.surf.gain.value = 0
+        surf.gain.disconnect()
+        surf.gain.connect(bed.surf).connect(out)
+        this.lfo(bed, 0.08, 0.5, surf.gain.gain)
         break
       }
       case 'orion': {

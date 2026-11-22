@@ -8,7 +8,7 @@ import {
   type Category,
   type DiscoveryData,
 } from '../data/discoveries'
-import { LOCATION_BY_ID, locationsFor, type LocationData } from '../data/locations'
+import { LOCATION_BY_ID, locationsFor, type LocationData, type Place } from '../data/locations'
 import { PLANET_BY_ID, PLANETS, type PlanetData, type PlanetId } from '../data/planets'
 
 /**
@@ -18,8 +18,8 @@ import { PLANET_BY_ID, PLANETS, type PlanetData, type PlanetId } from '../data/p
  * completion percentage.
  */
 
-export interface LocationProgress {
-  location: LocationData
+export interface LocationProgress<L extends Place = LocationData> {
+  location: L
   found: number
   total: number
   /** Hidden discoveries found here (0 or more; their total is not revealed). */
@@ -68,7 +68,7 @@ type Found = Record<string, number>
 
 const isFound = (discovered: Found, d: DiscoveryData) => !!discovered[d.id]
 
-export function locationProgress(location: LocationData, discovered: Found): LocationProgress {
+export function locationProgress<L extends Place>(location: L, discovered: Found): LocationProgress<L> {
   const here = discoveriesAt(location.id)
   const visible = here.filter((d) => d.kind !== 'secret')
   const times = here.map((d) => discovered[d.id]).filter((t): t is number => !!t)

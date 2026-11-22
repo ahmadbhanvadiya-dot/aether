@@ -1,5 +1,5 @@
 import { Euler, Matrix4, Vector3 } from 'three'
-import { PLANETS, PLANET_BY_ID, type MoonSpec, type PlanetData, type PlanetFact, type PlanetId } from './planets'
+import { PLANETS, PLANET_BY_ID, type MoonSpec, type PlanetData, type PlanetFact, type PlanetId, type WorldData } from './planets'
 
 /**
  * Phase 9: the astronomy of the Aether system. Fictional, but internally
@@ -72,7 +72,7 @@ export const MOONS: MoonInfo[] = PLANETS.flatMap((p) => ASTRONOMY[p.id].moons)
 // `axialTilt` about z.
 
 /** Orbital angle at a simulation day (decreasing: the system turns one way). */
-export function orbitAngle(p: PlanetData, day: number) {
+export function orbitAngle(p: Pick<PlanetData, 'phase' | 'yearDays'>, day: number) {
   return p.phase - ((day - EPOCH) / p.yearDays) * Math.PI * 2
 }
 
@@ -128,13 +128,17 @@ export function formatDay(hours: number, retrograde: boolean) {
 export const formatAU = (au: number) => `${num2.format(au)} AU`
 
 /** The fact list shown in the galaxy panel and the Observatory: Day, Year and Moons come from the astronomy. */
-export function planetFacts(p: PlanetData): PlanetFact[] {
-  const a = ASTRONOMY[p.id]
+export function planetFacts(p: WorldData): PlanetFact[] {
+  // Worlds beyond Elys carry their own day and year (no Elys-frame astronomy).
+  const a = p.id in ASTRONOMY ? ASTRONOMY[p.id as PlanetId] : null
+  const dayHours = a ? a.dayHours : Math.abs(p.dayHours)
+  const retrograde = a ? a.retrograde : p.dayHours < 0
+  const yearDays = a ? a.yearDays : p.yearDays
   const [radius, ...rest] = p.facts
   return [
     radius,
-    { label: 'Day', value: formatDay(a.dayHours, a.retrograde) },
-    { label: 'Year', value: `${num.format(a.yearDays)} days` },
+    { label: 'Day', value: formatDay(dayHours, retrograde) },
+    { label: 'Year', value: `${num.format(yearDays)} days` },
     ...rest,
     { label: 'Moons', value: p.moonCount === 0 ? 'None' : num.format(p.moonCount) },
   ]

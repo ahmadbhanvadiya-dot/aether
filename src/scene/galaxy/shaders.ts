@@ -123,6 +123,11 @@ export const worldFragment = /* glsl */ `
 ${kindDefines}
 uniform vec3 uSunPos;
 uniform vec3 uSunColor;
+#ifdef SUN2
+// Phase 11: a second sun (Tessaly's binary).
+uniform vec3 uSun2Pos;
+uniform vec3 uSun2Color;
+#endif
 // Eclipses: a moon between this point and Elys casts a soft shadow (world space,
 // the moons as drawn). Positions and radii come from Moons.tsx; w = 0 is unused.
 uniform vec4 uMoonShadow[5];
@@ -371,6 +376,11 @@ void main() {
   // --- Lighting ----------------------------------------------------------
   float dayMask = smoothstep(-0.06 - wrap, 0.22, NdL);
   float diffuse = max((dot(Nb, L) + wrap) / (1.0 + wrap), 0.0) * dayMask;
+#ifdef SUN2
+  vec3 L2 = normalize(uSun2Pos - vWorldPos);
+  float dayMask2 = smoothstep(-0.06 - wrap, 0.22, dot(N, L2));
+  float diffuse2 = max((dot(Nb, L2) + wrap) / (1.0 + wrap), 0.0) * dayMask2;
+#endif
 #ifdef RINGS
   float through = ringShadow(vWorldPos, L);
   diffuse *= through;
@@ -387,6 +397,9 @@ void main() {
   float fresnel = pow(1.0 - max(dot(N, V), 0.0), 5.0);
 
   vec3 color = albedo * uSunColor * diffuse * 1.9;
+#ifdef SUN2
+  color += albedo * uSun2Color * diffuse2 * 1.9;
+#endif
   color += uSunColor * spec * (0.6 + fresnel);
   color += albedo * vec3(0.3, 0.38, 0.8) * 0.035;  // faint starlight fill
   color += emissive;
@@ -416,6 +429,11 @@ void main() {
 export const worldCloudFragment = /* glsl */ `
 uniform vec3 uSunPos;
 uniform vec3 uSunColor;
+#ifdef SUN2
+// Phase 11: a second sun (Tessaly's binary).
+uniform vec3 uSun2Pos;
+uniform vec3 uSun2Color;
+#endif
 // Eclipses: a moon between this point and Elys casts a soft shadow (world space,
 // the moons as drawn). Positions and radii come from Moons.tsx; w = 0 is unused.
 uniform vec4 uMoonShadow[5];
@@ -484,6 +502,11 @@ void main() {
   float forward = pow(max(dot(-V, L), 0.0), 4.0) * pow(1.0 - max(dot(N, V), 0.0), 2.0);
 
   vec3 col = mix(vec3(0.006, 0.01, 0.025), uCloudColor * uSunColor, lit);
+#ifdef SUN2
+  float lit2 = smoothstep(-0.08, 0.45, dot(N, normalize(uSun2Pos - vWorldPos)));
+  col += uCloudColor * uSun2Color * lit2;
+  lit = max(lit, lit2);
+#endif
   col += mix(uAtmoDay, vec3(1.0), 0.5) * forward * smoothstep(-0.25, 0.1, NdL) * 0.6;
   gl_FragColor = vec4(col, cover * uOpacity * (0.65 + 0.35 * lit));
   #include <tonemapping_fragment>
@@ -501,6 +524,11 @@ uniform vec3 uSunPos;
 uniform vec3 uDay;
 uniform vec3 uNight;
 uniform float uIntensity;
+#ifdef SUN2
+// Phase 11: a second sun (Tessaly's binary).
+uniform vec3 uSun2Pos;
+uniform vec3 uSun2Color;
+#endif
 
 varying vec3 vObjPos;
 varying vec3 vWorldPos;
@@ -523,6 +551,13 @@ void main() {
   float day = smoothstep(-0.35, 0.65, dot(normalize(pc), L));
   float mie = pow(max(dot(rd, L), 0.0), 7.0);
 
+#ifdef SUN2
+  // Two suns: each lights its own side of the shell; the day side is the brighter of them.
+  vec3 L2 = normalize(uSun2Pos - (uCenter + pc * uRadius));
+  float day2 = smoothstep(-0.35, 0.65, dot(normalize(pc), L2));
+  mie += pow(max(dot(rd, L2), 0.0), 7.0) * 0.7;
+  day = max(day, day2 * 0.85);
+#endif
   vec3 col = mix(uNight * 0.6, uDay, day) * glow * (0.22 + 1.2 * day);
   col += uDay * glow * mie * 0.7;
   gl_FragColor = vec4(col * uIntensity, 1.0);
@@ -606,6 +641,9 @@ void main() {
 
 export const starFragment = /* glsl */ `
 uniform float uTime;
+// Phase 11: a star's own colours (Elys's by default; Tessaly's two suns differ).
+uniform vec3 uHot;
+uniform vec3 uWarm;
 varying vec3 vObjPos;
 varying vec3 vWorldPos;
 varying vec3 vWorldNormal;
@@ -618,9 +656,7 @@ void main() {
   vec3 V = normalize(cameraPosition - vWorldPos);
   float mu = max(dot(N, V), 0.0);
   float limb = pow(mu, 0.5);
-  vec3 hot = vec3(1.0, 0.95, 0.84);
-  vec3 warm = vec3(1.0, 0.6, 0.26);
-  vec3 col = mix(warm, hot, limb * 0.85 + g * 0.2);
+  vec3 col = mix(uWarm, uHot, limb * 0.85 + g * 0.2);
   col *= (2.6 + g * 1.4 + n * 0.6) * mix(0.55, 1.0, limb);
   gl_FragColor = vec4(col, 1.0);
 }

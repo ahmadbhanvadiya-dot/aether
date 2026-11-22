@@ -1,12 +1,12 @@
 import { useFrame, useThree } from '@react-three/fiber'
 import { sceneToAU } from '../../data/astronomy'
-import { MAP_VIEW, SYSTEMS } from '../../data/systems'
+import { MAP_VIEW, SYSTEM_BY_ID, SYSTEMS } from '../../data/systems'
 import { sim } from '../../state/simulation'
 import gsap from 'gsap'
 import { useEffect, useMemo } from 'react'
 import { MathUtils, PerspectiveCamera, Vector3 } from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
-import { PLANET_BY_ID, type PlanetId } from '../../data/planets'
+import { WORLD_BY_ID, type WorldId } from '../../data/planets'
 import { director, telemetry } from '../../state/director'
 import { galaxy } from '../../state/galaxy'
 import { useExperience } from '../../state/useExperience'
@@ -39,7 +39,7 @@ export const galaxyCam = {
   hasHome: false,
   outroFrom: new Vector3(),
   outroTarget: new Vector3(),
-  focus: null as PlanetId | null,
+  focus: null as WorldId | null,
   /** Camera offset from the focused world when a descent begins. */
   dive: new Vector3(),
   diveInit: false,
@@ -78,6 +78,8 @@ const rig = {
   width: 1,
   height: 1,
 }
+// Dev-only: the rig's controls, for inspecting views from the console.
+if (import.meta.env.DEV) Object.assign(window, { __rig: rig })
 
 /** Phase 4: rise to the zenith above Elys. The dial view is driven by director.observatory. */
 export function beginObservatory() {
@@ -116,7 +118,7 @@ export function endMap() {
  * stopping on a point. Interrupting a travel starts the next one at the
  * current velocity.
  */
-export function startGalaxyTravel(focus: PlanetId | null) {
+export function startGalaxyTravel(focus: WorldId | null) {
   const { camera, controls } = rig
   if (!camera || !controls) return
   // Entry, climb and the universe map own the camera until they finish.
@@ -193,7 +195,7 @@ export function startGalaxyTravel(focus: PlanetId | null) {
 }
 
 /** Where a travel ends: a world's live focus pose, or the overview. */
-function travelDest(focus: PlanetId | null, aspect: number, outPos: Vector3, outTarget: Vector3) {
+function travelDest(focus: WorldId | null, aspect: number, outPos: Vector3, outTarget: Vector3) {
   if (focus) {
     outTarget.copy(galaxy.positions[focus])
     outPos.copy(outTarget).add(galaxyCam.offset)
@@ -229,7 +231,7 @@ export function beginGalaxyDescent() {
  * dropping to the top of the atmosphere, so the camera arrives gliding over a
  * sunlit horizon. Descent runs it 0 → 1, the climb back runs it 1 → 0.
  */
-function initDive(rel: Vector3, planet: PlanetId) {
+function initDive(rel: Vector3, planet: WorldId) {
   const P = galaxy.positions[planet]
   galaxyCam.d0 = rel.length()
   galaxyCam.n0.copy(rel).normalize()
@@ -258,8 +260,8 @@ export function beginGalaxyAscent() {
 }
 
 /** Where the focus camera sits relative to a world (sunlit, gibbous view). */
-function focusOffset(planet: PlanetId, aspect: number, width: number, out: Vector3) {
-  const data = PLANET_BY_ID[planet]
+function focusOffset(planet: WorldId, aspect: number, width: number, out: Vector3) {
+  const data = WORLD_BY_ID[planet]
   const P = galaxy.positions[planet]
   const toStar = new Vector3().copy(P).multiplyScalar(-1).normalize()
   const sideV = new Vector3().crossVectors(UP, toStar).normalize()
@@ -279,7 +281,7 @@ function focusOffset(planet: PlanetId, aspect: number, width: number, out: Vecto
  * Debug shots that start on a surface: pretend we descended from the focus
  * view, so the ascent has somewhere to return to.
  */
-export function primeGalaxyFocus(planet: PlanetId) {
+export function primeGalaxyFocus(planet: WorldId) {
   const aspect = window.innerWidth / window.innerHeight
   galaxyCam.focus = planet
   focusOffset(planet, aspect, window.innerWidth, galaxyCam.offset)
@@ -456,7 +458,7 @@ export function GalaxyRig() {
         const turn = motionPaused || reducedMotion ? 1 : 1 - Math.exp(-3 * dt)
         // Phase 9: when the selected world runs faster than the dial can turn gracefully
         // (high speeds, a jump to an event), the dial holds still and the world moves on it.
-        const omega = (Math.PI * 2 * sim.rate) / PLANET_BY_ID[sel].yearDays
+        const omega = (Math.PI * 2 * sim.rate) / WORLD_BY_ID[sel].yearDays
         if (!sim.jumping && omega < 0.35) galaxyCam.obsUp.lerp(destPos, turn).normalize()
         const k = director.observatory
         const H = zenithHeight(baseFovFor(aspect), size.width, size.height)
@@ -481,8 +483,10 @@ export function GalaxyRig() {
         const k = director.map
         const pos = MathUtils.smootherstep(k, 0.05, 1)
         const aim = MathUtils.smootherstep(k, 0, 0.7)
-        tmpPos.lerpVectors(galaxyCam.mapFrom, MAP_VIEW.position, pos)
-        tmpTarget.lerpVectors(galaxyCam.mapFromTarget, MAP_VIEW.target, aim)
+        // The map's view is in Elys's frame; shift it when another system is at the origin.
+        const off = SYSTEM_BY_ID[useExperience.getState().activeSystem].position
+        tmpPos.lerpVectors(galaxyCam.mapFrom, side.copy(MAP_VIEW.position).sub(off), pos)
+        tmpTarget.lerpVectors(galaxyCam.mapFromTarget, destTarget.copy(MAP_VIEW.target).sub(off), aim)
         camera.position.copy(tmpPos)
         controls.target.copy(tmpTarget)
         camera.up.copy(UP)
@@ -496,7 +500,7 @@ export function GalaxyRig() {
         camera.position.add(tmpPos)
         controls.target.add(tmpPos)
         galaxyCam.last.copy(P)
-        const data = PLANET_BY_ID[f]
+        const data = WORLD_BY_ID[f]
         controls.minDistance = data.radius * (data.rings ? 2.9 : 1.7)
         controls.maxDistance = data.radius * 16
         galaxyCam.settle = MathUtils.damp(galaxyCam.settle, 1, 0.9, dt)
@@ -511,7 +515,7 @@ export function GalaxyRig() {
         if (!f) break
         controls.enabled = false
         const P = galaxy.positions[f]
-        const data = PLANET_BY_ID[f]
+        const data = WORLD_BY_ID[f]
         if (!galaxyCam.diveInit) initDive(tmpPos.subVectors(camera.position, P), f)
         const k = director.descent
         // Position: sweep toward the day side while dropping to the air.
@@ -572,13 +576,13 @@ export function GalaxyRig() {
       projected.set(0, 0, 0).project(camera)
       o.ox = (projected.x * 0.5 + 0.5) * size.width
       o.oy = (-projected.y * 0.5 + 0.5) * size.height
-      for (const id of Object.keys(galaxy.positions) as PlanetId[]) {
+      for (const id of Object.keys(galaxy.positions) as WorldId[]) {
         projected.copy(galaxy.positions[id]).project(camera)
         const w = o.worlds[id]
         w.x = (projected.x * 0.5 + 0.5) * size.width
         w.y = (-projected.y * 0.5 + 0.5) * size.height
         const dist = camera.position.distanceTo(galaxy.positions[id])
-        w.radiusPx = (PLANET_BY_ID[id].radius / (dist * Math.tan(MathUtils.degToRad(camera.fov) / 2))) * (size.height / 2)
+        w.radiusPx = (WORLD_BY_ID[id].radius / (dist * Math.tan(MathUtils.degToRad(camera.fov) / 2))) * (size.height / 2)
       }
       o.active = director.observatory
     }
@@ -586,8 +590,9 @@ export function GalaxyRig() {
     // ---- Universe map: projected systems ----------------------------------
     if (galaxyCam.mode === 'map') {
       camera.updateMatrixWorld()
+      const off = SYSTEM_BY_ID[useExperience.getState().activeSystem].position
       for (const s of SYSTEMS) {
-        projected.copy(s.position).project(camera)
+        projected.copy(s.position).sub(off).project(camera)
         const m = telemetry.map[s.id]
         m.x = (projected.x * 0.5 + 0.5) * size.width
         m.y = (-projected.y * 0.5 + 0.5) * size.height
@@ -599,12 +604,15 @@ export function GalaxyRig() {
     const f = galaxyCam.focus
     const near = galaxyCam.mode === 'focus' || galaxyCam.mode === 'travel' || galaxyCam.mode === 'descent' || galaxyCam.mode === 'ascent'
     if (f && near) {
-      const data = PLANET_BY_ID[f]
+      const data = WORLD_BY_ID[f]
       const d = camera.position.distanceTo(galaxy.positions[f])
       const alt = Math.max(0, (d / data.radius - 1) * data.radiusKm)
       telemetry.readout = `Altitude ${km.format(Math.round(alt / 100) * 100)} km`
     } else if (galaxyCam.mode === 'map') {
       telemetry.readout = 'Above the outer arm'
+    } else if (useExperience.getState().activeSystem === 'tessaly') {
+      // Tessaly's scale: Liris's orbit (24 units) is 1.33 AU around the pair's centre.
+      telemetry.readout = `${(camera.position.length() * 0.055).toFixed(1)} AU from the twin suns`
     } else {
       telemetry.readout = `${sceneToAU(camera.position.length()).toFixed(1)} AU from Elys`
     }
@@ -612,7 +620,7 @@ export function GalaxyRig() {
     // ---- Hover label position ---------------------------------------------
     const h = telemetry.hover
     if (hovered && hovered !== f) {
-      const data = PLANET_BY_ID[hovered]
+      const data = WORLD_BY_ID[hovered]
       camera.updateMatrixWorld()
       projected.copy(galaxy.positions[hovered]).project(camera)
       h.x = (projected.x * 0.5 + 0.5) * size.width
