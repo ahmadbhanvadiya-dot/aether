@@ -3544,3 +3544,54 @@ body {
   opacity: 0 !important;
   pointer-events: none;
 }
+
+/* Phase 11: the route between systems on the map, and the transit marker. */
+.map-route {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 0;
+  border-top: 1px dashed rgb(232 236 255 / 0.55);
+  transform-origin: 0 0;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.4s ease;
+}
+
+.map-traveller {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 8px;
+  height: 8px;
+  margin: -4px 0 0 -4px;
+  border-radius: 999px;
+  background: var(--color-starlight, #eef1ff);
+  box-shadow:
+    0 0 10px rgb(238 241 255 / 0.9),
+    0 0 26px rgb(90 176 255 / 0.6);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.map-mark-here {
+  color: var(--color-haze, #8a93b8);
+}
+
+.map-mark[data-here] .map-mark-dot {
+  outline: 1px solid rgb(232 236 255 / 0.35);
+  outline-offset: 5px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .map-route {
+    transition: none;
+  }
+}
+
+/* Narrow screens: the ring alone marks where you are (the label would run off the edge). */
+@media (max-width: 479px) {
+  .map-mark-here {
+    display: none;
+  }
+}

@@ -31,12 +31,14 @@ export interface StarSystem {
   unknownName: string
   star: string
   description: string
+  /** Shown once its expedition has opened it (Phase 11). */
+  openDescription?: string
   /** Its colour on the map. */
   color: string
   worlds: number
   /** World position (the scene's frame; Elys is the origin). */
   position: Vector3
-  /** 'home' is always reachable; 'story' opens with an expedition (not yet written for Tessaly). */
+  /** 'home' is always reachable; 'story' opens with an expedition (Tessaly: Expedition III). */
   unlock: 'home' | 'story'
 }
 
@@ -73,6 +75,8 @@ export const SYSTEMS: StarSystem[] = [
     unknownName: 'An unresolved double star',
     star: 'Two suns, one white and one gold',
     description: 'A double star further round the arm. Its light dims and brightens on a rhythm of its own. Nothing yet leads there.',
+    openDescription:
+      'A double star further round the arm: a white sun and a gold one, fourteen days about each other, and one world, Liris, circling both. Expedition III measured the way.',
     color: '#FFD49A',
     worlds: 1,
     position: fromGalaxy(tessalyLocal),

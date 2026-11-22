@@ -237,6 +237,98 @@ export const EXPEDITIONS: Expedition[] = [
       ],
     },
   },
+  {
+    id: 'exp-double-star',
+    code: 'Expedition III',
+    title: 'The Double Star',
+    unlock: { after: 'exp-second-sky' },
+    intro: {
+      id: 'ds-intro',
+      kind: 'transmission',
+      title: 'Closer than Elys',
+      source: 'The array · all four voices',
+      body: [
+        'The second sky is a shadow, and a shadow needs a light. The array has been pointing at it all along.',
+        'Find where the second light falls on Elys, and measure where it comes from.',
+      ],
+    },
+    objectives: [
+      {
+        id: 'ds-1',
+        title: 'Two shadows',
+        brief: 'At the Quiet Caldera on Nyx, the slab casts one shadow too many. Scan the second shadow.',
+        requires: ['nyx-quiet-caldera.second-shadow'],
+        fragment: {
+          id: 'ds-1-log',
+          kind: 'log',
+          title: 'A light nobody sees',
+          source: 'Nyx · the Quiet Caldera',
+          body: [
+            'The second shadow is faint, but its edge is sharp: a point of light, far off and steady.',
+            'It falls along the arm of the galaxy, away from the core.',
+          ],
+        },
+      },
+      {
+        id: 'ds-2',
+        title: 'A star that is gone',
+        brief: "Climbers on Aurelis talk of a ring of ice behind Halvard Ridge, set to stars that have left the sky. Find it.",
+        requires: ['aurelis-halvard-ridge.watchers-ring'],
+        fragment: {
+          id: 'ds-2-record',
+          kind: 'record',
+          title: 'The block that points nowhere',
+          source: 'Aurelis · the watcher’s ring',
+          body: [
+            'Every block but one matches a star still in the sky. The last points where the second shadow points.',
+            'When the ring was cut, that star was bright enough to see. It has dimmed since, or something stands in front of it.',
+          ],
+        },
+      },
+      {
+        id: 'ds-3',
+        title: 'A baseline',
+        brief: "The iron rings around Solara's Salt Mirror were set out to be measured again. Scan them.",
+        requires: ['solara-salt-mirror.survey-rings'],
+        fragment: {
+          id: 'ds-3-log',
+          kind: 'log',
+          title: 'Parallax',
+          source: 'Solara · the survey rings',
+          body: [
+            'The rings are a baseline. Sighted across them at opposite ends of Solara’s year, the vanished star shifts by a hair.',
+            'That hair gives its distance: far, but not beyond reach. Someone wanted to go there.',
+          ],
+        },
+      },
+      {
+        id: 'ds-4',
+        title: 'Twice the stars',
+        brief: 'The frozen lake at the Quiet Caldera shows every star twice. Scan it, and look for the one star that shows as two.',
+        requires: ['nyx-quiet-caldera.frozen-lake'],
+        fragment: {
+          id: 'ds-4-transmission',
+          kind: 'transmission',
+          title: 'Resolved',
+          source: 'Nyx · the double-starred lake',
+          body: [
+            'In the ice the vanished star splits in two: a white sun and a gold one, close together.',
+            'The array answers with a name in the old survey’s hand: Tessaly.',
+          ],
+        },
+      },
+    ],
+    closing: {
+      id: 'ds-closing',
+      kind: 'record',
+      title: 'The Double Star',
+      source: 'Expedition record',
+      body: [
+        'Two suns, fourteen days about each other, and between them one world, lit from both sides.',
+        'The survey measured the way and left it open. Tessaly is on the map. Open the galaxy map to travel there.',
+      ],
+    },
+  },
 ]
 
 export const EXPEDITION_BY_ID: Record<string, Expedition> = Object.fromEntries(EXPEDITIONS.map((e) => [e.id, e]))
