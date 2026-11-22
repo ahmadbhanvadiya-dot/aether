@@ -1,7 +1,7 @@
 import gsap from 'gsap'
 import { MathUtils } from 'three'
 import { sound } from '../audio/sound'
-import { DISCOVERY_BY_ID } from '../data/discoveries'
+import { FIND_BY_ID } from '../data/discoveries'
 import { scanFx, signalFx } from '../scene/motion'
 import { surfaceCam } from '../scene/surface/SurfaceRig'
 import { surface } from '../scene/surface/world'
@@ -54,7 +54,7 @@ export function aimAt(id: string) {
 /** Can this discovery be scanned (or reopened) from where the camera is now? */
 export function canScan(id: string) {
   const st = useExperience.getState()
-  const d = DISCOVERY_BY_ID[id]
+  const d = FIND_BY_ID[id]
   if (!d || st.phase !== 'surface' || surfaceCam.mode !== 'free') return false
   if (d.location !== st.location) return false
   const found = !!useExploration.getState().discovered[id]
@@ -102,7 +102,7 @@ function complete(id: string) {
   // Phase 8: queue any story this discovery unlocked (it plays after the record closes).
   if (isNew) noteDiscovery(before, useExploration.getState().discovered)
   if (isNew) sound.chime()
-  if (isNew && DISCOVERY_BY_ID[id].kind === 'signal') {
+  if (isNew && FIND_BY_ID[id].kind === 'signal') {
     gsap.fromTo(signalFx, { bloom: reduced() ? 0.4 : 1 }, { bloom: 0, duration: reduced() ? 0.8 : 1.6, ease: 'power2.out' })
   }
   const st = useExperience.getState()

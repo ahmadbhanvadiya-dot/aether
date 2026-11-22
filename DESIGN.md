@@ -2053,10 +2053,9 @@ The proposal (`docs/proposals/phase-11-beyond-the-system.md`) is updated to matc
   and glow (dimmer in the disc so its gold holds), and terrain, water (glint and body),
   clouds and landmarks take its light. The living drift moves both suns together,
   keeping their spacing with a slight wobble.
-- **What Liris does not have yet:** signals and discoveries (no beacon, no scan guide,
-  *First landing on Liris. Nothing here is charted yet.*), the sky's moons, true cast
-  shadows (the "two shadows" are told, not drawn). Its sound bed is its own: warm wind,
-  a two‑note pad, surf on the shore.
+- **What Liris does not have:** the sky's moons (it has none), true cast shadows (the
+  "two shadows" are told, not drawn). Its sound bed is its own: warm wind, a two‑note
+  pad, surf on the shore. Its discoveries came in the third stage, below.
 - **Development shots:** `?shot=liris-twofold-shore` (and the other two places) land
   directly and set Tessaly as the active system.
 - **Verified in the dev build:** select Liris → panel → *Explore* → descent → the
@@ -2064,10 +2063,51 @@ The proposal (`docs/proposals/phase-11-beyond-the-system.md`) is updated to matc
   → return to orbit around Liris. Elys: Aurelis compiles without `SUN2`, the second
   light is black, *0 of 54 discoveries*, scan guide shown, no console errors.
 
+### Liris's discoveries (11c, third stage — development only)
+
+- **Its own catalogue, the same shape as an Elys world:** three signals (one per
+  place), six points of interest and one hidden find, all about living under two suns:
+  - **The Twofold Shore:** *A dial with two shadows* (structure), *the two‑coloured
+    sands*, *bay skimmers*;
+  - **The Long Noon:** *Moss that follows both suns* (life), *the twin halos* (in the
+    sky), *wandering stones*, and hidden behind you, *the third shadow*;
+  - **Between Days:** *A stone that keeps the white sun* (anomaly), *the amber
+    curtain* (in the sky), *paired cairns*.
+
+  The places now have a hint before the scan and lore after it.
+- **Kept apart from Elys's:** `DISCOVERIES`, `DISCOVERY_BY_ID`, `VISIBLE`, `HIDDEN`
+  and `TOTAL_DISCOVERIES` (54) are unchanged and Elys's alone, as are the Observatory's
+  totals, timeline and records, the journal and the expeditions. `LIRIS_DISCOVERIES`,
+  `ALL_FINDS` and `FIND_BY_ID` hold every world's finds; `discoveriesFor` /
+  `discoveriesAt` read them. `DiscoveryData<P>` is generic like `LocationData`, with
+  `Find` for any world.
+- **The scanner, scan targets, discovery card and surface panel read `FIND_BY_ID`.**
+  `discoveredCount` / `hiddenCount` count one world's own list when given a world, and
+  Elys's when not. `worldProgress` takes any world.
+- **Liris's counts:**
+  - its panel in orbit: *n of 9 discoveries*;
+  - the surface panel and the discovery card: *Recorded on LIRIS · n of 9 found*
+    (Liris has no Observatory archive yet);
+  - the HUD in Tessaly: *n of 9 discoveries on LIRIS, n hidden*.
+
+  The beacon, scan list and first‑visit guide work there as on Elys.
+- **The Observatory's timeline shows only when there are Elys finds** (it used to
+  check for any stored find).
+- **Fixed (live since stage 1–2):** the Observatory chart projected every world in
+  `galaxy.positions`, which now includes Liris. It threw each frame at Liris and
+  skipped the chart's fade‑in. It now projects the chart's own six.
+- **Verified in the dev build:**
+  - scanned on Liris: a signal, a point of interest, the sky‑placed halo, a ground
+    find; the hidden find revealed by facing away from the suns, then scanned;
+  - counts 2 → 4 of 9, then *1 hidden*;
+  - Elys with Liris finds stored: *0 of 54*; Observatory renders, no errors.
+  - Caught and fixed in testing: the discovery card looked up Elys's location table
+    and crashed the interface on a Liris find.
+
 ### Not built yet (Phase 11, next)
 
 - **11c, remaining stages:**
-  - Liris's discoveries and its own record (counts, the Observatory, the journal);
+  - Liris in the Observatory and the journal (its own archive and record);
   - Expedition III, which opens Tessaly;
   - the transit from Elys;
   - drawn double shadows, and a palette of its own (Liris uses the terrestrial

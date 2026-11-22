@@ -1,7 +1,7 @@
 import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import { AdditiveBlending, Color, DoubleSide, Mesh, MathUtils, PlaneGeometry, ShaderMaterial, Vector3 } from 'three'
-import { discoveriesFor, type DiscoveryData } from '../../data/discoveries'
+import { discoveriesFor, type Find } from '../../data/discoveries'
 import { WORLD_BY_ID, type WorldId } from '../../data/planets'
 import { director, telemetry } from '../../state/director'
 import { useExploration } from '../../state/exploration'
@@ -89,7 +89,7 @@ const toTarget = new Vector3()
 const projected = new Vector3()
 
 interface Glint {
-  d: DiscoveryData
+  d: Find
   mesh: Mesh | null
   mat: ShaderMaterial
   reveal: number

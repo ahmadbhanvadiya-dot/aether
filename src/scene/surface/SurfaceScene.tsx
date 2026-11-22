@@ -149,8 +149,7 @@ export default function SurfaceScene({ planet }: { planet: WorldId }) {
       {s.locations.map((l) => (
         <Landmark key={l.id} loc={l} uniforms={uniforms} defines={defines} settings={settings} />
       ))}
-      {/* Liris has no signals yet (its discoveries come with its expedition). */}
-      {isElysWorld(planet) && <Signal settings={settings} />}
+      <Signal settings={settings} />
       <ScanTargets planet={planet} />
     </group>
   )
