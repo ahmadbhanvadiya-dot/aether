@@ -51,7 +51,7 @@ export function liveEnv(
   planet: WorldId,
   time: number,
   dt: number,
-  options: { reduced: boolean; paused: boolean },
+  options: { reduced: boolean; paused: boolean; gust?: number },
 ): EnvState {
   // Copy (never mutate the stored environment).
   if (!scratch) scratch = { ...env, sunDir: env.sunDir.clone(), sunColor: env.sunColor.clone(), sun2Dir: env.sun2Dir.clone(), sun2Color: env.sun2Color.clone(), zenith: env.zenith.clone(), horizon: env.horizon.clone(), ground: env.ground.clone(), cloudColor: env.cloudColor.clone() }
@@ -60,6 +60,9 @@ export function liveEnv(
   // Wind: prevailing direction, gusting strength, integrated into a drift.
   const [wx, wz] = WIND[planet]
   living.gust = options.reduced ? 1 : 1 + 0.35 * Math.sin(time * 0.07) + 0.15 * Math.sin(time * 0.23 + 1.7)
+  // Cinematic pass: a gust event (Solara) drives the wind up to ~2.5×, integrated, so it never jumps.
+  // A third, slower term keeps the gusting from settling into one obvious rhythm.
+  if (!options.reduced) living.gust *= (1 + 0.12 * Math.sin(time * 0.031 + 4.2)) * (1 + 1.5 * (options.gust ?? 0))
   if (!options.paused) living.drift.x += wx * living.gust * dt * (options.reduced ? 0.5 : 1)
   if (!options.paused) living.drift.y += wz * living.gust * dt * (options.reduced ? 0.5 : 1)
   living.wind.set(wx, wz)

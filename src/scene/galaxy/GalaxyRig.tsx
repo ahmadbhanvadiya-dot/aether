@@ -69,6 +69,15 @@ export const galaxyCam = {
   axis: new Vector3(0, 1, 0),
   sweep: 0,
   d0: 10,
+  /**
+   * Cinematic pass: the orbit "breathes" while the camera rests (overview and
+   * focus). `breath` eases 0 → 1 after every arrival; `breathOffset` is the
+   * offset added to the camera after OrbitControls, removed again before the
+   * next update so the controls (and the visitor's drag) always work on the
+   * clean pose.
+   */
+  breath: 0,
+  breathOffset: new Vector3(),
 }
 
 /** Live handles so module functions (the Observatory director) can start a travel. */
@@ -337,6 +346,44 @@ const centreDir = new Vector3()
  */
 const ENTRY_BELOW_HORIZON = 0.14
 const km = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 })
+const breathAxis = new Vector3()
+const breathRel = new Vector3()
+const gaze = new Vector3()
+const camRight = new Vector3()
+const camUp = new Vector3()
+
+/** Speed variation for the orbit's auto-rotation: slow swells, never a turntable. */
+function rotationSwell(T: number) {
+  return 1 + 0.28 * Math.sin(T * 0.071 + 0.5) + 0.12 * Math.sin(T * 0.19 + 2.1)
+}
+
+/**
+ * Cinematic pass: a resting orbit that breathes. After OrbitControls has set
+ * the pose, the camera rises and sinks a degree or two on long, incommensurate
+ * swells (15–40 s), drifts in and out by about 2 %, and its gaze wanders a
+ * fraction of a degree around the target, so the frame feels held by a hand,
+ * not bolted to a turntable. Driven by the scene clock (Pause motion stops it),
+ * eased in after every arrival, off for reduced motion.
+ */
+function applyBreath(camera: PerspectiveCamera, target: Vector3, amount: number, T: number, scale: number) {
+  if (amount < 1e-4) return
+  breathRel.subVectors(camera.position, target)
+  const len = breathRel.length()
+  breathAxis.crossVectors(breathRel, UP)
+  if (breathAxis.lengthSq() < 1e-8) return
+  breathAxis.normalize()
+  const elev = (Math.sin(T * 0.16 + 0.3) * 0.03 + Math.sin(T * 0.41 + 1.9) * 0.009) * amount * scale
+  const dolly = 1 + (Math.sin(T * 0.12 + 2.4) * 0.018 + Math.sin(T * 0.29 + 0.8) * 0.006) * amount * scale
+  galaxyCam.breathOffset.copy(breathRel).applyAxisAngle(breathAxis, elev).multiplyScalar(dolly).sub(breathRel)
+  camera.position.add(galaxyCam.breathOffset)
+  // The gaze wanders a little around the target (a fraction of a degree).
+  camRight.crossVectors(breathRel, UP).normalize()
+  camUp.crossVectors(camRight, breathRel).normalize()
+  const wx = (Math.sin(T * 0.21 + 1.1) * 0.0045 + Math.sin(T * 0.53) * 0.0012) * amount * len
+  const wy = (Math.sin(T * 0.17 + 2.6) * 0.003 + Math.sin(T * 0.47 + 0.4) * 0.001) * amount * len
+  gaze.copy(target).addScaledVector(camRight, wx).addScaledVector(camUp, wy)
+  camera.lookAt(gaze)
+}
 
 export function GalaxyRig() {
   const camera = useThree((s) => s.camera) as PerspectiveCamera
@@ -411,6 +458,15 @@ export function GalaxyRig() {
     const dt = Math.min(Math.max(delta, 1 / 240), 1 / 20)
     const aspect = size.width / size.height
     const { motionPaused, reducedMotion, hovered, phase: currentPhase } = useExperience.getState()
+    const live = !motionPaused && !reducedMotion
+    const T = director.time
+
+    // The breathing offset from the last frame comes off before anything reads
+    // the pose; other modes start from the clean pose and the breath restarts at 0.
+    const resting = galaxyCam.mode === 'focus' || galaxyCam.mode === 'free'
+    if (resting) camera.position.sub(galaxyCam.breathOffset)
+    else galaxyCam.breath = 0
+    galaxyCam.breathOffset.set(0, 0, 0)
 
     switch (galaxyCam.mode) {
       case 'intro': {
@@ -483,8 +539,16 @@ export function GalaxyRig() {
         const k = director.observatory
         const H = zenithHeight(baseFovFor(aspect), size.width, size.height)
         destTarget.set(0, 0, 0)
-        tmpPos.lerpVectors(galaxyCam.obsFrom, destTarget.set(0, H, 0), k)
-        tmpTarget.lerpVectors(galaxyCam.obsFromTarget, side.set(0, 0, 0), k)
+        // A crane, not a zoom: the camera rises first and swings over the
+        // system later, so the path curves up and over instead of sliding on a line.
+        const rise = MathUtils.smootherstep(k, 0, 0.82)
+        const over = MathUtils.smootherstep(k, 0.14, 1)
+        tmpPos.set(
+          MathUtils.lerp(galaxyCam.obsFrom.x, 0, over),
+          MathUtils.lerp(galaxyCam.obsFrom.y, H, rise),
+          MathUtils.lerp(galaxyCam.obsFrom.z, 0, over),
+        )
+        tmpTarget.lerpVectors(galaxyCam.obsFromTarget, side.set(0, 0, 0), MathUtils.smootherstep(k, 0, 0.7))
         camera.up.lerpVectors(UP, galaxyCam.obsUp, MathUtils.smoothstep(k, 0.25, 1)).normalize()
         camera.position.copy(tmpPos)
         controls.target.copy(tmpTarget)
@@ -505,7 +569,11 @@ export function GalaxyRig() {
         const aim = MathUtils.smootherstep(k, 0, 0.7)
         // The map's view is in Elys's frame; shift it when another system is at the origin.
         const off = SYSTEM_BY_ID[useExperience.getState().activeSystem].position
-        tmpPos.lerpVectors(galaxyCam.mapFrom, side.copy(MAP_VIEW.position).sub(off), pos)
+        // Cinematic pass: height leads, distance follows — a rising arc, not a line.
+        side.copy(MAP_VIEW.position).sub(off)
+        const up = MathUtils.smootherstep(k, 0.0, 0.85)
+        tmpPos.lerpVectors(galaxyCam.mapFrom, side, pos)
+        tmpPos.y = MathUtils.lerp(galaxyCam.mapFrom.y, side.y, up)
         tmpTarget.lerpVectors(galaxyCam.mapFromTarget, destTarget.copy(MAP_VIEW.target).sub(off), aim)
         camera.position.copy(tmpPos)
         controls.target.copy(tmpTarget)
@@ -524,9 +592,11 @@ export function GalaxyRig() {
         controls.minDistance = data.radius * (data.rings ? 2.9 : 1.7)
         controls.maxDistance = data.radius * 16
         galaxyCam.settle = MathUtils.damp(galaxyCam.settle, 1, 0.9, dt)
-        controls.autoRotate = !motionPaused && !reducedMotion
-        controls.autoRotateSpeed = 0.35 * galaxyCam.settle
+        controls.autoRotate = live
+        controls.autoRotateSpeed = 0.35 * galaxyCam.settle * rotationSwell(T)
         controls.update()
+        galaxyCam.breath = MathUtils.damp(galaxyCam.breath, live ? 1 : 0, 0.4, dt)
+        applyBreath(camera, controls.target, galaxyCam.breath, T, 1)
         break
       }
       case 'descent':
@@ -540,7 +610,10 @@ export function GalaxyRig() {
         const k = director.descent
         // Position: sweep toward the day side while dropping to the air.
         n.copy(galaxyCam.n0).applyAxisAngle(galaxyCam.axis, galaxyCam.sweep * smooth01(k))
-        const dist = MathUtils.lerp(galaxyCam.d0, data.radius * 1.012, k)
+        // Cinematic pass: altitude falls on 1 − (1 − k)^1.5, so the last of the drop
+        // is gentle. With a linear drop the horizon's dip (which the view follows)
+        // swung the view up at ~85°/s just before the hand-over; now ≲ 10°/s.
+        const dist = MathUtils.lerp(galaxyCam.d0, data.radius * 1.012, 1 - Math.pow(1 - k, 1.5))
         camera.position.copy(P).addScaledVector(n, dist)
         // View: from the world's centre to the horizon ahead (the direction of
         // the sweep), and the camera's up turns to the local vertical, so the
@@ -552,6 +625,10 @@ export function GalaxyRig() {
         centreDir.subVectors(P, camera.position).normalize()
         centreDir.lerp(lookDir, MathUtils.smootherstep(k, 0.32, 0.94)).normalize()
         camera.up.copy(UP).lerp(n, MathUtils.smoothstep(k, 0.22, 0.86)).normalize()
+        // Cinematic pass: a gentle bank through the sweep (≤ 2.6°), zero at both
+        // ends, so the camera flies the entry like a craft rather than on a rail.
+        const bank = 0.045 * Math.pow(Math.sin(Math.PI * k), 1.6)
+        camera.up.applyAxisAngle(centreDir, bank)
         camera.lookAt(tmpTarget.copy(camera.position).add(centreDir))
         controls.target.copy(P)
         atmosphereFx.up.copy(n)
@@ -569,9 +646,11 @@ export function GalaxyRig() {
         controls.minDistance = 16
         controls.maxDistance = 220
         galaxyCam.settle = MathUtils.damp(galaxyCam.settle, 1, 0.9, dt)
-        controls.autoRotate = !motionPaused && !reducedMotion
-        controls.autoRotateSpeed = 0.18 * galaxyCam.settle
+        controls.autoRotate = live
+        controls.autoRotateSpeed = 0.18 * galaxyCam.settle * rotationSwell(T + 40)
         controls.update()
+        galaxyCam.breath = MathUtils.damp(galaxyCam.breath, live ? 1 : 0, 0.4, dt)
+        applyBreath(camera, controls.target, galaxyCam.breath, T + 40, 0.8)
         break
       }
     }
