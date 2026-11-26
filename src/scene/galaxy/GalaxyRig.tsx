@@ -113,7 +113,7 @@ export function beginMap() {
  * that frames its small system (Liris orbits at 24, Elys's outer world at ~90).
  */
 const overviews: Partial<Record<SystemId, { pos: Vector3; target: Vector3 }>> = {}
-const FIRST_OVERVIEW: Partial<Record<SystemId, number>> = { tessaly: 58 }
+const FIRST_OVERVIEW: Partial<Record<SystemId, number>> = { tessaly: 58, waystation: 30 }
 export function switchMapReturn(from: SystemId, to: SystemId) {
   overviews[from] = { pos: galaxyCam.mapFrom.clone(), target: galaxyCam.mapFromTarget.clone() }
   const saved = overviews[to]
@@ -710,6 +710,9 @@ export function GalaxyRig() {
       telemetry.readout = `Altitude ${km.format(Math.round(alt / 100) * 100)} km`
     } else if (galaxyCam.mode === 'map') {
       telemetry.readout = 'Above the outer arm'
+    } else if (useExperience.getState().activeSystem === 'waystation') {
+      // The station is about 1.5 km across (scene units of ~120 m).
+      telemetry.readout = `${(camera.position.length() * 0.12).toFixed(1)} km from the Waystation`
     } else if (useExperience.getState().activeSystem === 'tessaly') {
       // Tessaly's scale: Liris's orbit (24 units) is 1.33 AU around the pair's centre.
       telemetry.readout = `${(camera.position.length() * 0.055).toFixed(1)} AU from the twin suns`

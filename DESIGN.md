@@ -1952,7 +1952,7 @@ Explore) beyond their existing routes, which are unchanged.
 
 ## 17. Phase 11 — Beyond the System (first steps)
 
-**Status: Partly implemented** (11a–c, deployed). Decisions taken for Phase 11:
+**Status: Partly implemented** (11a–c deployed, 11d begun). Decisions taken for Phase 11:
 
 - **Tessaly first:** a binary star with one circumbinary world.
 - **Story-gated:** a system opens when an expedition leads there.
@@ -2172,13 +2172,52 @@ The proposal (`docs/proposals/phase-11-beyond-the-system.md`) is updated to matc
   (*In the Aether system: 9 of 54*), the survey in the Journal, the Journal in
   Tessaly. A new player sees the Observatory as before. No errors.
 
+### Liris in the search (11c, last loose end)
+
+- Once Expedition III has opened Tessaly, the Observatory's search lists Liris's
+  places and finds (unfound ones under their surface names, unfound hidden ones not
+  at all, as for Elys). Picking one opens its record without turning the dial (the
+  dial is Elys's sky) and without *Explore* / *Revisit* (that would be a transit).
+
+### The Waystation and Expedition IV (11d, first stage)
+
+- **Expedition IV, The Third Shadow**, opens after Expedition III and is played on
+  Liris, through three of its surveyor‑built finds: the two‑shadow dial
+  (`liris-twofold-shore`), the paired cairns (`liris-between-days.paired-cairns`)
+  and the hidden third shadow (`liris-long-noon.third-shadow`), cast *against* a
+  light by something dark between the arms. Its closing puts the Waystation on the
+  map. Expedition requirements may now be any world's finds (`FIND_BY_ID`).
+- **The registry knows sites.** `StarSystem.kind` is `system` or `site`; each
+  story‑gated place names `knownAfter` (shown, unnamed) and `opensWith` (reachable),
+  its HUD `status` and its `sealedNote`; `mapAccess` derives `known` / `open` for
+  every place. The Waystation is known after III, open after IV, and lies in the gap
+  between the arms, back the other way from Elys and lifted out of the disc.
+- **The map** lists every known place; a site shows what it is (*A survey station,
+  derelict*; *No star; its own lamps*) instead of star, worlds and explored.
+  *Travel to the Waystation* / *Back to the Waystation* (names read lower‑case
+  mid‑sentence). Each place's code is fetched when it is selected (`loadSystem`).
+- **The Waystation** (`systems/waystation`, its own 1.5 kB gzipped chunk): a hub
+  with the survey mark (three rising lines over a circle) lit on its face, a main
+  ring on three spars with nine lamps (three still pulse, out of step), a broken
+  outer ring, drifting dust (seeded). No star: the galaxy's core lights it warm
+  from one side, the void cold from the other, its lamps from within. A first visit
+  frames it from 30 units; the readout gives km from the Waystation.
+- **Its record:** selecting the station opens a panel like a world's (*Deep space
+  · between the arms*): what it is, who built it, its lamps, its light, how it was
+  found. `siteOpen` is shared state, so the HUD steps aside as for a world's panel;
+  opening the map closes it.
+- **Verified in the dev build:** the scene and its record panel; Expedition IV:
+  the third shadow scanned for real on Liris (*Part of Expedition IV*), then *Something
+  in the way* and *The Third Shadow* in turn; the map lists Elys, Tessaly and the
+  Waystation, all open. **Not yet run:** the transit to the Waystation and its
+  first‑visit framing (the preview pane was closed mid‑test).
+
 ### Not built yet (Phase 11, next)
 
-- **11c, remaining stages:**
-  - Liris in the Observatory's search;
-  - drawn double shadows, and a palette of its own (Liris uses the terrestrial
-    recipe with its own seed, colours and atmosphere).
-- **11d–e:** deep‑space sites; expedition routes and unexplored regions on the map.
+- **11d, next stage:** readings at the Waystation (scannable from orbit), its
+  record in the Observatory and Journal.
+- **11e:** expedition routes and unexplored regions on the map.
+- **Liris:** drawn double shadows, and a surface recipe of its own.
 
 ### Verified
 
@@ -2662,9 +2701,9 @@ Superseded Phase 1 decisions, kept so nobody reintroduces them by accident.
 | 9 | Universe Simulation | **Complete** (not yet deployed) | One simulation clock, Kepler‑consistent orbits, slowed rotation, 11 moons, controls, solved conjunctions, oppositions, alignments, transits and eclipses, Observatory Sky section (§13) |
 | 10 | Production polish | **Complete** (not yet deployed) | Audit, failure handling, surface memory leak, adaptive resolution to 0.75, layout and accessibility fixes, GPU measurement, production build verified at /aether/ (§14) |
 | — | Planet exploration overhaul | **Complete** (not yet deployed) | Living surface camera, shared depth (haze banks, shafts, foreground particles, weathered landmarks), each world's continuous life and events, visible lightning, discovery light wave (§15) |
-| 11 | Beyond the System | **Partly complete** (11a–c, deployed) | Star-system registry, universe map, Tessaly: two suns, Liris (landing, 10 discoveries), Expedition III and the transit (§17); next: Liris in the Observatory and journal, deep-space sites |
-| 12 | AETHER Command | **Partly complete** (12a–d, not yet deployed) | Contextual record, search, timeline milestones, journal link in the Observatory (§16); the universe navigator waits for Phase 11 |
-| — | Cinematic motion overhaul | **Complete** (not yet deployed) | Breathing orbits, crane rises, banked entry, landing and climb, a smooth ground hull, operator-spring flights, evolving cloud decks and shadows, ocean glitter, layered life per world and five new occasional events (§23) |
+| 11 | Beyond the System | **Partly complete** (11a–c deployed, 11d begun) | Star-system registry, universe map, Tessaly: two suns, Liris (landing, 10 discoveries, Observatory, journal, search), Expedition III and the transit; the Waystation and Expedition IV (§17); next: readings at the Waystation, map routes |
+| 12 | AETHER Command | **Partly complete** (12a–d, deployed) | Contextual record, search, timeline milestones, journal link in the Observatory (§16); the universe navigator waits for Phase 11 |
+| — | Cinematic motion overhaul | **Complete** (deployed) | Breathing orbits, crane rises, banked entry, landing and climb, a smooth ground hull, operator-spring flights, evolving cloud decks and shadows, ocean glitter, layered life per world and five new occasional events (§23) |
 
 ---
 

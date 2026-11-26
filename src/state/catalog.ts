@@ -1,8 +1,8 @@
 import { MOONS, formatDuration } from '../data/astronomy'
-import { DISCOVERIES, CATEGORIES, discoveriesFor } from '../data/discoveries'
+import { DISCOVERIES, CATEGORIES, discoveriesFor, LIRIS_DISCOVERIES } from '../data/discoveries'
 import { FRAGMENT_KINDS } from '../data/expeditions'
-import { LOCATIONS, LOCATION_BY_ID } from '../data/locations'
-import { PLANETS, PLANET_BY_ID, type PlanetId, type WorldId } from '../data/planets'
+import { LIRIS_LOCATIONS, LOCATIONS, LOCATION_BY_ID, PLACE_BY_ID } from '../data/locations'
+import { PLANETS, PLANET_BY_ID, type WorldId } from '../data/planets'
 import { LIRIS } from '../data/tessaly'
 import type { CelestialEvent } from './events'
 import { unlockedFragments, type ExpeditionState } from './expeditions'
@@ -38,7 +38,7 @@ export interface CatalogEntry {
   title: string
   /** One line of context (world, place, kind). */
   sub: string
-  planet: PlanetId | null
+  planet: WorldId | null
   /** Lower-case text the search matches against. */
   text: string
 }
@@ -75,6 +75,16 @@ export function buildCatalog(found: Record<string, number>, states: ExpeditionSt
       add({ kind: 'discovery', id: d.id, title: d.name, sub: `${CATEGORIES[d.category].label} · ${l.name}, ${p.name}`, planet: d.planet }, d.description)
     } else if (d.kind !== 'secret') {
       add({ kind: 'discovery', id: d.id, title: unknown(d.kind), sub: `Not yet scanned · ${l.name}, ${p.name}`, planet: d.planet })
+    }
+  }
+
+  // Phase 11: Liris's places and finds, once Expedition III has opened Tessaly (search never spoils).
+  if (states.some((s) => s.expedition.id === 'exp-double-star' && s.completedAt !== null)) {
+    for (const l of LIRIS_LOCATIONS) add({ kind: 'location', id: l.id, title: l.name, sub: `${l.region}`, planet: 'liris' }, `${LIRIS.name} tessaly ${l.hint}`)
+    for (const d of LIRIS_DISCOVERIES) {
+      const l = PLACE_BY_ID[d.location]
+      if (found[d.id]) add({ kind: 'discovery', id: d.id, title: d.name, sub: `${CATEGORIES[d.category].label} · ${l.name}, ${LIRIS.name}`, planet: 'liris' }, d.description)
+      else if (d.kind !== 'secret') add({ kind: 'discovery', id: d.id, title: unknown(d.kind), sub: `Not yet scanned · ${l.name}, ${LIRIS.name}`, planet: 'liris' })
     }
   }
 

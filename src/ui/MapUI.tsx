@@ -7,7 +7,7 @@ import { useExploration } from '../state/exploration'
 import { mapAccess } from '../state/expeditions'
 import { systemProgress, worldProgress } from '../state/progress'
 import { useExperience } from '../state/useExperience'
-import { loadTessaly } from '../system/chunks'
+import { loadSystem } from '../system/chunks'
 import { closeMap, transitFx, travelTo } from './mapDirector'
 
 /**
@@ -34,16 +34,16 @@ export function MapUI() {
   useEffect(() => {
     selectedRef.current = selected
   }, [selected])
-  const percent = useMemo(
+  const percent = useMemo<Partial<Record<SystemId, number>>>(
     () => ({
       elys: systemProgress(discovered, visited).percent,
       tessaly: worldProgress(LIRIS, discovered, visited).percent,
     }),
     [discovered, visited],
   )
-  // A system is sealed until its expedition opens it (development shots can stand in Tessaly regardless).
-  const isSealed = (id: SystemId) => SYSTEM_BY_ID[id].unlock === 'story' && !access.tessalyOpen && id !== active
-  const shown = SYSTEMS.filter((s) => s.id === 'elys' || s.id === active || (s.id === 'tessaly' && access.tessalyKnown))
+  // A place is sealed until its expedition opens it (development shots can stand anywhere regardless).
+  const isSealed = (id: SystemId) => !access.open[id] && id !== active
+  const shown = SYSTEMS.filter((s) => s.id === active || access.known[s.id])
 
   // Each time the map opens: start on the system you are in (adjusted during render, not in an effect).
   const [wasOpen, setWasOpen] = useState(open)
@@ -129,7 +129,7 @@ export function MapUI() {
               onClick={() => {
                 setSelected(s.id)
                 // Fetch the destination's code early, so arriving never waits.
-                if (s.id === 'tessaly' && !sealedMark) travelPreload()
+                if (!sealedMark) travelPreload(s.id)
               }}
               aria-pressed={s.id === selected}
               tabIndex={tab}
@@ -149,14 +149,26 @@ export function MapUI() {
         <h2 className="map-title">{sealed ? sys.unknownName : sys.name}</h2>
         <p className="map-copy">{sealed ? sys.description : (sys.openDescription ?? sys.description)}</p>
         <dl className="obs-facts map-facts">
-          <div>
-            <dt>Star</dt>
-            <dd>{sealed ? 'Unresolved' : sys.star}</dd>
-          </div>
+          {sys.kind === 'site' ? (
+            <div>
+              <dt>Site</dt>
+              <dd>{sealed ? 'Unresolved' : sys.siteKind}</dd>
+            </div>
+          ) : (
+            <div>
+              <dt>Star</dt>
+              <dd>{sealed ? 'Unresolved' : sys.star}</dd>
+            </div>
+          )}
           {sealed ? (
             <div>
               <dt>Status</dt>
               <dd>Not yet reachable</dd>
+            </div>
+          ) : sys.kind === 'site' ? (
+            <div>
+              <dt>Light</dt>
+              <dd>No star; its own lamps</dd>
             </div>
           ) : (
             <>
@@ -166,23 +178,23 @@ export function MapUI() {
               </div>
               <div>
                 <dt>Explored</dt>
-                <dd className="tabular-nums">{percent[selected]}%</dd>
+                <dd className="tabular-nums">{percent[selected] ?? 0}%</dd>
               </div>
             </>
           )}
         </dl>
         {!access.tessalyKnown && <p className="map-note">Beyond Elys, the galaxy is uncharted. Complete the expeditions to learn where they lead.</p>}
-        {access.tessalyKnown && sealed && <p className="map-note">Expedition III, in the Journal, measures the way there.</p>}
+        {sealed && sys.sealedNote && <p className="map-note">{sys.sealedNote}</p>}
         <div className="map-actions">
           {canTravel && (
             <button type="button" className="explore-button" onClick={travel}>
               <Navigation size={14} strokeWidth={1.5} aria-hidden />
-              Travel to {sys.name}
+              Travel to {inSentence(sys.name)}
             </button>
           )}
           <button type="button" className={canTravel ? 'quiet-button px-3' : 'explore-button'} onClick={closeMap} tabIndex={tab} disabled={travelling}>
             <ArrowLeft size={14} strokeWidth={1.5} aria-hidden />
-            Back to {activeName}
+            Back to {inSentence(activeName)}
           </button>
         </div>
       </aside>
@@ -195,6 +207,9 @@ export function MapUI() {
   )
 }
 
-function travelPreload() {
-  void loadTessaly().catch(() => {})
+function travelPreload(id: SystemId) {
+  void loadSystem(id).catch(() => {})
 }
+
+/** "The Waystation" reads "the Waystation" mid-sentence. */
+const inSentence = (name: string) => (name.startsWith('The ') ? `the ${name.slice(4)}` : name)

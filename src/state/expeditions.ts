@@ -1,4 +1,5 @@
 import { EXPEDITIONS, EXPEDITION_BY_ID, type Expedition, type Fragment, type Objective } from '../data/expeditions'
+import { SYSTEMS, type SystemId } from '../data/systems'
 
 /**
  * Phase 8: expedition progress, derived from the exploration store's
@@ -79,13 +80,20 @@ export function expeditionStates(found: Found): ExpeditionState[] {
 }
 
 /**
- * Phase 11: what the expeditions have opened on the map. Tessaly is hinted at
- * (unnamed) once Expedition II is complete, and reachable once Expedition III is.
+ * Phase 11: what the expeditions have opened on the map. Each story-gated place
+ * names the expedition after which it shows (unnamed, sealed) and the one that
+ * opens it: Tessaly after II and III, the Waystation after III and IV.
  */
 export function mapAccess(found: Found) {
   const states = expeditionStates(found)
-  const done = (id: string) => states.find((s) => s.expedition.id === id)?.completedAt != null
-  return { tessalyKnown: done('exp-second-sky'), tessalyOpen: done('exp-double-star') }
+  const done = (id?: string) => !id || states.find((s) => s.expedition.id === id)?.completedAt != null
+  const known = {} as Record<SystemId, boolean>
+  const open = {} as Record<SystemId, boolean>
+  for (const s of SYSTEMS) {
+    known[s.id] = s.unlock === 'home' || done(s.knownAfter)
+    open[s.id] = s.unlock === 'home' || done(s.opensWith)
+  }
+  return { known, open, tessalyKnown: known.tessaly, tessalyOpen: open.tessaly }
 }
 
 /** Every story fragment the visitor has unlocked, oldest first. */

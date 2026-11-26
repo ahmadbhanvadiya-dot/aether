@@ -1,9 +1,9 @@
 import { CornerDownRight, X } from 'lucide-react'
 import { useEffect, useMemo, useRef } from 'react'
-import { DISCOVERY_BY_ID } from '../data/discoveries'
+import { FIND_BY_ID } from '../data/discoveries'
 import { FRAGMENT_KINDS } from '../data/expeditions'
-import { LOCATION_BY_ID } from '../data/locations'
-import { PLANET_BY_ID } from '../data/planets'
+import { PLACE_BY_ID } from '../data/locations'
+import { WORLD_BY_ID } from '../data/planets'
 import { useExploration } from '../state/exploration'
 import { expeditionStates, mapAccess, unlockedFragments, unlockLine, type ExpeditionState } from '../state/expeditions'
 import { formatWhen, worldProgress } from '../state/progress'
@@ -64,13 +64,13 @@ function ExpeditionEntry({ s, active }: { s: ExpeditionState; active: boolean })
                       {o.status === 'open' && <p className="journal-objective-brief">{o.objective.brief}</p>}
                       <ul className="journal-places">
                         {o.objective.requires.map((id) => {
-                          const d = DISCOVERY_BY_ID[id]
+                          const d = FIND_BY_ID[id]
                           const at = discovered[id]
                           return (
                             <li key={id} data-found={at ? true : undefined}>
-                              <span className="signal-dot" data-found={at ? true : undefined} style={{ ['--accent' as string]: PLANET_BY_ID[d.planet].accent }} aria-hidden />
+                              <span className="signal-dot" data-found={at ? true : undefined} style={{ ['--accent' as string]: WORLD_BY_ID[d.planet].accent }} aria-hidden />
                               <span>
-                                {at ? d.name : unknownName(d)} · {LOCATION_BY_ID[d.location].name}, {PLANET_BY_ID[d.planet].name}
+                                {at ? d.name : unknownName(d)} · {PLACE_BY_ID[d.location].name}, {WORLD_BY_ID[d.planet].name}
                               </span>
                               <span className="journal-place-state">{at ? formatWhen(at).date : 'Not yet found'}</span>
                             </li>

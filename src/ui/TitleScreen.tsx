@@ -18,6 +18,7 @@ import { Hud } from './Hud'
 import { JournalUI } from './JournalUI'
 import { SimulationKeys } from './SimulationUI'
 import { MapUI } from './MapUI'
+import { SiteUI } from './SiteUI'
 import { closeMap, openMap } from './mapDirector'
 import { StoryUI } from './StoryUI'
 import { OrbitLabel } from './OrbitLabel'
@@ -133,7 +134,7 @@ export function TitleScreen() {
             director.space = 'galaxy'
             enterGalaxyIntro()
             setPhase('galaxy')
-            if (shot === 'tessaly') useExperience.getState().setActiveSystem('tessaly')
+            if (shot === 'tessaly' || shot === 'waystation') useExperience.getState().setActiveSystem(shot)
             else if (shot === 'observatory') setTimeout(openObservatory, 500)
             else if (shot !== 'galaxy') setTimeout(() => useExperience.getState().setFocus(shot as PlanetId), 300)
           }
@@ -350,6 +351,7 @@ export function TitleScreen() {
       <StoryUI />
       <SimulationKeys />
       <MapUI />
+      <SiteUI />
 
       <div className="pointer-events-auto">
         <Hud />

@@ -69,6 +69,9 @@ interface ExperienceState {
   obsFocus: ObsFocus | null
   /** Phase 11: the star system the scene shows (Elys, or another once it is reached). */
   activeSystem: SystemId
+  /** Phase 11d: a deep-space site's record is open (the HUD steps aside as for a world's). */
+  siteOpen: boolean
+  setSiteOpen: (open: boolean) => void
   setActiveSystem: (id: SystemId) => void
   setObsFocus: (focus: ObsFocus | null, planet?: PlanetId | null) => void
   /** Phase 10: something failed (a chunk, WebGL, a slow start); shown by FaultUI. */
@@ -142,7 +145,9 @@ export const useExperience = create<ExperienceState>((set) => ({
   journal: false,
   obsFocus: null,
   activeSystem: 'elys',
-  setActiveSystem: (activeSystem) => set({ activeSystem, focus: null, hovered: null }),
+  setActiveSystem: (activeSystem) => set({ activeSystem, focus: null, hovered: null, siteOpen: false }),
+  siteOpen: false,
+  setSiteOpen: (siteOpen) => set({ siteOpen }),
   // Turning the dial to the item's world and showing the item are one update.
   setObsFocus: (obsFocus, planet) => set(planet ? { obsFocus, observed: planet } : { obsFocus }),
   fault: null,
@@ -183,7 +188,7 @@ export const debugShot = (() => {
   const shot = new URLSearchParams(window.location.search).get('shot')
   if (shot === 'orbit' || shot === 'galaxy' || shot === 'observatory') return shot
   // Phase 11: Tessaly is story-gated; until its expedition exists, only development can reach it.
-  if (shot === 'tessaly' && import.meta.env.DEV) return shot
+  if ((shot === 'tessaly' || shot === 'waystation') && import.meta.env.DEV) return shot
   if (shot && PLANETS.some((p) => p.id === shot)) return shot as PlanetId
   if (shot && LOCATION_BY_ID[shot]) return `loc:${shot}` as const
   // Liris's places, like Tessaly itself, only in development for now.
