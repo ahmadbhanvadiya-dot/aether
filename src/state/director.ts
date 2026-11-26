@@ -91,6 +91,8 @@ export const telemetry = {
     tessaly: { x: 0, y: 0, on: false },
     waystation: { x: 0, y: 0, on: false },
   } as Record<string, { x: number; y: number; on: boolean }>,
+  /** Phase 11d: the Waystation's readings, projected (CSS px; `on` when in view and facing). */
+  site: {} as Record<string, { x: number; y: number; on: boolean }>,
   /** Ithra's projected screen position in CSS pixels. */
   ithra: { x: 0, y: 0, visible: false },
 }

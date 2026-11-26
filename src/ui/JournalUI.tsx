@@ -8,6 +8,7 @@ import { useExploration } from '../state/exploration'
 import { expeditionStates, mapAccess, unlockedFragments, unlockLine, type ExpeditionState } from '../state/expeditions'
 import { formatWhen, worldProgress } from '../state/progress'
 import { LIRIS } from '../data/tessaly'
+import { READINGS, READINGS_TOTAL } from '../data/waystation'
 import { useExperience } from '../state/useExperience'
 import { unknownName } from './ScannerUI'
 import { replayStory } from './storyDirector'
@@ -143,6 +144,43 @@ function SurveyEntry() {
   )
 }
 
+/** Phase 11d: the Waystation's readings, as a survey beside Liris's. */
+function WaystationSurvey() {
+  const discovered = useExploration((st) => st.discovered)
+  const found = READINGS.filter((r) => discovered[r.id]).length
+  const done = found === READINGS_TOTAL
+  return (
+    <article className="journal-expedition" data-status={done ? 'complete' : 'open'}>
+      <p className="journal-code">
+        <span>Survey · Deep space</span>
+        <span className="journal-status">{done ? 'Complete' : found > 0 ? 'Under way' : 'Not yet read'}</span>
+      </p>
+      <h3 className="journal-title">The Waystation</h3>
+      <p className="journal-copy">{found > 0 ? 'Read from orbit: select the markers on the station.' : 'Travel to the Waystation from the galaxy map, and read the station from orbit.'}</p>
+      <div className="journal-progress" aria-label={`${found} of ${READINGS_TOTAL} readings`}>
+        {READINGS.map((r) => (
+          <span key={r.id} data-done={discovered[r.id] ? true : undefined} />
+        ))}
+        <span className="journal-progress-count tabular-nums">
+          {found} of {READINGS_TOTAL}
+        </span>
+      </div>
+      <ul className="journal-places">
+        {READINGS.map((r) => {
+          const at = discovered[r.id]
+          return (
+            <li key={r.id} data-found={at ? true : undefined}>
+              <span className="signal-dot" data-found={at ? true : undefined} style={{ ['--accent' as string]: '#9FE3FF' }} aria-hidden />
+              <span>{at ? r.name : r.hint}</span>
+              <span className="journal-place-state">{at ? formatWhen(at).date : 'Not yet read'}</span>
+            </li>
+          )
+        })}
+      </ul>
+    </article>
+  )
+}
+
 export function JournalUI() {
   const open = useExperience((s) => s.journal)
   const setJournal = useExperience((s) => s.setJournal)
@@ -155,7 +193,9 @@ export function JournalUI() {
   const sorted = useMemo(() => states.slice().sort((a, b) => ORDER[statusOf(a)] - ORDER[statusOf(b)]), [states])
   const complete = states.filter((s) => s.completedAt !== null).length
   const visitedLiris = useExploration((s) => !!s.visited.liris)
-  const showSurvey = mapAccess(discovered).tessalyOpen || visitedLiris
+  const access = mapAccess(discovered)
+  const showSurvey = access.tessalyOpen || visitedLiris
+  const showWaystation = access.open.waystation || READINGS.some((r) => discovered[r.id])
 
   useEffect(() => {
     if (!open) return
@@ -195,9 +235,10 @@ export function JournalUI() {
           ))}
         </section>
 
-        {showSurvey && (
+        {(showSurvey || showWaystation) && (
           <section aria-label="Surveys">
-            <SurveyEntry />
+            {showSurvey && <SurveyEntry />}
+            {showWaystation && <WaystationSurvey />}
           </section>
         )}
 

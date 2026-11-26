@@ -128,8 +128,8 @@ export function Hud() {
           : 'Drag to orbit, scroll to zoom'
         : activeSystem === 'waystation'
           ? quality.coarse
-            ? 'Drag to rotate, tap the station'
-            : 'Drag to rotate, select the station'
+            ? 'Drag to rotate, tap the station or a reading'
+            : 'Drag to rotate, select the station or a reading'
           : !atElys
           ? 'Drag to rotate'
           : quality.coarse

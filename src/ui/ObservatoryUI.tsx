@@ -4,6 +4,7 @@ import { CATEGORIES, CATEGORY_ORDER, discoveriesAt, type Find } from '../data/di
 import { LOCATIONS } from '../data/locations'
 import { isElysWorld, PLANET_BY_ID, PLANETS, WORLD_BY_ID, type PlanetId } from '../data/planets'
 import { LIRIS } from '../data/tessaly'
+import { READINGS, READINGS_TOTAL } from '../data/waystation'
 import { useThumbs } from '../scene/galaxy/Thumbnails'
 import { telemetry } from '../state/director'
 import { useExploration } from '../state/exploration'
@@ -449,7 +450,12 @@ export function ObservatoryUI() {
   const world = progress.worlds.find((w) => w.planet.id === observed)!
   // Phase 11: Liris, beyond Elys. Its row and archive appear once Tessaly is open or anything is known there.
   const liris = useMemo(() => worldProgress(LIRIS, discovered, visited), [discovered, visited])
-  const showLiris = mapAccess(discovered).tessalyOpen || !!visited.liris || liris.found + liris.hiddenFound > 0
+  const access = mapAccess(discovered)
+  const showLiris = access.tessalyOpen || !!visited.liris || liris.found + liris.hiddenFound > 0
+  // The Waystation: once Expedition IV opens it, or once anything is read there.
+  const wayFound = READINGS.filter((r) => discovered[r.id]).length
+  const showWaystation = access.open.waystation || wayFound > 0
+  const showBeyond = showLiris || showWaystation
   const [archiveLiris, setArchiveLiris] = useState(false)
   // Selecting a world on the dial (or stepping) brings the archive back to it.
   const [archiveFor, setArchiveFor] = useState(observed)
@@ -610,12 +616,13 @@ export function ObservatoryUI() {
         </section>
 
         {/* Phase 11: worlds beyond Elys. Not on the dial (that is Elys's sky); reached from the galaxy map. */}
-        {showLiris && (
+        {showBeyond && (
           <section id="obs-beyond" className="obs-section" aria-labelledby="obs-beyond-title">
             <h2 id="obs-beyond-title" className="obs-section-title">
               Beyond Elys
             </h2>
             <ol className="obs-worlds">
+              {showLiris && (
               <li data-selected={archiveLiris || undefined}>
                 <button
                   type="button"
@@ -651,6 +658,30 @@ export function ObservatoryUI() {
                 </button>
                 <p className="obs-beyond-note">Reached from the galaxy map</p>
               </li>
+              )}
+              {showWaystation && (
+                <li>
+                  <div className="obs-world-row" role="group" aria-label="The Waystation record">
+                    <span className="obs-portrait obs-portrait-waystation" style={{ width: 64, height: 64 }} aria-hidden />
+                    <span className="obs-world-main">
+                      <span className="obs-world-name">THE WAYSTATION</span>
+                      <span className="obs-world-class">A survey station, derelict · Between the arms</span>
+                      <span className="obs-world-teaser">Three of its nine lamps still turn.</span>
+                    </span>
+                    <span className="obs-world-stat">
+                      <span className="obs-stat-label">Readings</span>
+                      <span className="tabular-nums">
+                        {wayFound} of {READINGS_TOTAL}
+                      </span>
+                    </span>
+                    <span className="obs-world-stat">
+                      <span className="obs-stat-label">Explored</span>
+                      <span className="tabular-nums">{Math.round((wayFound / READINGS_TOTAL) * 100)}%</span>
+                    </span>
+                  </div>
+                  <p className="obs-beyond-note">Read from orbit, reached from the galaxy map</p>
+                </li>
+              )}
             </ol>
           </section>
         )}

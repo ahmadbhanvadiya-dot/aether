@@ -1,12 +1,19 @@
-import { Orbit } from 'lucide-react'
+import { Orbit, X } from 'lucide-react'
 import { useEffect, useRef } from 'react'
+import { CATEGORIES } from '../data/discoveries'
 import { SYSTEM_BY_ID } from '../data/systems'
-import { useExperience } from '../state/useExperience'
+import { READING_BY_ID, READINGS, READINGS_TOTAL, readingsFound } from '../data/waystation'
+import { telemetry } from '../state/director'
+import { useExploration } from '../state/exploration'
+import { formatWhen } from '../state/progress'
+import { quality, useExperience } from '../state/useExperience'
+import { CATEGORY_ICON } from './ScannerUI'
+import { closeReadingCard, readingFx, startReading, useSite } from './siteDirector'
 
 /**
- * Phase 11d: the record of a deep-space site, opened by selecting it in the
- * scene (`siteOpen`). The same panel as a world's, with what is known of the
- * site instead of a world's facts.
+ * Phase 11d: a deep-space site's interface — its record (opened by selecting the
+ * station: `siteOpen`), the markers of its readings over the scene, and the card
+ * of a reading once it is taken. The same panel and card as a world's.
  */
 
 const FACTS = [
@@ -16,13 +23,128 @@ const FACTS = [
   { label: 'Found', value: 'Expedition IV, from Liris' },
 ]
 
-export function SiteUI() {
+function useHere() {
   const phase = useExperience((s) => s.phase)
   const active = useExperience((s) => s.activeSystem)
+  return phase === 'galaxy' && active === 'waystation'
+}
+
+/** Markers over the station: a ring to read, a filled dot once read, a sweep while reading. */
+function Markers() {
+  const here = useHere()
+  const discovered = useExploration((s) => s.discovered)
+  const scanning = useSite((s) => s.scanning)
+  const layer = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!here) return
+    let raf = 0
+    const tick = () => {
+      layer.current?.querySelectorAll<HTMLElement>('[data-reading]').forEach((el) => {
+        const m = telemetry.site[el.dataset.reading!]
+        if (!m) return
+        el.style.transform = `translate3d(${m.x.toFixed(1)}px, ${m.y.toFixed(1)}px, 0)`
+        el.dataset.away = m.on ? '' : 'true'
+        if (el.dataset.reading === readingFx.id) el.style.setProperty('--p', readingFx.progress.toFixed(3))
+      })
+      raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [here])
+
+  return (
+    <div ref={layer} className="site-marks" data-visible={here || undefined} aria-label="Readings at the Waystation">
+      {READINGS.map((r) => {
+        const found = !!discovered[r.id]
+        return (
+          <button
+            key={r.id}
+            type="button"
+            data-reading={r.id}
+            className="site-mark"
+            data-found={found || undefined}
+            data-scanning={scanning === r.id || undefined}
+            onClick={() => startReading(r.id)}
+            tabIndex={here ? 0 : -1}
+            aria-label={found ? `${r.name}, read` : `Unread reading: ${r.hint}`}
+            title={found ? r.name : r.hint}
+          >
+            <span className="site-mark-ring" aria-hidden />
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+/** The card of a reading, once taken. */
+function ReadingCard() {
+  const here = useHere()
+  const card = useSite((s) => s.card)
+  const discovered = useExploration((s) => s.discovered)
+  const r = card ? READING_BY_ID[card] : null
+  const open = here && !!r
+
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent) => {
+      const st = useExperience.getState()
+      if (e.key === 'Escape' && !st.story && !st.journal) closeReadingCard()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [open])
+
+  if (!r) return <aside className="discovery-card site-card" aria-hidden />
+  const Icon = CATEGORY_ICON[r.category]
+  const at = discovered[r.id]
+  const when = at ? formatWhen(at) : null
+  return (
+    <aside
+      className="discovery-card site-card ui-hideable"
+      data-open={open || undefined}
+      aria-hidden={!open}
+      aria-live="polite"
+      aria-label={`Reading: ${r.name}`}
+      style={{ ['--accent' as string]: SYSTEM_BY_ID.waystation.color }}
+      key={r.id}
+    >
+      <p className="discovery-card-kind">
+        <Icon size={14} strokeWidth={1.5} aria-hidden />
+        {CATEGORIES[r.category].label}
+      </p>
+      <h2 className="discovery-card-name">{r.name}</h2>
+      <p className="discovery-card-copy">{r.description}</p>
+      <dl className="discovery-card-facts">
+        <div>
+          <dt>Where</dt>
+          <dd>The Waystation, between the arms</dd>
+        </div>
+        <div>
+          <dt>Recorded</dt>
+          <dd className="tabular-nums">{when ? `${when.date}, ${when.time}` : '—'}</dd>
+        </div>
+      </dl>
+      <p className="discovery-card-archive tabular-nums">
+        Read from orbit · {readingsFound(discovered)} of {READINGS_TOTAL} readings at the Waystation
+      </p>
+      <button type="button" className="discovery-card-close quiet-button" onClick={closeReadingCard} tabIndex={open ? 0 : -1}>
+        <X size={14} strokeWidth={1.5} aria-hidden />
+        Close
+      </button>
+    </aside>
+  )
+}
+
+export function SiteUI() {
+  const here = useHere()
   const siteOpen = useExperience((s) => s.siteOpen)
   const setSiteOpen = useExperience((s) => s.setSiteOpen)
+  const discovered = useExploration((s) => s.discovered)
   const aside = useRef<HTMLElement>(null)
-  const open = siteOpen && phase === 'galaxy' && active === 'waystation'
+  const open = siteOpen && here
+  const found = readingsFound(discovered)
 
   useEffect(() => {
     if (!open) return
@@ -37,33 +159,56 @@ export function SiteUI() {
 
   const site = SYSTEM_BY_ID.waystation
   return (
-    <aside ref={aside} className="world-panel ui-hideable" data-open={open || undefined} aria-hidden={!open} inert={!open} aria-live="polite">
-      <div className="world-panel-body">
-        <p className="text-[0.8125rem] text-haze">Deep space · between the arms</p>
-        <h2 className="world-panel-name">{site.name.toUpperCase()}</h2>
-        <p className="flex items-center gap-2.5 text-[1.02rem] font-light text-starlight/85">
-          <span className="h-1.5 w-1.5 rounded-full" style={{ background: site.color, boxShadow: `0 0 10px ${site.color}` }} aria-hidden />
-          {site.siteKind}
-        </p>
-        <p className="world-panel-copy">
-          A station the old survey left in the dark between the arms, turned out of the plane of the galaxy. Its hull carries their mark, three rising lines
-          over a circle, and three of its nine lamps still turn, slower every year.
-        </p>
-        <dl className="world-facts">
-          {FACTS.map((f) => (
-            <div key={f.label}>
-              <dt>{f.label}</dt>
-              <dd>{f.value}</dd>
-            </div>
-          ))}
-        </dl>
-        <div className="world-panel-actions">
-          <button type="button" className="quiet-button ml-auto px-4" onClick={() => setSiteOpen(false)} tabIndex={open ? 0 : -1} title="Close (Esc)">
-            <Orbit size={15} strokeWidth={1.5} aria-hidden />
-            Return to the station
-          </button>
+    <div className="site-ui">
+      <Markers />
+      <ReadingCard />
+      <aside ref={aside} className="world-panel ui-hideable" data-open={open || undefined} aria-hidden={!open} inert={!open} aria-live="polite">
+        <div className="world-panel-body">
+          <p className="text-[0.8125rem] text-haze">Deep space · between the arms</p>
+          <h2 className="world-panel-name">{site.name.toUpperCase()}</h2>
+          <p className="flex items-center gap-2.5 text-[1.02rem] font-light text-starlight/85">
+            <span className="h-1.5 w-1.5 rounded-full" style={{ background: site.color, boxShadow: `0 0 10px ${site.color}` }} aria-hidden />
+            {site.siteKind}
+          </p>
+          <p className="world-panel-copy">
+            A station the old survey left in the dark between the arms, turned out of the plane of the galaxy. Its hull carries their mark, three rising
+            lines over a circle, and three of its nine lamps still turn, slower every year.
+          </p>
+          <dl className="world-facts">
+            {FACTS.map((f) => (
+              <div key={f.label}>
+                <dt>{f.label}</dt>
+                <dd>{f.value}</dd>
+              </div>
+            ))}
+          </dl>
+          <div className="site-readings">
+            <p className="site-readings-head tabular-nums">
+              Readings <span>{found} of {READINGS_TOTAL}</span>
+            </p>
+            <ul>
+              {READINGS.map((r) => {
+                const at = discovered[r.id]
+                return (
+                  <li key={r.id}>
+                    <button type="button" className="site-reading" data-found={at ? true : undefined} onClick={() => startReading(r.id)} tabIndex={open ? 0 : -1}>
+                      <span className="site-reading-dot" aria-hidden />
+                      <span>{at ? r.name : r.hint}</span>
+                      <span className="site-reading-state">{at ? formatWhen(at).date : quality.coarse ? 'Tap to read' : 'Select to read'}</span>
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
+          </div>
+          <div className="world-panel-actions">
+            <button type="button" className="quiet-button ml-auto px-4" onClick={() => setSiteOpen(false)} tabIndex={open ? 0 : -1} title="Close (Esc)">
+              <Orbit size={15} strokeWidth={1.5} aria-hidden />
+              Return to the station
+            </button>
+          </div>
         </div>
-      </div>
-    </aside>
+      </aside>
+    </div>
   )
 }

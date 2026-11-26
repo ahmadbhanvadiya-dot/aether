@@ -2212,10 +2212,39 @@ The proposal (`docs/proposals/phase-11-beyond-the-system.md`) is updated to matc
   Waystation, all open. **Not yet run:** the transit to the Waystation and its
   first‑visit framing (the preview pane was closed mid‑test).
 
+### Readings at the Waystation (11d, second stage)
+
+- **A site is read from orbit.** No surface to land on, so its finds are readings
+  anchored to points on the station (`data/waystation.ts`): *the survey mark* on
+  the hub (structure), *a lamp keeping time* in the Listening Array's rhythm
+  (anomaly; the signal of Expedition I came from here), *the torn ring*, taken
+  away whole (structure), and *violet dust*, Liris's moss carried here (life).
+  Recorded in `discovered` under `waystation.*` ids (`discover` accepts them), kept
+  apart from Elys's 54 and Liris's 9.
+- **Markers:** the scene projects each anchor every frame (`telemetry.site`), in the
+  station's turning frame or in space about it; a reading on a face turned away
+  hides until it turns back. A ring breathes on what is unread (still for reduced
+  motion), a dot marks what is read.
+- **Reading** (`ui/siteDirector.ts`): select a marker (or the reading in the panel):
+  2.4 s (0.5 s reduced) while light gathers at the point in the scene and the
+  scanner's tone rises, then a chime and the reading's card (the discovery card's
+  look: category, name, text, where, when, *n of 4 readings*). A read one opens its
+  card at once. Leaving (the map, a transit) cancels a reading in progress and
+  closes the card; nothing is recorded.
+- **Records:** the station's panel lists its readings (*Readings n of 4*); the
+  Observatory's *Beyond Elys* gains a Waystation row (readings, explored) once it is
+  open or anything is read; the Journal gains *Survey · Deep space · The
+  Waystation*. Not on the Observatory timeline or in its search yet.
+- **Verified in the dev build:** markers aligned on the station (the survey mark's
+  35 px below the hub's centre, on its lit face), the torn ring hidden while turned
+  away; the survey mark read with a real click (card, *1 of 4*, marker to read);
+  the panel list, the Journal survey, the Observatory row (Elys still *0 of 54*); a
+  reading cancelled by opening the map (not recorded). No errors.
+
 ### Not built yet (Phase 11, next)
 
-- **11d, next stage:** readings at the Waystation (scannable from orbit), its
-  record in the Observatory and Journal.
+- **11d, next stage:** the Waystation's readings on the Observatory timeline and in
+  its search; an expedition that reads them together.
 - **11e:** expedition routes and unexplored regions on the map.
 - **Liris:** drawn double shadows, and a surface recipe of its own.
 
