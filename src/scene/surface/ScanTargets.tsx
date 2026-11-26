@@ -146,6 +146,8 @@ export function ScanTargets({ planet }: { planet: WorldId }) {
     [planet, accent],
   )
   const all = useMemo(() => discoveriesFor(planet), [planet])
+  // Per-frame lookups (were linear searches inside the frame loop).
+  const glintById = useMemo(() => new Map(glints.map((g) => [g.d.id, g])), [glints])
   const quad = useMemo(() => new PlaneGeometry(1, 1), [])
   // Freed with the surface (Phase 10): each descent mounts a new one.
   useEffect(() => () => quad.dispose(), [quad])
@@ -185,7 +187,8 @@ export function ScanTargets({ planet }: { planet: WorldId }) {
     const t = director.time
     const tanHalf = Math.tan(MathUtils.degToRad((camera as { fov?: number }).fov ?? 55) / 2)
 
-    for (const g of glints) {
+    for (let gi = 0; gi < glints.length; gi++) {
+      const g = glints[gi]
       const pos = surface.targets[g.d.id]
       const mesh = g.mesh
       if (!pos || !mesh) continue
@@ -211,13 +214,14 @@ export function ScanTargets({ planet }: { planet: WorldId }) {
         alpha = near * focus * (found ? 0.65 : 1)
       }
       // Behind a ridge: tested every third frame (staggered), faded rather than popped.
-      if ((frame.current + glints.indexOf(g)) % 3 === 0) g.blocked = blocked(camPos, pos)
+      if ((frame.current + gi) % 3 === 0) g.blocked = blocked(camPos, pos)
       g.occl = MathUtils.damp(g.occl, g.blocked ? 1 : 0, 6, dt)
       alpha *= clear * (gaze > 0 ? 1 : 0) * (1 - g.occl)
       mesh.visible = alpha > 0.004
       g.mat.uniforms.uAlpha.value = alpha
       g.mat.uniforms.uFound.value = found ? 1 : 0
-      g.mat.uniforms.uTime.value = t
+      // Cinematic pass: each glint breathes on its own phase (they used to pulse in unison).
+      g.mat.uniforms.uTime.value = t + gi * 1.37
       if (mesh.visible) {
         mesh.position.copy(pos)
         mesh.quaternion.copy(camera.quaternion)
@@ -240,15 +244,14 @@ export function ScanTargets({ planet }: { planet: WorldId }) {
       projected.copy(pos).project(camera)
       entry.x = (projected.x * 0.5 + 0.5) * size.width
       entry.y = (-projected.y * 0.5 + 0.5) * size.height
-      const glintOf = glints.find((g) => g.d.id === d.id)
+      const glintOf = glintById.get(d.id)
       entry.on =
         projected.z < 1 &&
         Math.abs(projected.x) < 1.05 &&
         Math.abs(projected.y) < 1.05 &&
         clear > 0.5 &&
         (!glintOf || glintOf.occl < 0.5)
-      const glint = glints.find((g) => g.d.id === d.id)
-      entry.alpha = d.kind === 'signal' ? 1 : (glint?.mat.uniforms.uAlpha.value as number) ?? 0
+      entry.alpha = d.kind === 'signal' ? 1 : (glintOf?.mat.uniforms.uAlpha.value as number) ?? 0
     }
 
     // Scan effects at the target.
