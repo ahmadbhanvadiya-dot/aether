@@ -381,7 +381,7 @@ export const EXPEDITIONS: Expedition[] = [
       {
         id: 'ts-3',
         title: 'The third shadow',
-        brief: 'At the Long Noon the arch casts one shadow too many. Turn your back on the suns and find it.',
+        brief: 'At the Long Noon the arch casts one shadow too many. Turn around from the arch, toward both suns, and look low along the ground until it shows.',
         requires: ['liris-long-noon.third-shadow'],
         fragment: {
           id: 'ts-3-transmission',
