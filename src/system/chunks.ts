@@ -37,6 +37,14 @@ export const loadObservatoryUI = memoImport(() => import('../ui/ObservatoryUI'))
 
 /** Phase 11: other star systems, each its own chunk. */
 export const loadTessaly = memoImport(() => import('../systems/tessaly/TessalySystem'))
+export const loadWaystation = memoImport(() => import('../systems/waystation/WaystationSite'))
+
+/** Phase 11d: fetch a place's scene ahead of a transit (Elys is in the main bundle). */
+export function loadSystem(id: 'elys' | 'tessaly' | 'waystation') {
+  if (id === 'tessaly') return loadTessaly()
+  if (id === 'waystation') return loadWaystation()
+  return Promise.resolve(null)
+}
 
 /** Set when the Observatory's interface failed to mount; opening it then reports the fault. */
 export const observatoryUnavailable = { current: false }

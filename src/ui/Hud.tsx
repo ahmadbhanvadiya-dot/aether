@@ -5,6 +5,7 @@ import { telemetry } from '../state/director'
 import { sound } from '../audio/sound'
 import { openObservatory } from './observatoryDirector'
 import { WORLD_BY_ID } from '../data/planets'
+import { SYSTEM_BY_ID } from '../data/systems'
 import { expeditionStates, unlockedFragments } from '../state/expeditions'
 import { discoveredCount, hiddenCount, PER_WORLD, TOTAL_DISCOVERIES, useExploration } from '../state/exploration'
 import { quality, useExperience, type Phase } from '../state/useExperience'
@@ -67,8 +68,10 @@ export function Hud() {
   const cinema = useExperience((s) => s.cinema)
   const toggleCinema = useExperience((s) => s.toggleCinema)
   const focus = useExperience((s) => s.focus)
+  const siteOpen = useExperience((s) => s.siteOpen)
   // Phase 11: away from Elys, the Elys-only views (Observatory, journal) wait.
-  const atElys = useExperience((s) => s.activeSystem) === 'elys'
+  const activeSystem = useExperience((s) => s.activeSystem)
+  const atElys = activeSystem === 'elys'
   const exploring = useExperience((s) => s.exploring)
   const location = useExperience((s) => s.location)
   const soundOn = useExploration((s) => s.soundOn)
@@ -94,7 +97,7 @@ export function Hud() {
         : phase === 'surface'
           ? `Exploring ${world}`
           : phase === 'galaxy' && !atElys
-            ? 'The Tessaly system'
+            ? SYSTEM_BY_ID[activeSystem].status
             : STATUS[phase]
   const inGalaxy = phase === 'galaxy'
   const onSurface = phase === 'surface'
@@ -123,7 +126,11 @@ export function Hud() {
         ? quality.coarse
           ? 'Drag to orbit, pinch to zoom'
           : 'Drag to orbit, scroll to zoom'
-        : !atElys
+        : activeSystem === 'waystation'
+          ? quality.coarse
+            ? 'Drag to rotate, tap the station'
+            : 'Drag to rotate, select the station'
+          : !atElys
           ? 'Drag to rotate'
           : quality.coarse
             ? 'Drag to rotate, tap a world'
@@ -248,7 +255,7 @@ export function Hud() {
       <div
         className="hud-corner ui-hideable hud-status flex flex-col"
         data-obs={inObservatory || undefined}
-        data-panel={(inGalaxy && focus !== null) || undefined}
+        data-panel={(inGalaxy && (focus !== null || siteOpen)) || undefined}
         data-map={phase === 'map' || undefined}
         style={{
           bottom: 'calc(env(safe-area-inset-bottom) + var(--gutter))',
@@ -261,7 +268,7 @@ export function Hud() {
           {status}
         </span>
         <Readout />
-        {showTotal && !atElys && (
+        {showTotal && activeSystem === 'tessaly' && (
           <span className="tabular-nums">
             {discoveredCount(discovered, 'liris')} of {PER_WORLD} discoveries on {WORLD_BY_ID.liris.name}
             {hiddenCount(discovered, 'liris') > 0 && <>, {hiddenCount(discovered, 'liris')} hidden</>}
@@ -278,7 +285,7 @@ export function Hud() {
       <div
         className="hud-corner ui-hideable hud-hint text-right"
         data-obs={inObservatory || undefined}
-        data-panel={(inGalaxy && focus !== null) || undefined}
+        data-panel={(inGalaxy && (focus !== null || siteOpen)) || undefined}
         data-map={phase === 'map' || undefined}
         style={{
           bottom: 'calc(env(safe-area-inset-bottom) + var(--gutter))',

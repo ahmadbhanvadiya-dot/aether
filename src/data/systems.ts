@@ -22,7 +22,7 @@ export const GALAXY = {
 const toScene = new Matrix4().makeRotationFromEuler(GALAXY.rotation).setPosition(GALAXY.position)
 const toLocal = toScene.clone().invert()
 
-export type SystemId = 'elys' | 'tessaly'
+export type SystemId = 'elys' | 'tessaly' | 'waystation'
 
 export interface StarSystem {
   id: SystemId
@@ -40,6 +40,17 @@ export interface StarSystem {
   position: Vector3
   /** 'home' is always reachable; 'story' opens with an expedition (Tessaly: Expedition III). */
   unlock: 'home' | 'story'
+  /** Phase 11d: a star system, or a site in deep space (no star, no worlds). */
+  kind: 'system' | 'site'
+  /** What the site is, for the map's record (sites only). */
+  siteKind?: string
+  /** How the HUD names it while you are there. */
+  status: string
+  /** Story-gated: the expedition after which it shows on the map (unnamed), and the one that opens it. */
+  knownAfter?: string
+  opensWith?: string
+  /** Shown on the map while it is known but sealed. */
+  sealedNote?: string
 }
 
 /** The galaxy's plane normal in the scene, pointing to the side the camera usually sees. */
@@ -49,12 +60,18 @@ export const GALAXY_NORMAL = new Vector3(0, 1, 0).applyEuler(GALAXY.rotation).no
 const fromGalaxy = (local: Vector3) => local.clone().applyMatrix4(toScene)
 const toGalaxy = (world: Vector3) => world.clone().applyMatrix4(toLocal)
 
-/** Elys sits out in an arm; Tessaly a little further round the same arm. */
+/** Elys sits out in an arm; Tessaly a little further round the same arm; the Waystation in the gap behind. */
 const elysLocal = toGalaxy(new Vector3(0, 0, 0))
 const tessalyLocal = (() => {
   const r = Math.hypot(elysLocal.x, elysLocal.z) * 0.93
   const a = Math.atan2(elysLocal.z, elysLocal.x) + 0.32
   return new Vector3(Math.cos(a) * r, elysLocal.y + 4, Math.sin(a) * r)
+})()
+/** Between the arms, back the other way from Elys and lifted out of the disc (where the third stones point). */
+const waystationLocal = (() => {
+  const r = Math.hypot(elysLocal.x, elysLocal.z) * 0.86
+  const a = Math.atan2(elysLocal.z, elysLocal.x) - 0.24
+  return new Vector3(Math.cos(a) * r, elysLocal.y + 14, Math.sin(a) * r)
 })()
 
 export const SYSTEMS: StarSystem[] = [
@@ -68,6 +85,8 @@ export const SYSTEMS: StarSystem[] = [
     worlds: PLANETS.length,
     position: new Vector3(0, 0, 0),
     unlock: 'home',
+    kind: 'system',
+    status: 'The Aether system',
   },
   {
     id: 'tessaly',
@@ -81,6 +100,30 @@ export const SYSTEMS: StarSystem[] = [
     worlds: 1,
     position: fromGalaxy(tessalyLocal),
     unlock: 'story',
+    kind: 'system',
+    status: 'The Tessaly system',
+    knownAfter: 'exp-second-sky',
+    opensWith: 'exp-double-star',
+    sealedNote: 'Expedition III, in the Journal, measures the way there.',
+  },
+  {
+    id: 'waystation',
+    name: 'The Waystation',
+    unknownName: 'A darkness between the arms',
+    star: 'None',
+    siteKind: 'A survey station, derelict',
+    description: 'Between the arms, one patch of the galaxy is a little darker than it should be. Nothing yet leads there.',
+    openDescription:
+      'A station the old survey left in the dark between the arms, out of the plane of the galaxy. No star lights it; three of its nine lamps still turn. Expedition IV found it from Liris.',
+    color: '#9FE3FF',
+    worlds: 0,
+    position: fromGalaxy(waystationLocal),
+    unlock: 'story',
+    kind: 'site',
+    status: 'The Waystation',
+    knownAfter: 'exp-double-star',
+    opensWith: 'exp-third-shadow',
+    sealedNote: 'Expedition IV, in the Journal, finds the way there.',
   },
 ]
 

@@ -1,10 +1,10 @@
 import { ArrowLeft, BookOpen, CornerDownRight, Play, Search } from 'lucide-react'
 import { useId, useMemo, useState, type ReactNode, type RefObject } from 'react'
 import { ASTRONOMY, MOONS, formatDuration } from '../data/astronomy'
-import { CATEGORIES, DISCOVERY_BY_ID, discoveriesAt } from '../data/discoveries'
+import { CATEGORIES, discoveriesAt, FIND_BY_ID } from '../data/discoveries'
 import { EXPEDITION_BY_ID, FRAGMENT_BY_ID, FRAGMENT_KINDS } from '../data/expeditions'
-import { LOCATION_BY_ID } from '../data/locations'
-import { PLANET_BY_ID, type PlanetId } from '../data/planets'
+import { PLACE_BY_ID } from '../data/locations'
+import { isElysWorld, PLANET_BY_ID, WORLD_BY_ID, type WorldId } from '../data/planets'
 import { buildCatalog, CATALOG_KINDS, CATALOG_ORDER, searchCatalog, type CatalogEntry } from '../state/catalog'
 import { EVENT_KINDS } from '../state/events'
 import { useExploration } from '../state/exploration'
@@ -27,8 +27,8 @@ import { replayStory } from './storyDirector'
 
 // ---- The contextual record ---------------------------------------------------
 
-function Head({ kind, title, planet, sub }: { kind: string; title: string; planet: PlanetId | null; sub: string }) {
-  const p = planet ? PLANET_BY_ID[planet] : null
+function Head({ kind, title, planet, sub }: { kind: string; title: string; planet: WorldId | null; sub: string }) {
+  const p = planet ? WORLD_BY_ID[planet] : null
   return (
     <>
       <p className="obs-focus-kind">{kind}</p>
@@ -57,14 +57,14 @@ function Body({ focus, active }: { focus: ObsFocus; active: boolean }) {
 
   switch (focus.kind) {
     case 'discovery': {
-      const d = DISCOVERY_BY_ID[focus.id]
+      const d = FIND_BY_ID[focus.id]
       if (!d) return null
       const at = discovered[d.id]
-      const l = LOCATION_BY_ID[d.location]
+      const l = PLACE_BY_ID[d.location]
       const Icon = CATEGORY_ICON[d.category]
       return (
         <>
-          <Head kind={at ? CATEGORIES[d.category].label : 'Not yet scanned'} title={at ? d.name : unknownName(d)} planet={d.planet} sub={`${l.name}, ${PLANET_BY_ID[d.planet].name}`} />
+          <Head kind={at ? CATEGORIES[d.category].label : 'Not yet scanned'} title={at ? d.name : unknownName(d)} planet={d.planet} sub={`${l.name}, ${WORLD_BY_ID[d.planet].name}`} />
           <p className="obs-reading-copy">{at ? d.description : d.kind === 'signal' ? l.hint : 'Seen from the location, not yet scanned.'}</p>
           <dl className="obs-facts">
             <Fact label="Status">{at ? 'Discovered' : 'Not yet found'}</Fact>
@@ -77,14 +77,15 @@ function Body({ focus, active }: { focus: ObsFocus; active: boolean }) {
             </Fact>
           </dl>
           <div className="obs-reading-actions">
-            {at ? (
+            {/* Beyond Elys, going there is a transit, from the galaxy map. */}
+            {!isElysWorld(d.planet) ? null : at ? (
               <button type="button" className="explore-button" onClick={() => revisitDiscovery(d.id)} tabIndex={tab}>
                 <CornerDownRight size={14} strokeWidth={1.5} aria-hidden />
                 Revisit
               </button>
             ) : (
               <button type="button" className="explore-button" onClick={() => exploreLocation(d.location)} tabIndex={tab}>
-                <span className="enter-glyph" style={{ background: PLANET_BY_ID[d.planet].accent }} aria-hidden />
+                <span className="enter-glyph" style={{ background: WORLD_BY_ID[d.planet].accent }} aria-hidden />
                 Explore {l.name}
               </button>
             )}
@@ -94,7 +95,7 @@ function Body({ focus, active }: { focus: ObsFocus; active: boolean }) {
     }
 
     case 'location': {
-      const l = LOCATION_BY_ID[focus.id]
+      const l = PLACE_BY_ID[focus.id]
       if (!l) return null
       const here = discoveriesAt(l.id)
       const listed = here.filter((d) => d.kind !== 'secret')
@@ -105,7 +106,7 @@ function Body({ focus, active }: { focus: ObsFocus; active: boolean }) {
           <Head kind="Place" title={l.name} planet={l.planet} sub={`${l.region}`} />
           <p className="obs-reading-copy">{found > 0 ? l.lore : l.hint}</p>
           <dl className="obs-facts">
-            <Fact label="World">{PLANET_BY_ID[l.planet].name}</Fact>
+            <Fact label="World">{WORLD_BY_ID[l.planet].name}</Fact>
             <Fact label="Discoveries">
               <span className="tabular-nums">
                 {found} of {listed.length}
@@ -113,12 +114,14 @@ function Body({ focus, active }: { focus: ObsFocus; active: boolean }) {
               </span>
             </Fact>
           </dl>
-          <div className="obs-reading-actions">
-            <button type="button" className="explore-button" onClick={() => exploreLocation(l.id)} tabIndex={tab}>
-              <span className="enter-glyph" style={{ background: PLANET_BY_ID[l.planet].accent }} aria-hidden />
-              Explore {l.name}
-            </button>
-          </div>
+          {isElysWorld(l.planet) && (
+            <div className="obs-reading-actions">
+              <button type="button" className="explore-button" onClick={() => exploreLocation(l.id)} tabIndex={tab}>
+                <span className="enter-glyph" style={{ background: PLANET_BY_ID[l.planet].accent }} aria-hidden />
+                Explore {l.name}
+              </button>
+            </div>
+          )}
         </>
       )
     }
@@ -241,8 +244,11 @@ export function SearchSection({ active, input, onPick }: { active: boolean; inpu
 
   const pick = (e: CatalogEntry) => {
     const st = useExperience.getState()
-    if (e.kind === 'world') st.setObserved(e.planet!)
-    else st.setObsFocus({ kind: e.kind, id: e.id }, e.planet)
+    // The dial turns only to Elys's worlds; a record beyond Elys opens without turning it.
+    const planet = e.planet && isElysWorld(e.planet) ? e.planet : null
+    if (e.kind === 'world') {
+      if (planet) st.setObserved(planet)
+    } else st.setObsFocus({ kind: e.kind, id: e.id }, planet)
     onPick()
   }
   const tab = active ? 0 : -1
@@ -299,7 +305,7 @@ export function SearchSection({ active, input, onPick }: { active: boolean; inpu
                   {shown.map((e) => (
                     <li key={`${e.kind}-${e.id}`}>
                       <button type="button" className="obs-search-hit" onClick={() => pick(e)} tabIndex={tab}>
-                        {e.planet && <span className="obs-accent-dot" style={{ background: PLANET_BY_ID[e.planet].accent }} aria-hidden />}
+                        {e.planet && <span className="obs-accent-dot" style={{ background: WORLD_BY_ID[e.planet].accent }} aria-hidden />}
                         <span className="obs-search-title">{e.title}</span>
                         <span className="obs-search-sub">{e.sub}</span>
                       </button>

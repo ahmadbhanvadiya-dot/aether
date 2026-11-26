@@ -4,7 +4,7 @@ import { beginMap, endMap, switchMapReturn } from '../scene/galaxy/GalaxyRig'
 import type { SystemId } from '../data/systems'
 import { director } from '../state/director'
 import { useExperience } from '../state/useExperience'
-import { loadTessaly } from '../system/chunks'
+import { loadSystem } from '../system/chunks'
 
 /**
  * Phase 11: the universe map, its own view (decided for Phase 11). From the
@@ -32,6 +32,7 @@ export function openMap() {
   if (st.phase !== 'galaxy' || st.focus) return
   sound.unlock()
   st.setHovered(null)
+  st.setSiteOpen(false)
   st.setPhase('map')
   beginMap()
   timeline?.kill()
@@ -82,7 +83,7 @@ export function travelTo(to: SystemId) {
   const st = useExperience.getState()
   if (st.phase !== 'map' || st.activeSystem === to || transitFx.active) return
   // Fetch the destination's code while the marker travels.
-  if (to === 'tessaly') void loadTessaly().catch(() => {})
+  void loadSystem(to).catch(() => {})
   Object.assign(transitFx, { from: st.activeSystem, to, t: 0, active: true })
   timeline?.kill()
   const from = st.activeSystem

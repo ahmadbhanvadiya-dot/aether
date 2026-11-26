@@ -1,4 +1,4 @@
-import { DISCOVERY_BY_ID } from './discoveries'
+import { FIND_BY_ID } from './discoveries'
 
 /**
  * Phase 8: expeditions. Static content only — progress is never stored. An
@@ -329,6 +329,82 @@ export const EXPEDITIONS: Expedition[] = [
       ],
     },
   },
+  {
+    id: 'exp-third-shadow',
+    code: 'Expedition IV',
+    title: 'The Third Shadow',
+    unlock: { after: 'exp-double-star' },
+    intro: {
+      id: 'ts-intro',
+      kind: 'transmission',
+      title: 'The surveyors',
+      source: 'The array · Tessaly',
+      body: [
+        'The old survey did more than measure Tessaly. It crossed to it, and built on Liris.',
+        'Find what the surveyors left there. Their mark is on all of it.',
+      ],
+    },
+    objectives: [
+      {
+        id: 'ts-1',
+        title: 'A dial for two suns',
+        brief: "On Liris's Twofold Shore, something at the foot of the stacks answers both suns. Scan the signal.",
+        requires: ['liris-twofold-shore'],
+        fragment: {
+          id: 'ts-1-log',
+          kind: 'log',
+          title: 'Read in two lights',
+          source: 'Liris · the Twofold Shore',
+          body: [
+            'The dial carries the survey mark: three rising lines over a circle.',
+            'Its hours are cut for both suns, and a third ring of hours for neither.',
+          ],
+        },
+      },
+      {
+        id: 'ts-2',
+        title: 'Built in pairs',
+        brief: 'On the ridge at Between Days, cairns stand in pairs, one for each sun. Scan them.',
+        requires: ['liris-between-days.paired-cairns'],
+        fragment: {
+          id: 'ts-2-record',
+          kind: 'record',
+          title: 'A third stone',
+          source: 'Liris · the paired cairns',
+          body: [
+            'Behind every pair sits a third stone, low and easy to miss.',
+            'All the third stones face the same way: out of the galaxy\u2019s plane, at a patch of sky where nothing shines.',
+          ],
+        },
+      },
+      {
+        id: 'ts-3',
+        title: 'The third shadow',
+        brief: 'At the Long Noon the arch casts one shadow too many. Turn your back on the suns and find it.',
+        requires: ['liris-long-noon.third-shadow'],
+        fragment: {
+          id: 'ts-3-transmission',
+          kind: 'transmission',
+          title: 'Something in the way',
+          source: 'Liris · the Long Noon',
+          body: [
+            'The third shadow is not cast by a light. It is cast against one: something dark, between the arms, hides a patch of the galaxy behind it.',
+            'The array finds it at once. It has been answering all along.',
+          ],
+        },
+      },
+    ],
+    closing: {
+      id: 'ts-closing',
+      kind: 'record',
+      title: 'The Third Shadow',
+      source: 'Expedition record',
+      body: [
+        'Between the arms, where there is no star, the surveyors left a station. Its lamps still turn, slower every year.',
+        'The Waystation is on the map. Open the galaxy map to travel there.',
+      ],
+    },
+  },
 ]
 
 export const EXPEDITION_BY_ID: Record<string, Expedition> = Object.fromEntries(EXPEDITIONS.map((e) => [e.id, e]))
@@ -349,6 +425,6 @@ export function expeditionsFor(discoveryId: string) {
 if (import.meta.env.DEV) {
   for (const e of EXPEDITIONS)
     for (const o of e.objectives)
-      for (const r of o.requires) if (!DISCOVERY_BY_ID[r]) throw new Error(`Expedition ${e.id}: unknown discovery ${r}`)
+      for (const r of o.requires) if (!FIND_BY_ID[r]) throw new Error(`Expedition ${e.id}: unknown discovery ${r}`)
   if (Object.keys(FRAGMENT_BY_ID).length !== FRAGMENTS.length) throw new Error('Duplicate fragment id')
 }
