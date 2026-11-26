@@ -11,6 +11,7 @@ import {
   type Find,
 } from '../data/discoveries'
 import { LOCATION_BY_ID, locationsFor, PLACE_BY_ID, type LocationData, type Place } from '../data/locations'
+import { READINGS } from '../data/waystation'
 import { PLANET_BY_ID, PLANETS, WORLD_BY_ID, type PlanetData, type PlanetId, type WorldData, type WorldId } from '../data/planets'
 
 /**
@@ -152,16 +153,27 @@ export function formatWhen(at: number) {
 }
 
 /** A find on any world, with its place and world (Phase 11: the Observatory's timeline). */
+/** One line of the Observatory's timeline: a world's find, or (Phase 11d) a reading at a site. */
 export interface FindEntry {
-  discovery: Find
-  location: Place
-  planet: WorldData
+  discovery: Pick<Find, 'id' | 'name' | 'category' | 'kind'>
+  location: { name: string }
+  planet: { name: string; accent: string }
   at: number
 }
 
-/** Every discovery made on every world, oldest first (Elys's and Liris's). */
+/** Every discovery made on every world, and every reading at the Waystation, oldest first. */
 export function fullTimeline(discovered: Found): FindEntry[] {
-  return ALL_FINDS.filter((d) => discovered[d.id])
-    .map((d) => ({ discovery: d, location: PLACE_BY_ID[d.location], planet: WORLD_BY_ID[d.planet], at: discovered[d.id] }))
-    .sort((a, b) => a.at - b.at)
+  const finds: FindEntry[] = ALL_FINDS.filter((d) => discovered[d.id]).map((d) => ({
+    discovery: d,
+    location: PLACE_BY_ID[d.location],
+    planet: WORLD_BY_ID[d.planet],
+    at: discovered[d.id],
+  }))
+  const readings: FindEntry[] = READINGS.filter((r) => discovered[r.id]).map((r) => ({
+    discovery: { id: r.id, name: r.name, category: r.category, kind: 'poi' as const },
+    location: { name: 'The Waystation' },
+    planet: { name: 'between the arms', accent: '#9FE3FF' },
+    at: discovered[r.id],
+  }))
+  return [...finds, ...readings].sort((a, b) => a.at - b.at)
 }

@@ -2241,10 +2241,35 @@ The proposal (`docs/proposals/phase-11-beyond-the-system.md`) is updated to matc
   the panel list, the Journal survey, the Observatory row (Elys still *0 of 54*); a
   reading cancelled by opening the map (not recorded). No errors.
 
+### Expedition V and the readings in the record (11d, third stage)
+
+- **Expedition V, The Keepers**, opens after Expedition IV and is played at the
+  Waystation: one objective per reading, in the order the keepers left them (the
+  mark, the lamp, the ring, the dust). Its records tell who kept the station:
+  forty‑one surveyors, the lamp as the Listening Array's source, the outer ring cut
+  free and flown away, Liris's moss aboard. Its closing leaves where they went open.
+  Expedition requirements may name readings (`READING_BY_ID`); the Journal lists
+  them as *… · The Waystation*, and a reading's card names its expedition.
+- **Story from readings:** a reading that completes an objective queues its records
+  (`noteDiscovery`), as a surface scan does. Site state (`readingFx`, `useSite`)
+  moved to `state/site.ts`, so the story director waits for a reading in progress
+  or its card, without the scene, interface and story importing each other.
+- **Timeline:** `fullTimeline` adds readings (*…, The Waystation, between the
+  arms*, in the station's colour); `FindEntry` is now the shape the timeline needs.
+- **Search:** once Expedition IV has opened the Waystation, its readings are listed
+  (unread ones only as *Unread reading*, by their hint). A picked reading opens its
+  record (status, when it was taken) without turning the dial and without actions.
+- **Verified in the dev build:** Expeditions I–IV and three readings seeded; the
+  violet dust read with a real click: its card (*Part of Expedition V*, *4 of 4*),
+  the story held while the card was open, then *Carried both ways* and *The
+  Keepers* in turn; Expedition V complete in the Journal with its readings; the
+  timeline (*Expedition V begins*, four readings, *complete*); search *violet dust*
+  → the reading and its record; a new player finds nothing under *waystation*. No
+  errors; lint unchanged.
+
 ### Not built yet (Phase 11, next)
 
-- **11d, next stage:** the Waystation's readings on the Observatory timeline and in
-  its search; an expedition that reads them together.
+- **Where the keepers went:** the next place, found from the lamp's four notes.
 - **11e:** expedition routes and unexplored regions on the map.
 - **Liris:** drawn double shadows, and a surface recipe of its own.
 

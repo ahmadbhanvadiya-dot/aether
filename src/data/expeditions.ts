@@ -1,4 +1,5 @@
 import { FIND_BY_ID } from './discoveries'
+import { READING_BY_ID } from './waystation'
 
 /**
  * Phase 8: expeditions. Static content only — progress is never stored. An
@@ -405,6 +406,88 @@ export const EXPEDITIONS: Expedition[] = [
       ],
     },
   },
+  {
+    id: 'exp-keepers',
+    code: 'Expedition V',
+    title: 'The Keepers',
+    unlock: { after: 'exp-third-shadow' },
+    intro: {
+      id: 'kp-intro',
+      kind: 'transmission',
+      title: 'Left in order',
+      source: 'The Waystation · its lamps',
+      body: [
+        'The Waystation is not empty because it was abandoned. It is empty because it was left in order.',
+        'Read it as its keepers left it: the mark, the lamp, the ring, the dust.',
+      ],
+    },
+    objectives: [
+      {
+        id: 'kp-1',
+        title: 'Whose mark',
+        brief: 'At the Waystation, read the survey mark lit on the hub.',
+        requires: ['waystation.survey-mark'],
+        fragment: {
+          id: 'kp-1-record',
+          kind: 'record',
+          title: 'Forty-one',
+          source: 'The Waystation · the survey mark',
+          body: ['Under the mark, a list of names too worn to read, and a count: forty-one surveyors.'],
+        },
+      },
+      {
+        id: 'kp-2',
+        title: 'Keeping time',
+        brief: 'One of the surviving lamps pulses in a rhythm you have heard before. Read it.',
+        requires: ['waystation.turning-lamp'],
+        fragment: {
+          id: 'kp-2-transmission',
+          kind: 'transmission',
+          title: 'The same four notes',
+          source: 'The Waystation · a lamp',
+          body: [
+            'The lamp is the Listening Array\u2019s source. It has sent the same four notes since the keepers left: here, here, here, follow.',
+          ],
+        },
+      },
+      {
+        id: 'kp-3',
+        title: 'What was taken',
+        brief: 'The outer ring ends cleanly. Read where it was cut.',
+        requires: ['waystation.torn-ring'],
+        fragment: {
+          id: 'kp-3-log',
+          kind: 'log',
+          title: 'A ship of the ring',
+          source: 'The Waystation · the torn ring',
+          body: ['The missing ring was not lost. It was cut free and fitted with engines: the keepers left in a piece of their own station.'],
+        },
+      },
+      {
+        id: 'kp-4',
+        title: 'Seeds',
+        brief: 'Something living drifts in the dust about the station. Read it.',
+        requires: ['waystation.violet-dust'],
+        fragment: {
+          id: 'kp-4-clue',
+          kind: 'clue',
+          title: 'Carried both ways',
+          source: 'The Waystation · the dust',
+          body: ['The moss came from Liris to here, and from here it went on, in the ring.', 'Wherever the keepers went, something grows violet there now.'],
+        },
+      },
+    ],
+    closing: {
+      id: 'kp-closing',
+      kind: 'record',
+      title: 'The Keepers',
+      source: 'Expedition record',
+      body: [
+        'Forty-one surveyors measured the way to Tessaly, built the Waystation, and left in its outer ring with Liris\u2019s moss aboard.',
+        'The lamp still calls them home. Where they went is not yet on any map.',
+      ],
+    },
+  },
 ]
 
 export const EXPEDITION_BY_ID: Record<string, Expedition> = Object.fromEntries(EXPEDITIONS.map((e) => [e.id, e]))
@@ -425,6 +508,6 @@ export function expeditionsFor(discoveryId: string) {
 if (import.meta.env.DEV) {
   for (const e of EXPEDITIONS)
     for (const o of e.objectives)
-      for (const r of o.requires) if (!FIND_BY_ID[r]) throw new Error(`Expedition ${e.id}: unknown discovery ${r}`)
+      for (const r of o.requires) if (!FIND_BY_ID[r] && !READING_BY_ID[r]) throw new Error(`Expedition ${e.id}: unknown discovery ${r}`)
   if (Object.keys(FRAGMENT_BY_ID).length !== FRAGMENTS.length) throw new Error('Duplicate fragment id')
 }

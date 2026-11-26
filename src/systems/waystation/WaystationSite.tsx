@@ -16,7 +16,7 @@ import { director } from '../../state/director'
 import { telemetry } from '../../state/director'
 import { useExperience } from '../../state/useExperience'
 import { READINGS } from '../../data/waystation'
-import { readingFx } from '../../ui/siteDirector'
+import { readingFx } from '../../state/site'
 
 /**
  * Phase 11d: the Waystation — a survey station left in the dark between the

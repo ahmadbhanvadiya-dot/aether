@@ -4,6 +4,7 @@ import { FRAGMENT_KINDS } from '../data/expeditions'
 import { LIRIS_LOCATIONS, LOCATIONS, LOCATION_BY_ID, PLACE_BY_ID } from '../data/locations'
 import { PLANETS, PLANET_BY_ID, type WorldId } from '../data/planets'
 import { LIRIS } from '../data/tessaly'
+import { READINGS } from '../data/waystation'
 import type { CelestialEvent } from './events'
 import { unlockedFragments, type ExpeditionState } from './expeditions'
 
@@ -85,6 +86,14 @@ export function buildCatalog(found: Record<string, number>, states: ExpeditionSt
       const l = PLACE_BY_ID[d.location]
       if (found[d.id]) add({ kind: 'discovery', id: d.id, title: d.name, sub: `${CATEGORIES[d.category].label} · ${l.name}, ${LIRIS.name}`, planet: 'liris' }, d.description)
       else if (d.kind !== 'secret') add({ kind: 'discovery', id: d.id, title: unknown(d.kind), sub: `Not yet scanned · ${l.name}, ${LIRIS.name}`, planet: 'liris' })
+    }
+  }
+
+  // Phase 11d: the Waystation's readings, once Expedition IV has opened it (search never spoils).
+  if (states.some((s) => s.expedition.id === 'exp-third-shadow' && s.completedAt !== null)) {
+    for (const r of READINGS) {
+      if (found[r.id]) add({ kind: 'discovery', id: r.id, title: r.name, sub: `${CATEGORIES[r.category].label} · The Waystation`, planet: null }, `waystation ${r.description}`)
+      else add({ kind: 'discovery', id: r.id, title: 'Unread reading', sub: 'Not yet read · The Waystation', planet: null }, `waystation ${r.hint}`)
     }
   }
 

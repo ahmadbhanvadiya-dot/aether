@@ -8,7 +8,7 @@ import { useExploration } from '../state/exploration'
 import { expeditionStates, mapAccess, unlockedFragments, unlockLine, type ExpeditionState } from '../state/expeditions'
 import { formatWhen, worldProgress } from '../state/progress'
 import { LIRIS } from '../data/tessaly'
-import { READINGS, READINGS_TOTAL } from '../data/waystation'
+import { READING_BY_ID, READINGS, READINGS_TOTAL } from '../data/waystation'
 import { useExperience } from '../state/useExperience'
 import { unknownName } from './ScannerUI'
 import { replayStory } from './storyDirector'
@@ -65,8 +65,18 @@ function ExpeditionEntry({ s, active }: { s: ExpeditionState; active: boolean })
                       {o.status === 'open' && <p className="journal-objective-brief">{o.objective.brief}</p>}
                       <ul className="journal-places">
                         {o.objective.requires.map((id) => {
-                          const d = FIND_BY_ID[id]
                           const at = discovered[id]
+                          const reading = READING_BY_ID[id]
+                          if (reading) {
+                            return (
+                              <li key={id} data-found={at ? true : undefined}>
+                                <span className="signal-dot" data-found={at ? true : undefined} style={{ ['--accent' as string]: '#9FE3FF' }} aria-hidden />
+                                <span>{at ? reading.name : 'Unread reading'} · The Waystation</span>
+                                <span className="journal-place-state">{at ? formatWhen(at).date : 'Not yet read'}</span>
+                              </li>
+                            )
+                          }
+                          const d = FIND_BY_ID[id]
                           return (
                             <li key={id} data-found={at ? true : undefined}>
                               <span className="signal-dot" data-found={at ? true : undefined} style={{ ['--accent' as string]: WORLD_BY_ID[d.planet].accent }} aria-hidden />

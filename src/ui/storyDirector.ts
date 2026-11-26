@@ -4,6 +4,7 @@ import { scanFx } from '../scene/motion'
 import { surfaceCam } from '../scene/surface/SurfaceRig'
 import { useExploration } from '../state/exploration'
 import { expeditionStates, unlockedFragments } from '../state/expeditions'
+import { useSite } from '../state/site'
 import { useExperience } from '../state/useExperience'
 
 /**
@@ -35,6 +36,9 @@ export function noteDiscovery(before: Found, after: Found) {
 export function storyCanPlay() {
   const st = useExperience.getState()
   if (st.story || st.card || st.scanning || st.journal) return false
+  // A reading at a site, or its card, is its own record: wait for it too.
+  const site = useSite.getState()
+  if (site.scanning || site.card) return false
   if (st.phase === 'surface') return surfaceCam.mode === 'free'
   return st.phase === 'galaxy' || st.phase === 'observatory'
 }

@@ -1,8 +1,9 @@
 import gsap from 'gsap'
-import { create } from 'zustand'
 import { sound } from '../audio/sound'
 import { READING_BY_ID } from '../data/waystation'
 import { useExploration } from '../state/exploration'
+import { readingFx, useSite } from '../state/site'
+import { noteDiscovery } from './storyDirector'
 import { useExperience } from '../state/useExperience'
 
 /**
@@ -12,10 +13,7 @@ import { useExperience } from '../state/useExperience'
  * already taken opens its card at once.
  */
 
-/** Read by the scene every frame (no React). */
-export const readingFx = { id: null as string | null, progress: 0 }
-
-export const useSite = create<{ scanning: string | null; card: string | null }>(() => ({ scanning: null, card: null }))
+export { readingFx, useSite }
 
 let tween: gsap.core.Tween | null = null
 let stopTone: (() => void) | null = null
@@ -49,7 +47,9 @@ export function startReading(id: string) {
     onComplete: () => {
       tween = null
       stopTone = null
-      useExploration.getState().discover(id)
+      // Phase 11d: a reading can complete an objective too (Expedition V): queue its story.
+      const before = useExploration.getState().discovered
+      if (useExploration.getState().discover(id)) noteDiscovery(before, useExploration.getState().discovered)
       sound.chime()
       Object.assign(readingFx, { id: null, progress: 0 })
       useSite.setState({ scanning: null, card: id })
