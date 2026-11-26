@@ -1,6 +1,7 @@
 import { Orbit, X } from 'lucide-react'
 import { useEffect, useRef } from 'react'
 import { CATEGORIES } from '../data/discoveries'
+import { expeditionsFor } from '../data/expeditions'
 import { SYSTEM_BY_ID } from '../data/systems'
 import { READING_BY_ID, READINGS, READINGS_TOTAL, readingsFound } from '../data/waystation'
 import { telemetry } from '../state/director'
@@ -126,6 +127,11 @@ function ReadingCard() {
           <dd className="tabular-nums">{when ? `${when.date}, ${when.time}` : '—'}</dd>
         </div>
       </dl>
+      {expeditionsFor(r.id).map((e) => (
+        <p key={e.id} className="discovery-card-expedition">
+          Part of {e.code} · {e.title}
+        </p>
+      ))}
       <p className="discovery-card-archive tabular-nums">
         Read from orbit · {readingsFound(discovered)} of {READINGS_TOTAL} readings at the Waystation
       </p>

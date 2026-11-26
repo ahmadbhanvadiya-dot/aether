@@ -4,6 +4,7 @@ import { ASTRONOMY, MOONS, formatDuration } from '../data/astronomy'
 import { CATEGORIES, discoveriesAt, FIND_BY_ID } from '../data/discoveries'
 import { EXPEDITION_BY_ID, FRAGMENT_BY_ID, FRAGMENT_KINDS } from '../data/expeditions'
 import { PLACE_BY_ID } from '../data/locations'
+import { READING_BY_ID } from '../data/waystation'
 import { isElysWorld, PLANET_BY_ID, WORLD_BY_ID, type WorldId } from '../data/planets'
 import { buildCatalog, CATALOG_KINDS, CATALOG_ORDER, searchCatalog, type CatalogEntry } from '../state/catalog'
 import { EVENT_KINDS } from '../state/events'
@@ -57,6 +58,21 @@ function Body({ focus, active }: { focus: ObsFocus; active: boolean }) {
 
   switch (focus.kind) {
     case 'discovery': {
+      // Phase 11d: a reading at the Waystation (read from orbit; no Explore or Revisit from here).
+      const r = READING_BY_ID[focus.id]
+      if (r) {
+        const at = discovered[r.id]
+        return (
+          <>
+            <Head kind={at ? CATEGORIES[r.category].label : 'Not yet read'} title={at ? r.name : 'Unread reading'} planet={null} sub="The Waystation, between the arms" />
+            <p className="obs-reading-copy">{at ? r.description : r.hint}</p>
+            <dl className="obs-facts">
+              <Fact label="Status">{at ? 'Read' : 'Not yet read'}</Fact>
+              <Fact label="Taken">{at ? formatWhen(at).date : 'From orbit, at the Waystation'}</Fact>
+            </dl>
+          </>
+        )
+      }
       const d = FIND_BY_ID[focus.id]
       if (!d) return null
       const at = discovered[d.id]
