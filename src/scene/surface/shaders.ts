@@ -40,6 +40,7 @@ uniform vec2 uDrift;
 uniform float uLive;
 uniform vec3 uEventDir;
 uniform vec2 uEvent;
+uniform float uEventKind;
 uniform vec4 uReveal;
 uniform vec3 uRevealColor;
 
@@ -57,6 +58,8 @@ vec3 revealLight(vec3 p) {
 }
 
 float sunVisible() { return smoothstep(-0.08, 0.06, uSunDir.y); }
+// Cinematic pass: 1 while the event with this id plays (ids: SurfaceScene EVENT_ID).
+float eventIs(float k) { return 1.0 - step(0.5, abs(uEventKind - k)); }
 // Phase 11: a second sun (Liris). Compiled only where there is one.
 float sun2Visible() { return smoothstep(-0.08, 0.06, uSun2Dir.y); }
 
@@ -121,7 +124,7 @@ vec3 applyFog(vec3 col, vec3 wpos) {
     air *= mix(1.0, 0.72 + 0.28 * shade, smoothstep(0.2, 0.85, mu));
 #if SKIND == 0
     // Aurelis: now and then the cloud breaks and the beams strengthen.
-    float beams = 1.0 + 2.2 * uEvent.x * step(0.0, uSunDir.y);
+    float beams = 1.0 + 2.2 * uEvent.x * eventIs(2.0) * step(0.0, uSunDir.y);
 #else
     float beams = 1.0;
 #endif
@@ -219,6 +222,17 @@ void main() {
     float streak = 0.5 + 0.5 * vnoise(vec2(a * 140.0 + uTime * 0.6, h * 3.0 - uTime * 0.5));
     curtain *= 0.65 + 0.55 * smoothstep(0.2, 0.9, sin(a * 3.0 - uTime * 0.35) * 0.5 + 0.5);
     float band = smoothstep(0.04, 0.18, h) * (1.0 - smoothstep(0.26, 0.5, h));
+    // Cinematic pass: a substorm breaks out in one part of the sky — the curtains
+    // there brighten, ripple faster and reach higher, then settle again.
+    float sub = uEvent.x * eventIs(6.0);
+    if (sub > 0.0) {
+      vec3 eD = normalize(uEventDir);
+      float off = abs(mod(a - atan(eD.z, eD.x) + 3.14159265, 6.2831853) - 3.14159265);
+      float local = sub * exp(-off * off / 0.8);
+      curtain *= 1.0 + local;
+      streak = mix(streak, 0.5 + 0.5 * vnoise(vec2(a * 220.0 + uTime * 2.4, h * 5.0 - uTime * 1.6)), local * 0.6);
+      band = smoothstep(0.04, 0.18, h) * (1.0 - smoothstep(0.26 + 0.14 * local, 0.5 + 0.2 * local, h));
+    }
     vec3 ac = mix(vec3(0.2, 1.0, 0.65), vec3(0.55, 0.35, 1.0), smoothstep(0.12, 0.5, h));
     col += ac * curtain * streak * band * uAurora * 0.42;
   }
@@ -267,8 +281,10 @@ void main() {
   // Solara: dust storms walk the horizon — a billowing wall in some directions, drifting.
   if (d.y > -0.05 && d.y < 0.3) {
     float a = atan(d.z, d.x);
-    float where = smoothstep(0.6, 0.84, fbm2(vec2(a * 1.2 + uDrift.x * 0.8, 4.1), 3) * 0.5 + 0.5);
-    float top = 0.015 + 0.085 * where * (0.75 + 0.25 * fbm2(vec2(a * 7.0 - uDrift.x * 3.0, 1.3), 3));
+    // Cinematic pass: in a gust the dust walls spread and climb.
+    float gustS = uEvent.x * eventIs(9.0);
+    float where = smoothstep(0.6 - 0.18 * gustS, 0.84 - 0.12 * gustS, fbm2(vec2(a * 1.2 + uDrift.x * 0.8, 4.1), 3) * 0.5 + 0.5);
+    float top = 0.015 + (0.085 + 0.05 * gustS) * where * (0.75 + 0.25 * fbm2(vec2(a * 7.0 - uDrift.x * 3.0, 1.3), 3));
     float inside = (1.0 - smoothstep(top - 0.03, top, d.y)) * where;
     if (inside > 0.0) {
       float billow = fbm2(vec2(a * 18.0 - uDrift.x * 9.0, d.y * 40.0 - uTime * 0.04 * uLive), 3) * 0.5 + 0.5;
@@ -283,6 +299,13 @@ void main() {
   if (uCloudCover > 0.2 && d.y > -0.02 && d.y < 0.16) {
     float a = atan(d.z, d.x);
     float cell = smoothstep(0.55, 0.85, fbm2(vec2(a * 5.0 + uDrift.x * 2.0, 2.7), 3) * 0.5 + 0.5);
+    // Cinematic pass: a squall line — a broad wall of rain moving across the view.
+    float sq = uEvent.x * eventIs(8.0);
+    if (sq > 0.0) {
+      vec3 sqD = normalize(uEventDir);
+      float sqOff = abs(mod(a - atan(sqD.z, sqD.x) + 3.14159265, 6.2831853) - 3.14159265);
+      cell = max(cell, sq * exp(-sqOff * sqOff / 0.35));
+    }
     float streak = 0.6 + 0.4 * vnoise(vec2(a * 380.0 + d.y * 40.0, d.y * 6.0 + uTime * 1.2 * uLive));
     float hang = smoothstep(0.16, 0.06, d.y) * smoothstep(-0.02, 0.02, d.y);
     col = mix(col, mix(uGround, uHorizon, 0.5) * 0.85, cell * hang * streak * 0.6 * uCloudCover);
@@ -319,7 +342,7 @@ void main() {
 
 #if SKIND == 0
   // Aurelis at night: a meteor crosses, leaving a fading trail.
-  if (evS > 0.0 && evD.y > 0.2) {
+  if (evS * eventIs(1.0) > 0.0 && evD.y > 0.2) {
     vec3 side = normalize(cross(evD, vec3(0.0, 1.0, 0.0)));
     vec3 path = normalize(side - vec3(0.0, 0.45, 0.0));
     vec3 head = normalize(evD + path * (uEvent.y * 0.55));
@@ -340,7 +363,7 @@ void main() {
     col += vec3(0.42, 0.16, 0.6) * smoothstep(0.55, 0.85, glowAz) * low * flick * 0.35;
   }
   // ...and now and then something erupts on it: a flare, then a glowing column of ash.
-  if (evS > 0.0 && d.y > -0.05) {
+  if (evS * eventIs(3.0) > 0.0 && d.y > -0.05) {
     // A wide, low glow over the vent (not a pillar), brightest at the horizon.
     float flare = exp(-azOff * azOff / 0.012) * exp(-max(d.y, 0.0) * 30.0) * 1.2 + exp(-azOff * azOff / 0.0015) * exp(-max(d.y, 0.0) * 14.0) * 0.5;
     float colH = 0.06 + 0.16 * min(uEvent.y * 3.0, 1.0);
@@ -355,7 +378,7 @@ void main() {
 
 #if SKIND == 2
   // Solara: a dust devil wanders along the horizon, twisting.
-  if (evS > 0.0 && d.y > -0.02 && d.y < 0.22) {
+  if (evS * eventIs(4.0) > 0.0 && d.y > -0.02 && d.y < 0.22) {
     float h = clamp(d.y / 0.2, 0.0, 1.0);
     float sway = sin(h * 5.0 + uTime * 0.8) * 0.01 * h;
     float width = 0.007 + h * h * 0.04;
@@ -379,7 +402,11 @@ void main() {
     float halo = smoothstep(0.7, 0.99, fa) * 0.18;
     float band = smoothstep(0.1, 0.25, d.y) * (1.0 - smoothstep(0.5, 0.85, d.y));
     float along = 0.35 + 0.65 * smoothstep(0.3, 0.8, vnoise(vec2(dAz * 3.0 - uTime * 0.05, 1.7)) * 0.5 + 0.5);
-    col += mix(vec3(0.55, 0.4, 1.0), vec3(0.45, 0.75, 1.0), fb) * (core + halo) * band * along * 0.22;
+    // Cinematic pass: a surge — light floods along the ribbons in one part of the sky
+    // and runs down their length, the halo widening, then ebbs.
+    float surge = evS * eventIs(7.0) * exp(-azOff * azOff / 0.6);
+    float runs = 0.5 + 0.5 * sin(dAz * 9.0 - uEvent.y * 14.0 + d.y * 6.0);
+    col += mix(vec3(0.55, 0.4, 1.0), vec3(0.45, 0.75, 1.0), fb) * (core + halo * (1.0 + surge * 2.0)) * band * (along + surge * (0.6 + 0.6 * runs)) * (0.22 + 0.3 * surge);
   }
 #endif
 
@@ -478,7 +505,18 @@ void main() {
   emissive += albedo * veinCol * halo * breathe * (1.0 + run * 0.6) * uFissure * 3.2;
   // An eruption on the horizon lights the plain from its side.
   vec3 toP = normalize(p - cameraPosition);
-  emissive += albedo * vec3(1.0, 0.5, 0.75) * uEvent.x * pow(max(dot(normalize(vec3(toP.x, 0.0, toP.z)), normalize(vec3(uEventDir.x, 0.0, uEventDir.z))), 0.0), 6.0) * 0.9;
+  emissive += albedo * vec3(1.0, 0.5, 0.75) * uEvent.x * eventIs(3.0) * pow(max(dot(normalize(vec3(toP.x, 0.0, toP.z)), normalize(vec3(uEventDir.x, 0.0, uEventDir.z))), 0.0), 6.0) * 0.9;
+  // Cinematic pass: a tremor — a wave of light runs through the vein field from the
+  // horizon toward the eye, with a softer after-wave, as heat shifts below.
+  float trem = uEvent.x * eventIs(10.0);
+  if (trem > 0.0) {
+    vec2 ed = normalize(uEventDir.xz + vec2(1e-5));
+    float alongW = dot(p.xz - cameraPosition.xz, ed);
+    float front = mix(1400.0, -200.0, uEvent.y);
+    float wave = exp(-pow((alongW - front) / 90.0, 2.0)) + 0.35 * exp(-pow((alongW - front - 280.0) / 170.0, 2.0));
+    // It dies away before it reaches the eye, so the frame never floods.
+    emissive += veinCol * (lines * 5.0 + halo * 1.2 + 0.025) * wave * trem * uFissure * smoothstep(-50.0, 350.0, front);
+  }
 #elif SKIND == 2
   albedo = mix(uPalette[0], uPalette[1], (0.5 + 0.5 * micro) * 0.6 + smoothstep(0.0, 30.0, h) * 0.3);
   float strata = 0.5 + 0.5 * sin(h * 0.7 + micro * 2.0);
@@ -492,9 +530,12 @@ void main() {
     // Short wisps (not continuous lines) that come and go in gust patches.
     float stream = vnoise(vec2(sq.x * 0.12 - uDrift.x * 160.0, sq.y * 0.55)) * 0.5 + 0.5;
     float patchy = smoothstep(0.15, 0.75, vnoise(sq * 0.009 - uDrift * 25.0) * 0.5 + 0.5);
-    float near = 1.0 - smoothstep(50.0, 320.0, length(p.xz - cameraPosition.xz));
+    // Cinematic pass: in a gust the streams spread across the whole plain and run thicker.
+    float gustT = uEvent.x * eventIs(9.0);
+    patchy = max(patchy, gustT * 0.85);
+    float near = 1.0 - smoothstep(50.0, 320.0 + 380.0 * gustT, length(p.xz - cameraPosition.xz));
     float level = 1.0 - smoothstep(0.12, 0.3, slope);
-    albedo = mix(albedo, uPalette[1] * 1.18, smoothstep(0.68, 0.95, stream) * patchy * near * level * 0.36 * uLive);
+    albedo = mix(albedo, uPalette[1] * 1.18, smoothstep(0.68 - 0.12 * gustT, 0.95, stream) * patchy * near * level * (0.36 + 0.3 * gustT) * uLive);
   }
   // Overhaul: wind ripples across the dunes, catching the low sun near the eye.
   {
@@ -513,6 +554,11 @@ void main() {
   // Vesper: the decks brighten and dim slowly as light filters through moving layers above.
   albedo *= 0.93 + 0.07 * sin(uTime * 0.05 + c * 6.0 + p.x * 0.001);
   emissive = vec3(0.7, 0.6, 1.0) * uFlash * pow(max(dot(normalize(p - cameraPosition), uFlashDir), 0.0), 3.0) * 0.35;
+  // Cinematic pass: the decks catch a surge's light from its side of the sky.
+  {
+    vec3 toD = normalize(p - cameraPosition);
+    emissive += albedo * vec3(0.55, 0.45, 1.0) * uEvent.x * eventIs(7.0) * pow(max(dot(normalize(vec3(toD.x, 0.0, toD.z)), normalize(vec3(uEventDir.x, 0.0, uEventDir.z))), 0.0), 4.0) * 0.35;
+  }
   wrap = 0.35;
 #elif SKIND == 4
   albedo = mix(uPalette[0], uPalette[1], smoothstep(1.0, 12.0, h));
@@ -537,7 +583,7 @@ void main() {
     }
   }
   // Overhaul: a storm deep below flickers up through the cloud tops.
-  emissive += vec3(1.0, 0.78, 0.55) * uEvent.x * pow(max(dot(normalize(p - cameraPosition), normalize(uEventDir)), 0.0), 40.0) * 1.4;
+  emissive += vec3(1.0, 0.78, 0.55) * uEvent.x * eventIs(5.0) * pow(max(dot(normalize(p - cameraPosition), normalize(uEventDir)), 0.0), 40.0) * 1.4;
   wrap = 0.35;
 #endif
 
@@ -653,9 +699,28 @@ void main() {
   vec3 Rv = reflect(-V, n);
   Rv.y = abs(Rv.y);
   vec3 refl = skyBase(Rv);
+  // Cinematic pass: the water reflects the cloud layer above it, drifting with the
+  // wind (the same field the clouds draw), fading toward the horizon.
+  if (uCloudCover > 0.03 && Rv.y > 0.03) {
+    float tc = (uCloudHeight - p.y) / Rv.y;
+    if (tc > 0.0) {
+      vec2 at = p.xz + Rv.xz * tc;
+      float cr = fbm2(at * 0.0035 + uDrift * CLOUD_RATE, LIVE_OCT) * 0.5 + 0.5;
+      float cd = smoothstep(1.0 - uCloudCover, 1.0 - uCloudCover + 0.22, cr);
+      vec3 cbase = uCloudColor * (uSunColor * max(uSunDir.y + 0.15, 0.0) * 0.55 + ambient(vec3(0.0, -1.0, 0.0)) * 0.9);
+      refl = mix(refl, cbase, cd * 0.8 * (1.0 - smoothstep(1500.0, 3500.0, tc)));
+    }
+  }
   float shade = cloudShadow(p);
   float glint = pow(max(dot(Rv, uSunDir), 0.0), 300.0) * sunVisible() * shade;
   refl += uSunColor * glint * 6.0;
+  // Cinematic pass: a glitter path toward the sun — wind-driven facets that flash
+  // and go out — near the eye, where single facets can be seen.
+  {
+    float facet = vnoise(p.xz * 2.2 + uTime * vec2(1.3, -0.9)) * 0.6 + vnoise(p.xz * 5.1 - uTime * vec2(0.7, 1.4)) * 0.4;
+    float glitter = smoothstep(0.42, 0.8, facet) * pow(max(dot(Rv, uSunDir), 0.0), 24.0) * sunVisible() * shade;
+    refl += uSunColor * glitter * 3.0 * uLive * (1.0 - smoothstep(60.0, 420.0, camDist));
+  }
 #ifdef SUN2
   refl += uSun2Color * pow(max(dot(Rv, uSun2Dir), 0.0), 300.0) * sun2Visible() * 6.0;
 #endif

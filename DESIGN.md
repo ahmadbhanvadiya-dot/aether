@@ -36,6 +36,7 @@ Status labels used throughout:
 20. [Known limitations](#20-known-limitations)
 21. [Decision log](#21-decision-log)
 22. [Roadmap](#22-roadmap)
+23. [Cinematic motion overhaul](#23-cinematic-motion-overhaul) (Implemented)
 
 ---
 
@@ -2390,6 +2391,9 @@ colors. Locations are `LOCATIONS` entries (fields in §6).
 - **rAF loops in DOM components** (`Readout`, `OrbitLabel`, `HoverLabel`, `SignalLabel`, the
   Observatory `Chart`) write
   text and transforms directly from `telemetry`.
+- **Cinematic motion (§23):** additive orbit breathing over OrbitControls, an operator
+  spring for flight views, a look-ahead ground hull, a shared orbital cloud field and an
+  event registry with `uEventKind`.
 
 ### Performance
 
@@ -2637,6 +2641,8 @@ Superseded Phase 1 decisions, kept so nobody reintroduces them by accident.
 | Surface camera: ±1.5 unit sway, ~1° view drift | A slow ±10 unit dolly aimed at a focal point 220 units ahead | No parallax meant no depth; the surfaces read as stills |
 | Lightning at random azimuths, lifting the whole frame | Mostly within the view; lights its own part of the sky; visible bolts | Flashes fell behind the visitor and whited out the frame |
 | Celestial events from the camera's view | Solved from the simulation's own geometry, independent of the camera | Events are facts about the system, not about a viewpoint |
+| Flight view locked to the path's heading (±5°) | View follows the heading through a capped spring (≤ 65°/s), settling onto the destination over the last quarter | Hairpin flights whipped the view round at 165–367°/s (§23) |
+| Resting orbit: constant-speed auto-rotate | Auto-rotate speed swells; the orbit breathes (elevation, distance, gaze) | A turntable reads as mechanical (§23) |
 
 ---
 
@@ -2658,3 +2664,160 @@ Superseded Phase 1 decisions, kept so nobody reintroduces them by accident.
 | — | Planet exploration overhaul | **Complete** (not yet deployed) | Living surface camera, shared depth (haze banks, shafts, foreground particles, weathered landmarks), each world's continuous life and events, visible lightning, discovery light wave (§15) |
 | 11 | Beyond the System | **Partly complete** (11a–c, deployed) | Star-system registry, universe map, Tessaly: two suns, Liris (landing, 10 discoveries), Expedition III and the transit (§17); next: Liris in the Observatory and journal, deep-space sites |
 | 12 | AETHER Command | **Partly complete** (12a–d, not yet deployed) | Contextual record, search, timeline milestones, journal link in the Observatory (§16); the universe navigator waits for Phase 11 |
+| — | Cinematic motion overhaul | **Complete** (not yet deployed) | Breathing orbits, crane rises, banked entry, landing and climb, a smooth ground hull, operator-spring flights, evolving cloud decks and shadows, ocean glitter, layered life per world and five new occasional events (§23) |
+
+---
+
+## 23. Cinematic motion overhaul
+
+**Status: Implemented** (branch `cinematic-motion`, not yet deployed). A motion-only pass
+across the whole journey. No screen, navigation, data or saved progress changed; no system
+was replaced. Every change builds on §8 (choreography), §11 (living universe) and §15
+(exploration overhaul).
+
+### Audit (what was found)
+
+| Kind | Finding | Where |
+|------|---------|-------|
+| Mechanical | Resting orbit (overview and focus) was a constant-speed OrbitControls turntable | `GalaxyRig` |
+| Mechanical | Observatory and universe-map rises were straight lines between two poses (a zoom) | `GalaxyRig` |
+| Mechanical | Entry, landing and climb had no bank; only flights banked | `GalaxyRig`, `SurfaceRig` |
+| Static | Orbital cloud decks slid as one rigid sheet and never changed shape; no cloud shadows from orbit; oceans had one static highlight | `galaxy/shaders.ts` |
+| Abrupt | Entry: the view follows the horizon's dip; with altitude falling linearly it swung up at ~85°/s in the last half second before the hand-over, partly visible through the thinning haze | `GalaxyRig` |
+| Abrupt | Landing ended 11 units above the location (clearance 14 against the free view's 3) and snapped down on hand-over; flights and the climb had the same snap at their ends | `SurfaceRig` |
+| Abrupt | The ground clamp followed every bump at glide speed: single-frame vertical accelerations up to 5,500 units/s² | `SurfaceRig` |
+| Abrupt | Flights whose start and end headings are far apart make a hairpin; the view, locked to the path, panned at 165–367°/s | `SurfaceRig` |
+| Abrupt | Vesper's orbital lightning blinked on a 3 Hz grid (`step()`), not as flashes | `galaxy/shaders.ts` |
+| Abrupt | The discovery signal's pings jumped when it was found (phase = time × speed, and the speed changed); its beam popped off | `SurfaceScene → Signal` |
+| Abrupt | World hover highlight and orbit-path fades used per-frame factors (frame-rate dependent) | `World.tsx` |
+| Repetitive | All scan glints breathed in unison; Vesper and Thalassa had no occasional event; Nyx, Solara and Orion had one each | `ScanTargets`, `SurfaceScene` |
+| Hygiene | A `Color.clone()` per frame in the mote light; linear searches inside the glint frame loop | `SurfaceScene`, `ScanTargets` |
+
+### Animation architecture (unchanged principles, new pieces)
+
+- **One clock per move, curves in the rig** (§8) still holds. New continuous motion is
+  driven by the scene clock `director.time` (stops with *Pause motion*) or integrated
+  per frame with `delta`; nothing goes through React state.
+- **Additive breathing over OrbitControls** (`GalaxyRig → applyBreath`): after
+  `controls.update()` an offset is added to the camera and subtracted again before the
+  next update, so the controls and the visitor's drag always work on the clean pose, and
+  any move that starts (travel, descent, Observatory) starts from the pose on screen.
+  `galaxyCam.breath` eases 0 → 1 after every arrival.
+- **Operator spring** (`SurfaceRig`, flights): the view's yaw follows its target heading
+  through a critically damped spring (ω = 2.4) with a capped rate; state in
+  `surfaceCam.rel` / `yawVel`. A redirected flight keeps its turn rate.
+- **Ground hull** (`SurfaceRig → groundGuard`): the clearance a moving camera keeps looks
+  ahead along its velocity (up to 90 units), rises promptly (rate 6) and settles slowly
+  (1.4), and joins the path through a smooth maximum (`softMax`), so glides and flights
+  ride over the land instead of tracing it. Every move starts and ends at the locations'
+  own clearance (3), so nothing snaps at either end.
+- **Shared cloud field** (`galaxy/shaders.ts → cloudFieldGLSL`): the orbital deck's drift,
+  latitude shear and churn are one function, used by the cloud layer and by the ground's
+  cloud shadows, so the shadows lie under the clouds.
+- **Event registry** (`SurfaceScene`): `EVENTS` picks the next event per world kind,
+  `DURATION` (±15 % per occurrence) and `ENVELOPE` shape it, `EVENT_ID` → `uEventKind`
+  lets the shaders tell events apart (`eventIs(k)` in `envGLSL`), and `weatherEvent`
+  lets the environment pass react (light, cover, fog, aurora, wind). Dev only:
+  `__forceEvent('<kind>')` plays one now.
+
+### Camera
+
+| Move | Change |
+|------|--------|
+| Overview and focus orbit | Auto-rotate speed swells (×0.6–1.4, 33 s and 88 s periods). The orbit breathes: elevation ±2° (39 s, 15 s), distance ±2.4 % (52 s, 22 s), and the gaze wanders ±0.3° around the target. Eases in over ~3 s after every arrival. Off for reduced motion and while paused. |
+| Observatory rise | A crane: height leads (`smootherstep 0 – 0.82`), the swing over the system follows (`0.14 – 1`), the aim turns over `0 – 0.7`. Same end pose, so the dial is unchanged. |
+| Universe-map rise | Height leads the lateral move (`0 – 0.85` against `0.05 – 1`): a rising arc. |
+| Entry (orbit → air) | Altitude falls on `1 − (1 − k)^1.5`, so the end of the drop is gentle: the horizon-tracking turn peaks at 34°/s instead of 85°/s and ends at ~7°/s, against the glide's 4.6°/s after the switch. A bank of up to 2.6° through the sweep, zero at both ends. The climb back runs the same path. |
+| Landing glide | Curves in from the left of the final line (−72·far², tangent at the end), so its heading turns with the 0.22 rad yaw offset — it faces where it flies; banks ≤ 2° with its rate of turn; rides the ground hull; settles exactly onto the location (no step on hand-over). |
+| Flights | The view follows the path through the operator spring, ≤ 65°/s (was up to 367°/s), and settles onto the destination's view over the last quarter of the linear clock (the eased clock has almost arrived well before the end); hand-over step ≤ 0.06°. Path, durations and momentum unchanged. Supersedes "faces the path's heading within ±5°" in §8. |
+| Climb | Banks ≤ 2° into its turn, levelling toward the hand-over; rides the ground hull from the location's own clearance. |
+
+Measured (dev build, fixed 30 fps virtual clock, Aurelis): the galaxy approach and focus
+show no acceleration spikes; landing peak acceleration 5,550 → 970 units/s² (smooth
+curvature, not single frames); flights between the Glass Shelf, Halvard Ridge and the
+Sounding Lagoon (six legs) peak at 45–65°/s yaw and ≤ 257°/s² yaw acceleration (was up
+to 1,805).
+
+### Living planets — orbit (`galaxy/shaders.ts`, `World.tsx`)
+
+Shared by every world with a cloud or dust deck (Aurelis, Solara, Thalassa, Liris):
+
+- **Clouds evolve.** The deck drifts east with a ±16 % latitude shear and is churned by a
+  slow simplex warp taken in the deck's own rotating frame (no seam). A thinner, finer
+  second deck runs 2.6× faster above it, so two layers move against each other.
+- **Cloud shadows** drift over land and sea (`CLOUDS` define; strength = deck opacity × 0.5).
+
+| World | Orbit |
+|-------|-------|
+| Aurelis | Clouds and shadows as above; **sunglint glitter** on open water (wind facets that catch the sun and go out, faded where facets are smaller than a pixel, via `fwidth`); **aurora substorms** travel around the ovals, swelling their width and brightness for a minute. Cyclones as before. |
+| Nyx | Vein pulses **travel** across the world instead of throbbing in unison; whole regions of the field wax and wane over minutes. Hot spots as before. |
+| Solara | The dust deck evolves and shades the ground; storms as before. |
+| Vesper | Bands meander (eddies along their edges, in the bands' own frame). **Lightning** strikes, flickers and decays per cell on its own rhythm, clustered in storm regions. |
+| Thalassa | Clouds evolve; the cyclones turn as before and now **flash with lightning** on the night side. Ocean glitter as on Aurelis. |
+| Orion | Bands meander; the great storm slowly swells and contracts. Rings turn as before. |
+
+Interaction: the hover highlight rises in ~0.3 s and falls a little slower; orbit paths
+fade at a fixed rate — both now delta-time.
+
+### Living planets — surface (`surface/shaders.ts`, `SurfaceScene.tsx`, `living.ts`)
+
+- **Water** (Aurelis, Thalassa, Liris) reflects the cloud layer above it — the same field
+  the clouds draw, drifting with the wind, fading toward the horizon — and carries a
+  **glitter path** toward the sun near the eye.
+- **Wind** gains a third, slower gust term so the gusting never settles into one rhythm.
+
+Occasional events (one at a time, 25–60 s apart, near the view; never in reduced motion,
+while paused, during flights or off the surface):
+
+| World | Events (new in **bold**) |
+|-------|--------------------------|
+| Aurelis | Day: a break in the clouds (beams; the scene brightens 12 %). Night: a meteor, or an **auroral substorm** (26 s) — the curtains brighten, ripple faster and reach higher in one part of the sky, and the aurora's light on the land rises. |
+| Nyx | An eruption, or a **tremor** (9 s): a wave of violet light runs through the vein field from the horizon toward the eye and dies before it reaches it; ash thickens; a low rumble. |
+| Solara | A dust devil, or a **gust** (15 s): the wind rises up to 2.5× (integrated, so streams and walls speed up without jumping), sand streams spread across the plain, the dust walls climb, the distance softens and warms, the air fills with dust. |
+| Vesper | **Surge** (18 s): light floods along the energy ribbons in one part of the sky and runs down them, the halo widening; the decks catch it. Lightning keeps its own schedule. |
+| Thalassa | **Squall line** (26 s): a broad wall of rain moves across the horizon, the ceiling lowers and thickens, the light falls by a third, rain and spray thicken, wind. Lightning keeps its own schedule. |
+| Orion | A storm deep below flickers up through the cloud tops (as before). |
+
+### Interaction polish
+
+- **Discovery signal:** the pings advance by integrated phase and the found state eases
+  over ~1 s, so a discovery slows the signal instead of making it jump; the beam fades out.
+- **Glints** each breathe on their own phase.
+
+### Technical
+
+- All new motion is clock- or delta-driven; nothing new re-renders React. The per-frame
+  allocation in the mote light is gone; glint lookups use a map.
+- **Reduced motion:** breathing, banks, events and shader motion (`uLive`) are off.
+  Verified: the focus camera holds still (0.000° over 3 s once settled).
+- **Pause motion** stops breathing, events and every shader term (they read
+  `director.time`); transitions the visitor started still complete.
+- **Cost:** the orbital world and cloud shaders add two simplex samples each (the warp),
+  one texture sample (cloud shadow) and two value-noise lookups on water; surface water
+  adds one cloud-field sample (`LIVE_OCT` octaves) and two value-noise lookups. No new
+  passes, textures or draw calls. `noise.ts` gained a default `OCTAVES` so shaders that
+  only need `snoise` compile.
+- **Checks:** `tsc` and `vite build` pass; oxlint is unchanged from `main` (85 warnings).
+
+### Verified
+
+Dev build, forced frames on a fixed virtual clock (the pane throttles to ~2 fps when the
+app window is behind):
+
+- The full journey on Aurelis: galaxy overview → approach → focus → entry → landing →
+  three locations (six flights) → climb → pull-back → focus, recorded frame by frame for
+  linear and angular acceleration spikes (numbers above).
+- Every new event forced and photographed: auroral substorm (Halvard Ridge), tremor (Vein
+  Fields; also measured — the wave lifts the frame's lower half by up to 40 % luminance
+  mid-plain and fades before the eye), gust (Amber Sea), surge (Thunderhead Choir),
+  squall (Long Storm).
+- Liris in orbit (two suns, clouds and shadows) and on the Twofold Shore: shaders
+  compile, both suns light the water's glitter. All programs runnable.
+- Reduced motion: the resting orbit holds still.
+
+Not verified:
+
+- events firing on their own schedule (they were forced for capture);
+- the feel at full frame rate on a real display, and on phones;
+- GPU time of the added shader terms (not re-measured; the additions are small next to §15);
+- the Observatory and map arcs were not photographed in this pass (Orion's surface was: it compiles and renders).

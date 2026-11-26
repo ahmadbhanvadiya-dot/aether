@@ -51,7 +51,11 @@ float snoise(vec3 v) {
   return 105.0 * dot(m * m, vec4(dot(p0, x0), dot(p1, x1), dot(p2, x2), dot(p3, x3)));
 }
 
-// fBm in [−1, 1]-ish. OCTAVES is injected per material via #define.
+// fBm in [−1, 1]-ish. OCTAVES is injected per material via #define (a default
+// keeps shaders that only need snoise compiling).
+#ifndef OCTAVES
+#define OCTAVES 4
+#endif
 float fbm(vec3 p) {
   float sum = 0.0;
   float amp = 0.5;

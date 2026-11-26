@@ -13,6 +13,31 @@ const kindDefines = /* glsl */ `
 #define K_GIANT 5
 `
 
+/**
+ * Cinematic pass: the cloud deck as it is drawn — drifting east, sheared a
+ * little by latitude, and churned by a slow warp that travels with it (taken
+ * in the deck's own rotating frame, so it has no seam) — shared by the cloud
+ * layer and by the ground's cloud shadows, so the shadows lie under the clouds.
+ * Needs snoise (noiseGLSL).
+ */
+const cloudFieldGLSL = /* glsl */ `
+vec2 cloudWarp(vec3 p, float t, float drift) {
+  float a = drift * 6.2831853;
+  vec3 q = vec3(p.x * cos(a) - p.z * sin(a), p.y, p.x * sin(a) + p.z * cos(a));
+  return vec2(snoise(q * 2.3 + vec3(0.0, 0.0, t * 0.012)), snoise(q * 2.3 + vec3(5.2, 1.7, -t * 0.01)));
+}
+// The main deck's texture coordinates; w receives the warp (reused by the high deck).
+vec2 cloudUV(vec3 p, float lat, float lon, float t, float speed, out vec2 w) {
+  float drift = t * speed * (1.0 + 0.16 * sin(lat * 2.6 + 0.7));
+  w = cloudWarp(p, t, drift);
+  return vec2(lon / 6.2831853 + 0.5 + drift, lat / 3.14159265 + 0.5) + w * vec2(0.014, 0.01);
+}
+float cloudRamp(float d, vec3 p) {
+  float c = smoothstep(-0.05, 0.6, d);
+  return c * c * smoothstep(1.0, 0.6, abs(p.y) * 0.9 + 0.1);
+}
+`
+
 // ---------------------------------------------------------------------------
 // Terrain bake — one equirectangular half-float texture per world, evaluated
 // once on the GPU while the prelude is up. Channel meanings depend on KIND.
@@ -155,6 +180,12 @@ uniform vec3 uAtmoNight;
 uniform vec3 uIon;
 uniform vec3 uViolet;
 uniform float uHighlight;
+#ifdef CLOUDS
+uniform float uCloudSpeed;
+uniform float uCloudShadow;
+#endif
+${noiseGLSL}
+${cloudFieldGLSL}
 #ifdef RINGS
 uniform vec3 uCenter;
 uniform float uRingInner;
@@ -233,6 +264,14 @@ void main() {
 #if KIND == K_CLOUD || KIND == K_GIANT
   // Atmospheres turn faster at the equator: a gentle, bounded shear.
   uv.x += uTime * 0.0025 * (1.0 + 0.35 * cos(lat * 2.0));
+  // Cinematic pass: the bands are not rigid — eddies along their edges meander
+  // and slowly change shape (latitude wobble, taken in the bands' own frame).
+  {
+    float ba = uTime * 0.0025 * 6.2831853;
+    vec3 bq = vec3(p.x * cos(ba) - p.z * sin(ba), p.y * 4.0, p.x * sin(ba) + p.z * cos(ba));
+    uv.y += snoise(bq * 2.6 + vec3(0.0, 0.0, uTime * 0.006)) * 0.0045;
+    uv.x += snoise(bq * 1.4 + vec3(3.1, 0.0, -uTime * 0.004)) * 0.006;
+  }
 #endif
 
   vec4 t = T(uv);
@@ -284,10 +323,14 @@ void main() {
   emissive = vec3(1.0, 0.72, 0.4) * lights * 0.35 * (1.0 - smoothstep(-0.2, 0.05, NdL));
   // Auroral ovals ring both poles on the night side, rippling slowly.
   {
-    float ring = exp(-pow((abs(lat) - 1.12 - 0.04 * sin(lon * 3.0 + uTime * 0.07)) / 0.05, 2.0));
+    // Cinematic pass: substorms — brightenings that travel around the oval and
+    // swell its width for a minute, then fade; the oval itself wanders.
+    float surge = smoothstep(0.35, 0.95, vn(vec2(lon * 1.6 - uTime * 0.06, uTime * 0.017 + sign(lat) * 3.0)));
+    float width = 0.05 * (0.85 + 0.6 * surge);
+    float ring = exp(-pow((abs(lat) - 1.12 - 0.04 * sin(lon * 3.0 + uTime * 0.07) - 0.015 * surge) / width, 2.0));
     float ripple = 0.55 + 0.45 * vn(vec2(lon * 9.0 + uTime * 0.12, lat * 4.0));
     float darkSide = 1.0 - smoothstep(-0.25, 0.08, NdL);
-    emissive += mix(vec3(0.2, 1.0, 0.62), vec3(0.55, 0.4, 1.0), ripple * 0.5) * ring * ripple * darkSide * 0.32;
+    emissive += mix(vec3(0.2, 1.0, 0.62), vec3(0.55, 0.4, 1.0), ripple * 0.5 + surge * 0.25) * ring * ripple * darkSide * (0.24 + 0.34 * surge);
   }
 
 #elif KIND == K_DARK
@@ -296,10 +339,13 @@ void main() {
   albedo = mix(vec3(0.016, 0.015, 0.02), vec3(0.05, 0.047, 0.058), smoothstep(-0.4, 0.5, t.r));
   rough = 40.0;
   water = 0.25; // glassy sheen
-  float pulse = 0.7 + 0.3 * sin(uTime * 0.6 + t.b * 6.0);
+  // Cinematic pass: pulses travel along the veins (not one global throb), and whole
+  // regions of the field wax and wane over minutes as heat moves beneath the crust.
+  float pulse = 0.68 + 0.32 * sin(uTime * 0.6 + t.b * 6.0 - lon * 5.0 + lat * 3.0);
+  float region = 0.55 + 0.75 * smoothstep(0.25, 0.85, vn(uv * vec2(9.0, 4.5) + vec2(uTime * 0.004, -uTime * 0.003)));
   vec3 veinCol = mix(uViolet, uIon, smoothstep(-0.5, 0.8, t.b));
   float night = 1.0 - smoothstep(-0.3, 0.2, NdL);
-  emissive = veinCol * veins * pulse * (0.12 + night * 0.7);
+  emissive = veinCol * veins * pulse * region * (0.12 + night * 0.7);
   // Volcanic hot spots: a few places swell to a glow and fade over minutes.
   {
     vec2 cell = floor(uv * vec2(40.0, 20.0));
@@ -336,9 +382,19 @@ void main() {
   wrap = 0.25;
   // Lightning: brief flashes in random cells on the night side
   float night = 1.0 - smoothstep(-0.25, 0.1, NdL);
-  vec2 cell = floor(uv * vec2(48.0, 24.0));
-  float flash = step(0.9965, hash12(cell + floor(uTime * 3.0) * 1.37));
-  emissive = vec3(0.75, 0.7, 1.0) * flash * night * smoothstep(0.0, 0.6, t.r) * 0.8;
+  // Cinematic pass: each flash strikes, flickers and decays (it used to blink on and
+  // off on a 3 Hz grid), cells keep their own rhythm, and storms cluster in regions.
+  vec2 cellUV = uv * vec2(48.0, 24.0);
+  vec2 cell = floor(cellUV);
+  float ch = hash12(cell);
+  float tt = uTime / (1.4 + ch * 2.2) + ch * 17.0;
+  float age = fract(tt);
+  float fire = step(0.982, hash12(cell + floor(tt) * 1.37));
+  float flash = fire * exp(-age * 7.0) * (0.65 + 0.35 * sin(age * 70.0 + ch * 9.0));
+  vec2 cf = fract(cellUV) - 0.5;
+  float shape = exp(-dot(cf, cf) * 9.0);
+  float cluster = smoothstep(0.4, 0.75, vn(uv * vec2(7.0, 3.5) + vec2(uTime * 0.003, 0.0)));
+  emissive = vec3(0.75, 0.7, 1.0) * flash * shape * cluster * night * smoothstep(0.0, 0.6, t.r) * 1.6;
 
 #elif KIND == K_OCEAN
   float island = smoothstep(0.3, 0.33, t.r);
@@ -367,7 +423,8 @@ void main() {
   albedo *= 0.88 + 0.2 * t.b;
   // The great amber storm in the southern belt
   vec2 d = vec2((uv.x - 0.62) * 2.0, (uv.y - 0.33) * 5.0);
-  float storm = exp(-dot(d, d) * 90.0);
+  // Cinematic pass: the great storm slowly swells and contracts.
+  float storm = exp(-dot(d, d) * (90.0 - 14.0 * sin(uTime * 0.013)));
   float swirl = sin(atan(d.y, d.x) * 2.0 + length(d) * 40.0 - uTime * 0.08) * 0.5 + 0.5;
   albedo = mix(albedo, mix(vec3(0.85, 0.42, 0.18), vec3(0.95, 0.68, 0.42), swirl), storm * 0.9);
   wrap = 0.12;
@@ -392,9 +449,33 @@ void main() {
   diffuse *= eclipse;
   through *= eclipse;
 
+#ifdef CLOUDS
+  // Cinematic pass: the cloud deck's shadows drift over land and sea below it.
+  {
+    vec2 cw;
+    vec2 cuv = cloudUV(p, lat, lon, uTime, uCloudSpeed, cw);
+    float above = cloudRamp(texture2D(uTerrain, cuv).a, p);
+    float shade = 1.0 - above * uCloudShadow * smoothstep(-0.1, 0.3, NdL);
+    diffuse *= shade;
+    through *= shade;
+  }
+#endif
+
   vec3 H = normalize(L + V);
   float spec = pow(max(dot(N, H), 0.0), rough) * water * dayMask * through;
   float fresnel = pow(1.0 - max(dot(N, V), 0.0), 5.0);
+#if KIND == K_TERRESTRIAL || KIND == K_OCEAN
+  // Cinematic pass: sunglint on open water glitters — wind-driven facets catch the
+  // light and let it go — fading where the facets get smaller than a pixel.
+  {
+    float fa = vn(uv * vec2(2400.0, 1200.0) + vec2(uTime * 0.9, -uTime * 0.6));
+    float fb = vn(uv * vec2(1100.0, 550.0) - vec2(uTime * 0.5, uTime * 0.35));
+    float facets = smoothstep(0.6, 0.95, fa * 0.6 + fb * 0.4);
+    float resolve = 1.0 - smoothstep(0.3, 0.9, fwidth(uv.y) * 1200.0);
+    float lobe = pow(max(dot(N, H), 0.0), rough * 0.16);
+    spec += lobe * facets * resolve * water * dayMask * through * 0.7;
+  }
+#endif
 
   vec3 color = albedo * uSunColor * diffuse * 1.9;
 #ifdef SUN2
@@ -459,6 +540,8 @@ uniform vec3 uCloudColor;
 uniform float uOpacity;
 uniform vec3 uAtmoDay;
 uniform float uStorms;
+${noiseGLSL}
+${cloudFieldGLSL}
 
 varying vec3 vObjPos;
 varying vec3 vWorldPos;
@@ -481,10 +564,15 @@ void main() {
   vec3 p = normalize(vObjPos);
   float lat = asin(clamp(p.y, -1.0, 1.0));
   float lon = atan(p.z, p.x);
-  vec2 uv = vec2(lon / (2.0 * PI) + 0.5 + uTime * uSpeed, lat / PI + 0.5);
+  // Cinematic pass: the deck drifts, shears and churns (cloudUV), and a thinner,
+  // finer deck above it runs faster, so two layers move against each other.
+  vec2 cw;
+  vec2 uv = cloudUV(p, lat, lon, uTime, uSpeed, cw);
   float d = texture2D(uTerrain, uv).a;
   // Wide, soft ramp so cloud edges feather instead of cutting like brush strokes.
   float cover = smoothstep(-0.05, 0.6, d);
+  vec2 uv2 = vec2((lon / (2.0 * PI) + 0.5) * 2.0 + uTime * uSpeed * 2.6, lat / PI + 0.57) + cw * vec2(0.03, 0.012);
+  float high = smoothstep(0.25, 0.8, texture2D(uTerrain, uv2).a) * 0.4;
   if (uStorms > 0.0) {
     // Cyclones turn where they are (anticlockwise north, clockwise south) and drift with the clouds.
     float s = cyclone(uv, vec2(0.3, 0.33), 0.12, uTime * 0.05);
@@ -492,6 +580,7 @@ void main() {
     s = max(s, cyclone(uv, vec2(1.05, 0.38), 0.07, uTime * 0.07) * uStorms);
     cover = max(cover, s * uStorms);
   }
+  cover = max(cover, high);
   cover *= cover * smoothstep(1.0, 0.6, abs(p.y) * 0.9 + 0.1);
 
   vec3 N = normalize(vWorldNormal);
@@ -508,6 +597,18 @@ void main() {
   lit = max(lit, lit2);
 #endif
   col += mix(uAtmoDay, vec3(1.0), 0.5) * forward * smoothstep(-0.25, 0.1, NdL) * 0.6;
+  if (uStorms > 0.0) {
+    // Cinematic pass: lightning inside the storms on the night side — a strike, a
+    // flicker, a decay — each cell on its own irregular rhythm.
+    float night = 1.0 - smoothstep(-0.2, 0.1, NdL);
+    vec2 cell = floor(uv * vec2(36.0, 18.0));
+    float ch = fract(sin(dot(cell, vec2(12.9898, 78.233))) * 43758.5453);
+    float tt = uTime / (1.2 + ch * 2.4) + ch * 11.0;
+    float fire = step(0.93, fract(sin(dot(cell + floor(tt) * 1.37, vec2(39.3468, 11.135))) * 43758.5453));
+    float age = fract(tt);
+    float flash = fire * exp(-age * 8.0) * (0.6 + 0.4 * sin(age * 64.0));
+    col += vec3(0.7, 0.78, 1.0) * flash * night * smoothstep(0.35, 0.9, cover) * uStorms * 1.4;
+  }
   gl_FragColor = vec4(col, cover * uOpacity * (0.65 + 0.35 * lit));
   #include <tonemapping_fragment>
   #include <colorspace_fragment>

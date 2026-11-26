@@ -163,6 +163,8 @@ export function createSurfaceUniforms(settings: SurfaceSettings) {
      */
     uEventDir: { value: new Vector3(1, 0.05, 0).normalize() },
     uEvent: { value: new Vector2(0, 0) },
+    /** Cinematic pass: which event is playing (ids in SurfaceScene's EVENT_ID), so shaders can tell them apart. */
+    uEventKind: { value: 0 },
     /** Overhaul: a discovery's light wave across the ground (xyz = where, w = progress 0 → 1). */
     uReveal: { value: new Vector4(0, 0, 0, 0) },
     uRevealColor: { value: new Color(settings.glow) },

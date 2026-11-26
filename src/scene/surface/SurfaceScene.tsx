@@ -11,6 +11,7 @@ import {
   DoubleSide,
   Group,
   LineSegments,
+  MathUtils,
   Mesh,
   Points,
   ShaderMaterial,
@@ -126,10 +127,33 @@ export default function SurfaceScene({ planet }: { planet: WorldId }) {
     const { reducedMotion, motionPaused } = useExperience.getState()
     // The living pass: day–night drift, gusting wind and breathing weather (Phase 7).
     if (s.env) {
+      const ev = weatherEvent
       const env = liveEnv(s.env, uniforms, planet, director.time, Math.min(delta, 1 / 20), {
         reduced: reducedMotion,
         paused: motionPaused,
+        // Cinematic pass: a gust event drives the wind (sand streams and dust walls speed up).
+        gust: ev.kind === 'gust' ? ev.strength : 0,
       })
+      // Cinematic pass: what an event does to the light and weather (all eased by its envelope).
+      if (ev.strength > 0) {
+        const k = ev.strength
+        if (ev.kind === 'squall') {
+          // A squall line passes: the ceiling lowers and thickens, the light falls, the air fills.
+          env.cloudCover = Math.min(0.98, env.cloudCover + 0.22 * k)
+          env.sunColor.multiplyScalar(1 - 0.32 * k)
+          env.zenith.multiplyScalar(1 - 0.18 * k)
+          env.fog *= 1 + 0.6 * k
+        } else if (ev.kind === 'aurora') {
+          env.aurora *= 1 + 0.9 * k
+        } else if (ev.kind === 'gust') {
+          // Dust in the air: the distance softens and warms.
+          env.fog *= 1 + 0.4 * k
+          env.horizon.lerp(env.ground, 0.12 * k)
+        } else if (ev.kind === 'sunbreak') {
+          // The break in the clouds brightens the whole scene a touch (beams are in the shaders).
+          env.sunColor.multiplyScalar(1 + 0.12 * k)
+        }
+      }
       applyEnv(uniforms, env)
       // The sky's moons stand where the simulation has them (after the sun is set).
       const covered = isElysWorld(planet) ? placeMoons(uniforms, planet, sim.day, settings.moons) : 0
@@ -267,17 +291,58 @@ const MOTE_MOTION: Record<SurfaceSettings['motes'], { vel: [number, number, numb
 // Overhaul: each world's occasional events. The scheduler (in Weather) picks one
 // every 25–60 s; the shaders draw it from uEventDir and uEvent.
 
-type EventKind = 'meteor' | 'sunbreak' | 'eruption' | 'devil' | 'deep'
+type EventKind = 'meteor' | 'sunbreak' | 'eruption' | 'devil' | 'deep' | 'aurora' | 'surge' | 'squall' | 'gust' | 'tremor'
 
-/** Which event a world has (Vesper and Thalassa have their lightning instead). */
-const EVENTS: Partial<Record<SurfaceSettings['kind'], (night: boolean) => EventKind>> = {
-  terrestrial: (night) => (night ? 'meteor' : 'sunbreak'),
-  dark: () => 'eruption',
-  desert: () => 'devil',
+/** Shader ids for uEventKind (see the sky and terrain shaders). */
+const EVENT_ID: Record<EventKind, number> = {
+  meteor: 1,
+  sunbreak: 2,
+  eruption: 3,
+  devil: 4,
+  deep: 5,
+  aurora: 6,
+  surge: 7,
+  squall: 8,
+  gust: 9,
+  tremor: 10,
+}
+
+/**
+ * Which event a world has next. Cinematic pass: every world now has one, most
+ * have two, so the occasional moment does not repeat itself.
+ */
+const EVENTS: Partial<Record<SurfaceSettings['kind'], (night: boolean, aurora: number) => EventKind>> = {
+  // Aurelis: by night a meteor or an auroral substorm; by day a break in the clouds.
+  terrestrial: (night, aurora) => (night ? (aurora > 0.05 && Math.random() < 0.5 ? 'aurora' : 'meteor') : 'sunbreak'),
+  // Nyx: an eruption, or a tremor that runs a wave of light through the vein field.
+  dark: () => (Math.random() < 0.55 ? 'eruption' : 'tremor'),
+  // Solara: a dust devil, or a gust that lifts the sand and drives it across the dunes.
+  desert: () => (Math.random() < 0.5 ? 'devil' : 'gust'),
+  // Vesper: a surge of light along the energy ribbons (lightning keeps its own schedule).
+  deck: () => 'surge',
+  // Thalassa: a squall line sweeps through (lightning keeps its own schedule).
+  ocean: () => 'squall',
   giant: () => 'deep',
 }
 
-const DURATION: Record<EventKind, number> = { meteor: 1.4, sunbreak: 14, eruption: 16, devil: 22, deep: 3.2 }
+const DURATION: Record<EventKind, number> = {
+  meteor: 1.4,
+  sunbreak: 14,
+  eruption: 16,
+  devil: 22,
+  deep: 3.2,
+  aurora: 26,
+  surge: 18,
+  squall: 26,
+  gust: 15,
+  tremor: 9,
+}
+
+/** Smoothstep 0 → 1 (eases the edges of the longer events). */
+const ease01 = (x: number) => {
+  const c = Math.min(1, Math.max(0, x))
+  return c * c * (3 - 2 * c)
+}
 
 /** Strength over the event's life (t: 0 → 1). */
 const ENVELOPE: Record<EventKind, (t: number) => number> = {
@@ -288,7 +353,20 @@ const ENVELOPE: Record<EventKind, (t: number) => number> = {
   devil: (t) => Math.min(1, t * 5) * Math.min(1, (1 - Math.min(t, 1)) * 5),
   // Deep storms flicker: a few pulses inside one envelope.
   deep: (t) => Math.sin(Math.min(t, 1) * Math.PI) * (0.55 + 0.45 * Math.sin(t * 37) * Math.sin(t * 11 + 1)),
+  // A substorm: brightens over a few seconds, breathes in pulses, fades slowly.
+  aurora: (t) => ease01(t * 4) * ease01((1 - t) * 1.8) * (0.78 + 0.22 * Math.sin(t * 29) * Math.sin(t * 7 + 0.6)),
+  surge: (t) => Math.sin(Math.min(t, 1) * Math.PI) ** 2,
+  squall: (t) => ease01(t * 3.5) * ease01((1 - t) * 2.5),
+  gust: (t) => ease01(t * 3) * ease01((1 - t) * 2.2),
+  tremor: (t) => Math.sin(Math.min(t, 1) * Math.PI),
 }
+
+/** The event playing now, for the environment pass (one frame behind is fine). */
+const weatherEvent = { kind: 'none' as EventKind | 'none', strength: 0 }
+/** Dev only: `__forceEvent('squall')` plays an event now (for review and capture). */
+let forcedEvent: EventKind | null = null
+if (import.meta.env.DEV) Object.assign(window, { __forceEvent: (k: EventKind) => (forcedEvent = k) })
+const moteLight = new Color()
 
 /** The camera's heading as an angle in the shaders' (cos a, sin a) convention. */
 function viewAngle() {
@@ -389,20 +467,25 @@ function Weather({ uniforms, settings }: { uniforms: SurfaceUniforms; settings: 
     const dt = Math.min(delta, 1 / 20)
     const mm = motes.material.uniforms
     mm.uPR.value = dpr
-    mm.uAmount.value = env.motes * (reducedMotion ? 0.4 : 1)
+    // Cinematic pass: events thicken the air — sand in a gust, ash in a tremor, spray in a squall.
+    const evNow = weatherEvent
+    const lift =
+      evNow.kind === 'gust' ? 1.3 * evNow.strength : evNow.kind === 'tremor' ? 0.6 * evNow.strength : evNow.kind === 'squall' ? 0.5 * evNow.strength : 0
+    mm.uAmount.value = env.motes * (reducedMotion ? 0.4 : 1) * (1 + lift)
     // Motes take the light of the scene they drift through.
     light
       .copy(env.sunColor)
       .multiplyScalar(Math.max(env.sunDir.y, 0) * 0.7 + 0.25)
-      .add(env.zenith.clone().multiplyScalar(0.6))
+      .add(moteLight.copy(env.zenith).multiplyScalar(0.6))
     mm.uColor.value.copy(motes.base).multiply(light)
     const nm = near.material.uniforms
     nm.uPR.value = dpr
     // The foreground layer is faint: it should be felt more than seen.
-    nm.uAmount.value = env.motes * (reducedMotion ? 0.2 : 0.32)
+    nm.uAmount.value = env.motes * (reducedMotion ? 0.2 : 0.32) * (1 + lift)
     nm.uColor.value.copy(mm.uColor.value)
-    rain.material.uniforms.uAmount.value = env.rain * 0.35
-    rain.lines.visible = env.rain > 0.01
+    const rainAmt = env.rain + (evNow.kind === 'squall' ? 0.6 * evNow.strength : 0)
+    rain.material.uniforms.uAmount.value = rainAmt * 0.35
+    rain.lines.visible = rainAmt > 0.01
 
     // Lightning: never in reduced motion (flashing), never while paused. Vesper
     // always has storms somewhere (Phase 7): a faint, distant baseline — rare,
@@ -432,30 +515,44 @@ function Weather({ uniforms, settings }: { uniforms: SurfaceUniforms; settings: 
     if (spec && !motionPaused && !reducedMotion && director.space === 'surface' && surfaceCam.mode === 'free') {
       if (ev.age < 0) {
         ev.wait -= dt
-        if (ev.wait <= 0) {
+        if (ev.wait <= 0 || forcedEvent) {
           const night = env.stars > 0.25 || env.sunDir.y < 0
-          ev.kind = spec(night)
+          ev.kind = forcedEvent ?? spec(night, env.aurora)
+          forcedEvent = null
           ev.age = 0
-          ev.dur = DURATION[ev.kind]
+          // Cinematic pass: each occurrence runs a little longer or shorter.
+          ev.dur = DURATION[ev.kind] * (0.85 + Math.random() * 0.3)
           ev.az = viewAngle() + (Math.random() - 0.5) * 1.3
           ev.el = ev.kind === 'meteor' ? 0.35 + Math.random() * 0.3 : ev.kind === 'deep' ? -0.25 - Math.random() * 0.2 : 0.02
+          uniforms.uEventKind.value = EVENT_ID[ev.kind]
           if (ev.kind === 'eruption') sound.thunder(3.5 + Math.random() * 2, 0.35)
           if (ev.kind === 'deep') sound.thunder(2.5, 0.2)
+          if (ev.kind === 'tremor') sound.thunder(0.6, 0.28)
+          if (ev.kind === 'squall' || ev.kind === 'gust') sound.wind(ev.dur * 0.8, 'down')
         }
       }
     }
     if (ev.age >= 0) {
       ev.age += dt / ev.dur
-      // A dust devil wanders along the horizon; the others stay put.
+      // A dust devil wanders along the horizon; a squall line and surges move across the view.
       if (ev.kind === 'devil') ev.az += dt * 0.02
+      if (ev.kind === 'squall' || ev.kind === 'surge') ev.az += dt * 0.012
       uniforms.uEventDir.value.set(Math.cos(ev.az) * Math.cos(ev.el), Math.sin(ev.el), Math.sin(ev.az) * Math.cos(ev.el))
       const t = ev.age
       eu.set(ENVELOPE[ev.kind](t), t)
+      weatherEvent.kind = ev.kind
+      weatherEvent.strength = eu.x
       if (t >= 1) {
         ev.age = -1
         ev.wait = 25 + Math.random() * 35
         eu.set(0, 0)
+        weatherEvent.kind = 'none'
+        weatherEvent.strength = 0
       }
+    } else {
+      // No event (paused mid-way, or none due): any strength left eases away.
+      weatherEvent.strength = Math.max(0, weatherEvent.strength - dt * 0.5)
+      if (weatherEvent.strength === 0) weatherEvent.kind = 'none'
     }
 
     // Overhaul: a discovery's light wave, timed by the scanner's completion pulse.
@@ -704,6 +801,10 @@ function Signal({ settings }: { settings: SurfaceSettings }) {
   const core = useRef<Mesh>(null)
   const beam = useRef<Mesh>(null)
   const rings = useRef<Group>(null)
+  // Cinematic pass: the pings advance by integrated phase and the found state eases,
+  // so the moment of discovery slows the signal instead of making it jump.
+  const ping = useRef(0)
+  const foundK = useRef(discovered ? 1 : 0)
 
   const mats = useMemo(() => {
     const color = new Color(settings.glow).lerp(new Color('#FFFFFF'), 0.25)
@@ -742,34 +843,37 @@ function Signal({ settings }: { settings: SurfaceSettings }) {
   const hitGeometry = useMemo(() => new SphereGeometry(8, 12, 12), [])
   useDispose(hitGeometry)
 
-  useFrame(({ camera }) => {
+  useFrame(({ camera }, delta) => {
     if (!location || !group.current) return
     const pos = surface.signals[location]
     if (!pos) return
     group.current.position.copy(pos)
     const t = director.time
     const b = signalFx.bloom
-    const { reducedMotion } = useExperience.getState()
+    const { reducedMotion, motionPaused } = useExperience.getState()
+    const dt = Math.min(delta, 1 / 20)
+    const fk = (foundK.current = MathUtils.damp(foundK.current, discovered ? 1 : 0, 1.2, dt))
 
     if (core.current) {
       core.current.quaternion.copy(camera.quaternion)
-      const pulse = discovered ? 0.7 : 0.8 + 0.25 * Math.sin(t * 2.2)
+      const pulse = MathUtils.lerp(0.8 + 0.25 * Math.sin(t * 2.2), 0.7, fk)
       mats.coreM.uniforms.uPulse.value = pulse + b * 2.5
       core.current.scale.setScalar(1 + b * 1.5)
     }
     // Two pings expanding outward, half a cycle apart. Slow and faint once found.
-    const speed = discovered ? 0.12 : 0.35
+    if (!motionPaused) ping.current = (ping.current + dt * MathUtils.lerp(0.35, 0.12, fk)) % 1
     mats.ringM.forEach((m, i) => {
-      const phase = reducedMotion ? 0.55 : (t * speed + i * 0.5) % 1
+      const phase = reducedMotion ? 0.55 : (ping.current + i * 0.5) % 1
       m.uniforms.uRadius.value = 0.15 + phase * 0.8
-      m.uniforms.uOpacity.value = (1 - phase) * (discovered ? 0.35 : 0.9) + b * 1.5
+      m.uniforms.uOpacity.value = (1 - phase) * MathUtils.lerp(0.9, 0.35, fk) + b * 1.5
     })
     if (rings.current) rings.current.scale.setScalar(1 + b * 3)
     if (beam.current) {
-      // The beam only marks signals that have not been found yet.
-      beam.current.visible = !discovered || b > 0.01
+      // The beam only marks signals that have not been found yet (it fades as one is).
+      const beamA = MathUtils.lerp(0.32, 0, fk) + b * 0.6
+      beam.current.visible = beamA > 0.003
       beam.current.rotation.y = Math.atan2(camera.position.x - pos.x, camera.position.z - pos.z)
-      mats.beamM.uniforms.uOpacity.value = (discovered ? 0 : 0.32) + b * 0.6
+      mats.beamM.uniforms.uOpacity.value = beamA
     }
   })
 

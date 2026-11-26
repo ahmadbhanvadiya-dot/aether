@@ -7,6 +7,38 @@ import { approach, atmosphereFx, bezier, bezierTangent, cruise, lerpAngle, scanF
 import { cloneEnv, lerpEnv, type EnvState } from './env'
 import { forward, surface, type Pose } from './world'
 
+/**
+ * Cinematic pass: a smooth maximum (the two meet in a curve of width ~k, not a
+ * corner), so a ground clamp lifts the camera over a rise instead of kinking its
+ * path. With k = 0 it is the plain maximum.
+ */
+function softMax(a: number, b: number, k: number) {
+  if (k <= 1e-3) return Math.max(a, b)
+  return (a + b + Math.sqrt((a - b) * (a - b) + k * k)) / 2
+}
+
+/**
+ * Cinematic pass: the height a moving camera must keep above the land. It looks
+ * ahead along the camera's motion and rises promptly over a rise but settles
+ * slowly after it, so a glide or flight rides a smooth hull over rough ground
+ * instead of following every bump (which read as a jolting, bouncing camera).
+ * Reset whenever a new move begins.
+ */
+const guard = { y: 0, mode: '' as string }
+const ahead = new Vector3()
+function groundGuard(x: number, z: number, clearance: number, dt: number, vel: Vector3, mode: string) {
+  ahead.set(vel.x, 0, vel.z)
+  const sp = ahead.length()
+  if (sp > 1e-3) ahead.multiplyScalar(Math.min(0.6, 90 / sp))
+  const target =
+    Math.max(surface.floor(x, z), surface.floor(x + ahead.x * 0.5, z + ahead.z * 0.5), surface.floor(x + ahead.x, z + ahead.z)) + clearance
+  if (guard.mode !== mode) {
+    guard.mode = mode
+    guard.y = target
+  } else guard.y = MathUtils.damp(guard.y, target, target > guard.y ? 6 : 1.4, dt)
+  return guard.y
+}
+
 /** Copies values (never references) so stored environments stay untouched. */
 function copyEnv(src: EnvState, dst: EnvState) {
   lerpEnv(src, src, 0, dst)
@@ -54,6 +86,9 @@ export const surfaceCam = {
   roll: 0,
   /** Field-of-view widening from flight speed (degrees, damped). */
   speedKick: 0,
+  /** Flight view heading as followed by the operator spring (NaN: a new flight), and its turn rate (rad/s). */
+  rel: NaN,
+  yawVel: 0,
 }
 
 /**
@@ -65,6 +100,8 @@ export const surfaceCam = {
  * keeps its speed instead of braking hard.
  */
 export function beginTravel(to: Pose, duration: number) {
+  guard.mode = ''
+  surfaceCam.rel = NaN
   const c = surfaceCam.current
   const from = surfaceCam.from
   from.pos.copy(c.pos)
@@ -113,6 +150,7 @@ export function beginTravel(to: Pose, duration: number) {
 
 /** Starts the climb back to orbit from wherever the camera is now (even mid-flight). */
 export function beginClimb() {
+  guard.mode = ''
   const c = surfaceCam.current
   surfaceCam.climbFrom.pos.copy(c.pos)
   surfaceCam.climbFrom.yaw = c.yaw
@@ -131,6 +169,8 @@ const dir = new Vector3()
 const back = new Vector3()
 const right = new Vector3()
 const target = new Vector3()
+/** The flight view's fastest turn (rad/s): 65°/s. */
+const YAW_RATE_MAX = 1.13
 const projected = new Vector3()
 const smooth = { yaw: 0, pitch: 0, px: 0, py: 0 }
 const m = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 })
@@ -196,12 +236,25 @@ export function SurfaceRig() {
         const L = director.landing
         const far = 1 - L
         forward(pose.yaw, 0, back).multiplyScalar(-1)
+        right.set(Math.cos(pose.yaw), 0, Math.sin(pose.yaw))
+        // Cinematic pass: the glide curves in from the left of the final line
+        // (−72·far², tangent to the line at the end), so its heading turns with
+        // the camera's yaw (0.22 rad off at the top) — it faces where it flies.
+        const prevYaw = c.yaw
         c.pos
           .copy(pose.pos)
           .addScaledVector(back, far * 640)
+          .addScaledVector(right, -72 * far * far)
           .addScaledVector(UP, Math.pow(far, 1.7) * 520 + far * 26)
-        c.pos.y = Math.max(c.pos.y, surface.floor(c.pos.x, c.pos.z) + 14 + far * 30)
+        // Clearance eases down to the location's own (3, as in free view) over the
+        // last of the glide; it used to end at 14 and snap down on hand-over.
+        const nearEnd = MathUtils.smoothstep(far, 0, 0.3)
+        const hull = groundGuard(c.pos.x, c.pos.z, 3 + 11 * nearEnd + far * 30, dt, surfaceCam.vel, 'landing')
+        // Rides the hull while gliding; on arrival exactly the free view's rule.
+        c.pos.y = MathUtils.lerp(Math.max(c.pos.y, surface.floor(c.pos.x, c.pos.z) + 3), softMax(c.pos.y, hull, 12), nearEnd)
         c.yaw = pose.yaw + far * 0.22
+        // A slight bank into the curve (≤ ~2°), from the rate of turn.
+        if (live && surfaceCam.hasPrev) rollTarget = MathUtils.clamp((-lerpAngle(0, c.yaw - prevYaw, 1) / dt) * 0.5, -0.04, 0.04)
         c.pitch = MathUtils.lerp(HANDOVER_PITCH, pose.pitch, MathUtils.smootherstep(L, 0.12, 1))
         copyEnv(surface.envs[location], surface.env)
         if (phase === 'surface' && L >= 0.999) {
@@ -225,9 +278,14 @@ export function SurfaceRig() {
         // Any motion carried over from an interrupted flight, decaying (τ = 0.8 s).
         const carry = 0.8 * (1 - Math.exp(-surfaceCam.climbClock / 0.8))
         c.pos.addScaledVector(surfaceCam.climbVel, carry)
-        c.pos.y = Math.max(c.pos.y, surface.floor(c.pos.x, c.pos.z) + 10)
+        const lift = MathUtils.smoothstep(a, 0, 0.15)
+        const hull = groundGuard(c.pos.x, c.pos.z, 3 + 7 * lift, dt, surfaceCam.vel, 'climb')
+        c.pos.y = MathUtils.lerp(Math.max(c.pos.y, surface.floor(c.pos.x, c.pos.z) + 3), softMax(c.pos.y, hull, 10), lift)
+        const prevYaw = c.yaw
         c.yaw = from.yaw + a * 0.12
         c.pitch = MathUtils.lerp(from.pitch, HANDOVER_PITCH, MathUtils.smootherstep(a, 0, 0.55))
+        // Banks gently into the turn as it lifts away, levelling toward the hand-over.
+        if (live && surfaceCam.hasPrev) rollTarget = MathUtils.clamp((-lerpAngle(0, c.yaw - prevYaw, 1) / dt) * 0.35, -0.035, 0.035) * (1 - a)
         copyEnv(surface.envs[location], surface.env)
         break
       }
@@ -236,10 +294,13 @@ export function SurfaceRig() {
         const from = surfaceCam.from
         const e = surfaceCam.momentum ? cruise(t) : approach(t)
         bezier(c.pos, from.pos, surfaceCam.p1, surfaceCam.p2, pose.pos, e)
-        // Never skim through the ground.
-        c.pos.y = Math.max(c.pos.y, surface.floor(c.pos.x, c.pos.z) + 8)
-        // Face where we're going: the path's heading in the middle, the start
-        // and end headings at either end (they agree with the path's tangents).
+        // Never skim through the ground. The clearance starts and ends at the
+        // locations' own (3) so neither end of a flight jumps, and the clamp is soft.
+        const mid = MathUtils.smoothstep(e, 0, 0.15) * (1 - MathUtils.smoothstep(e, 0.85, 1))
+        const hull = groundGuard(c.pos.x, c.pos.z, 3 + 5 * mid, dt, surfaceCam.vel, 'travel')
+        c.pos.y = MathUtils.lerp(Math.max(c.pos.y, surface.floor(c.pos.x, c.pos.z) + 3), softMax(c.pos.y, hull, 12), mid)
+        // Face where we're going at first: the path's heading, blended from the
+        // start heading (they agree with the path's tangent).
         bezierTangent(tmp, from.pos, surfaceCam.p1, surfaceCam.p2, pose.pos, e)
         const flat = Math.hypot(tmp.x, tmp.z)
         const pathYaw = flat > 1e-3 ? Math.atan2(tmp.x, -tmp.z) : pose.yaw
@@ -248,7 +309,25 @@ export function SurfaceRig() {
         const wStart = 1 - MathUtils.smoothstep(e, 0, surfaceCam.momentum ? 0.2 : 0.06)
         const wEnd = MathUtils.smoothstep(e, 0.86, 1)
         const prevYaw = c.yaw
-        c.yaw = lerpAngle(lerpAngle(pathYaw, from.yaw, wStart), pose.yaw, wEnd)
+        // Cinematic pass: the view follows that heading through a critically damped
+        // spring with a capped turn rate, as a camera operator would, instead of
+        // locking to the path. Where start and end headings are far apart the path
+        // makes a hairpin, and the locked view whipped round at up to ~165°/s (more
+        // where the bend was tight); the spring turns at most 65°/s, lagging the bend a
+        // little. The last quarter of the flight settles exactly onto the destination's view.
+        const want = lerpAngle(lerpAngle(pathYaw, from.yaw, wStart), pose.yaw, wEnd)
+        if (!Number.isFinite(surfaceCam.rel)) {
+          surfaceCam.rel = from.yaw
+          // A redirected flight keeps turning as it was; a new one starts still.
+          if (!surfaceCam.momentum) surfaceCam.yawVel = 0
+        }
+        const err = lerpAngle(0, want - surfaceCam.rel, 1)
+        const omega = 2.4
+        surfaceCam.yawVel += (omega * omega * err - 2 * omega * surfaceCam.yawVel) * dt
+        surfaceCam.yawVel = MathUtils.clamp(surfaceCam.yawVel, -YAW_RATE_MAX, YAW_RATE_MAX)
+        surfaceCam.rel += surfaceCam.yawVel * dt
+        // (On the linear clock: the eased one has nearly arrived well before the end.)
+        c.yaw = lerpAngle(surfaceCam.rel, pose.yaw, MathUtils.smootherstep(t, 0.74, 1))
         c.pitch = MathUtils.lerp(MathUtils.lerp(pathPitch, from.pitch, wStart), pose.pitch, wEnd)
         // A slight bank into turns (at most ~3°).
         if (live) rollTarget = MathUtils.clamp(-lerpAngle(0, c.yaw - prevYaw, 1) / dt * 0.3, -0.05, 0.05)
@@ -256,6 +335,7 @@ export function SurfaceRig() {
         break
       }
       case 'free': {
+        guard.mode = 'free'
         // Mouse position adds a slight parallax; touch uses drag only.
         const allow = live && !quality.coarse
         smooth.px = MathUtils.damp(smooth.px, allow ? pointer.x : 0, 2.2, dt)

@@ -12,6 +12,7 @@ import {
   HalfFloatType,
   type IUniform,
   LinearFilter,
+  MathUtils,
   Matrix3,
   Mesh,
   OrthographicCamera,
@@ -222,6 +223,8 @@ export function World({ data, seed, light, interactive = true }: { data: WorldDa
         BUMP: BUMP[data.kind].toFixed(3),
         HAZE: HAZE[data.kind].toFixed(2),
         ...(data.rings ? { RINGS: 1 } : {}),
+        // Cinematic pass: worlds with a cloud deck see its shadows drift over the ground.
+        ...(data.clouds ? { CLOUDS: 1 } : {}),
         ...two,
       },
       uniforms: {
@@ -242,6 +245,8 @@ export function World({ data, seed, light, interactive = true }: { data: WorldDa
         uViolet: { value: palette.violet },
         uHighlight: { value: 0 },
         uMoonShadow: { value: moonShadow },
+        uCloudSpeed: { value: data.clouds?.speed ?? 0 },
+        uCloudShadow: { value: data.clouds ? data.clouds.opacity * 0.5 : 0 },
       },
     })
 
@@ -319,8 +324,9 @@ export function World({ data, seed, light, interactive = true }: { data: WorldDa
     galaxy.materials[data.id] = materials
   }, [data.id, materials])
 
-  useFrame(() => {
+  useFrame((_, delta) => {
     const t = director.time
+    const dt = Math.min(delta, 1 / 20)
     // Phase 9: position, rotation and rings follow the simulation clock.
     const angle = orbitAngle(data, sim.day)
     const r = data.orbitRadius
@@ -340,7 +346,9 @@ export function World({ data, seed, light, interactive = true }: { data: WorldDa
     const isFocus = focus === data.id
     const isHover = hovered === data.id
     const highlight = materials.surface.uniforms.uHighlight
-    highlight.value += ((isHover && !isFocus ? 1 : 0) - highlight.value) * 0.12
+    // Frame-rate independent (was a per-frame factor): rises in ~0.3 s, falls a little slower.
+    const want = isHover && !isFocus ? 1 : 0
+    highlight.value = MathUtils.damp(highlight.value, want, want > highlight.value ? 9 : 5, dt)
 
     materials.surface.uniforms.uTime.value = t
     if (materials.clouds) materials.clouds.uniforms.uTime.value = t
@@ -356,7 +364,7 @@ export function World({ data, seed, light, interactive = true }: { data: WorldDa
     const shown = useSimulation.getState().orbits
     const target = isHover ? 0.95 : !shown ? 0 : focus ? (isFocus ? 0.4 : 0.12) : 0.42
     const om = orbit.material.uniforms
-    om.uOpacity.value += (target * director.galaxyIntro - om.uOpacity.value) * 0.08
+    om.uOpacity.value = MathUtils.damp(om.uOpacity.value, target * director.galaxyIntro, 5, dt)
     om.uPixelRatio.value = dpr
     om.uPhase.value = ((((angle / (Math.PI * 2)) % 1) + 1) % 1)
   })
