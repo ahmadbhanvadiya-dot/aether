@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware'
 import { discoveriesFor, FIND_BY_ID, HIDDEN, TOTAL_DISCOVERIES, VISIBLE } from '../data/discoveries'
 import { LOCATION_BY_ID } from '../data/locations'
+import { READING_BY_ID } from '../data/waystation'
 import type { PlanetId, WorldId } from '../data/planets'
 
 /**
@@ -79,8 +80,8 @@ export const useExploration = create<ExplorationState>()(
       },
       setVolume: (v) => set({ volume: Math.max(0, Math.min(1, v)) }),
       discover: (id) => {
-        // Only catalogued discoveries, and each only once.
-        if (!FIND_BY_ID[id] || get().discovered[id]) return false
+        // Only catalogued discoveries (and the Waystation's readings), and each only once.
+        if ((!FIND_BY_ID[id] && !READING_BY_ID[id]) || get().discovered[id]) return false
         set((s) => ({ discovered: { ...s.discovered, [id]: Date.now() } }))
         return true
       },

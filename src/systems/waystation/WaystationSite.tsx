@@ -1,4 +1,4 @@
-import { useFrame, type ThreeEvent } from '@react-three/fiber'
+import { useFrame, useThree, type ThreeEvent } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import {
   AdditiveBlending,
@@ -6,13 +6,17 @@ import {
   BufferGeometry,
   Color,
   Group,
+  Mesh,
   MeshBasicMaterial,
   MeshStandardMaterial,
   Vector3,
 } from 'three'
 import { GALAXY, SYSTEM_BY_ID } from '../../data/systems'
 import { director } from '../../state/director'
+import { telemetry } from '../../state/director'
 import { useExperience } from '../../state/useExperience'
+import { READINGS } from '../../data/waystation'
+import { readingFx } from '../../ui/siteDirector'
 
 /**
  * Phase 11d: the Waystation — a survey station left in the dark between the
@@ -26,8 +30,24 @@ const LAMPS = 9
 const LIT = new Set([0, 4, 7])
 const LAMP_COLOR = new Color('#9FE3FF')
 
+// Scratch for projecting the readings (no allocation per frame).
+const pos = new Vector3()
+const nrm = new Vector3()
+const toCam = new Vector3()
+const anchors = READINGS.map((r) => ({
+  id: r.id,
+  frame: r.frame,
+  local: new Vector3(...r.anchor),
+  normal: new Vector3(...r.normal),
+  world: new Vector3(),
+}))
+for (const r of READINGS) telemetry.site[r.id] = telemetry.site[r.id] ?? { x: 0, y: 0, on: false }
+
 export default function WaystationSite() {
   const spin = useRef<Group>(null)
+  const scanHalo = useRef<Mesh>(null)
+  const camera = useThree((st) => st.camera)
+  const size = useThree((st) => st.size)
   const lamps = useRef<(MeshBasicMaterial | null)[]>([])
   const halos = useRef<(MeshBasicMaterial | null)[]>([])
 
@@ -72,6 +92,40 @@ export default function WaystationSite() {
   useFrame(() => {
     const t = director.time
     if (spin.current) spin.current.rotation.y = t * 0.018
+
+    // Readings: where each anchor is on screen, and whether its face is towards us.
+    const group = spin.current
+    if (group) {
+      group.updateWorldMatrix(true, false)
+      for (const a of anchors) {
+        if (a.frame === 'station') {
+          a.world.copy(a.local).applyMatrix4(group.matrixWorld)
+          nrm.copy(a.normal).transformDirection(group.matrixWorld)
+        } else {
+          a.world.copy(a.local)
+          nrm.set(0, 0, 0)
+        }
+        toCam.subVectors(camera.position, a.world)
+        const facing = nrm.lengthSq() === 0 || nrm.dot(toCam) > 0
+        pos.copy(a.world).project(camera)
+        const m = telemetry.site[a.id]
+        m.x = (pos.x * 0.5 + 0.5) * size.width
+        m.y = (-pos.y * 0.5 + 0.5) * size.height
+        m.on = facing && pos.z < 1 && Math.abs(pos.x) < 1.02 && Math.abs(pos.y) < 1.02
+      }
+    }
+    // While a reading is taken, light gathers at its point.
+    const halo = scanHalo.current
+    if (halo) {
+      const a = readingFx.id ? anchors.find((x) => x.id === readingFx.id) : null
+      halo.visible = !!a
+      if (a) {
+        halo.position.copy(a.world)
+        const p = readingFx.progress
+        halo.scale.setScalar(0.35 + 1.1 * (1 - p) + 0.08 * Math.sin(t * 9))
+        ;(halo.material as MeshBasicMaterial).opacity = 0.15 + 0.55 * p
+      }
+    }
     // The surviving lamps turn slowly, each a little out of step with the others.
     for (let i = 0; i < LAMPS; i++) {
       const lamp = lamps.current[i]
@@ -176,6 +230,11 @@ export default function WaystationSite() {
           </mesh>
         </group>
       </group>
+
+      <mesh ref={scanHalo} visible={false}>
+        <sphereGeometry args={[0.5, 16, 16]} />
+        <meshBasicMaterial color={LAMP_COLOR} transparent opacity={0} depthWrite={false} blending={AdditiveBlending} toneMapped={false} />
+      </mesh>
 
       <points geometry={dust}>
         <pointsMaterial color="#8FA6C8" size={0.09} sizeAttenuation transparent opacity={0.55} depthWrite={false} />

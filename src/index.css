@@ -3613,3 +3613,159 @@ body {
   padding-inline: 1rem;
   align-self: center;
 }
+
+/* Phase 11d: the Waystation's interface — reading markers over the scene, and its readings list. */
+.site-ui {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.site-marks {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 500ms ease;
+}
+
+.site-marks[data-visible] {
+  opacity: 1;
+}
+
+.site-mark {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 32px;
+  height: 32px;
+  margin: -16px 0 0 -16px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  cursor: pointer;
+  pointer-events: auto;
+  transition: opacity 360ms ease;
+}
+
+.site-marks:not([data-visible]) .site-mark,
+.site-mark[data-away='true'] {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.site-mark-ring {
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  border: 1.5px solid #9fe3ff;
+  box-shadow: 0 0 10px rgb(159 227 255 / 0.55);
+  animation: site-breathe 3.4s ease-in-out infinite;
+}
+
+.site-mark[data-found] .site-mark-ring {
+  width: 8px;
+  height: 8px;
+  border: 0;
+  background: #9fe3ff;
+  opacity: 0.85;
+  animation: none;
+}
+
+.site-mark[data-scanning] .site-mark-ring {
+  width: 18px;
+  height: 18px;
+  border-color: rgb(159 227 255 / 0.35);
+  background: conic-gradient(rgb(159 227 255 / 0.9) calc(var(--p, 0) * 360deg), transparent 0);
+  animation: none;
+}
+
+.site-mark:focus-visible {
+  outline: 1px solid var(--color-ion, #5ab0ff);
+  outline-offset: 2px;
+}
+
+@keyframes site-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.7;
+  }
+  50% {
+    transform: scale(1.22);
+    opacity: 1;
+  }
+}
+
+.site-readings {
+  margin-top: 1.25rem;
+}
+
+.site-readings-head {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 0.35rem;
+  font-size: 0.8125rem;
+  color: var(--color-haze, #8a93b8);
+}
+
+.site-readings ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.site-reading {
+  width: 100%;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.5rem 0;
+  border: 0;
+  border-top: 1px solid rgb(138 147 184 / 0.18);
+  background: none;
+  text-align: left;
+  font-size: 0.875rem;
+  color: rgb(232 236 255 / 0.8);
+  cursor: pointer;
+}
+
+.site-reading:hover,
+.site-reading:focus-visible {
+  color: var(--color-starlight, #eef1ff);
+}
+
+.site-reading-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  border: 1px solid #9fe3ff;
+}
+
+.site-reading[data-found] .site-reading-dot {
+  background: #9fe3ff;
+}
+
+.site-reading-state {
+  font-size: 0.75rem;
+  color: var(--color-haze, #8a93b8);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .site-mark-ring {
+    animation: none;
+  }
+}
+
+/* Phase 11d: the Waystation's portrait — a dark hull with its ring and one lit lamp. */
+.obs-portrait-waystation {
+  border-radius: 999px;
+  background:
+    radial-gradient(circle at 78% 38%, #9fe3ff 0 3px, transparent 4px),
+    radial-gradient(circle at 50% 50%, #4a5363 0 9px, transparent 10px),
+    radial-gradient(circle at 50% 50%, transparent 0 22px, rgb(138 147 166 / 0.9) 23px 25px, transparent 26px),
+    #05070f;
+  box-shadow: 0 0 0 1px rgb(159 227 255 / 0.3);
+}
