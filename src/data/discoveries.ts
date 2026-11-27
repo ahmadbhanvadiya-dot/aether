@@ -589,8 +589,9 @@ const LIRIS_SECRET: Entry & { location: string } = {
   category: 'anomaly',
   description:
     'Once a year the suns line up and the arch casts a single shadow. For a few minutes a third shadow falls behind it, pointing at nothing in the sky.',
-  lead: 'Herders on the steppe say the arch has one shadow too many. Turn around from the arch, toward both suns, and look low along the ground.',
-  placement: { bearing: Math.PI, distance: 90, rise: 2 },
+  lead: 'Herders on the steppe say the arch has one shadow too many. Turn around from the arch, toward both suns, and look along the near slope of the dune.',
+  // In front of the dune behind the arrival view (further out, the dune hides it).
+  placement: { bearing: Math.PI, distance: 30, rise: 1.5 },
 }
 
 function buildLiris(): DiscoveryData<'liris'>[] {
