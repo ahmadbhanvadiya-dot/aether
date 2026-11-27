@@ -2958,3 +2958,44 @@ Not verified:
 - the feel at full frame rate on a real display, and on phones;
 - GPU time of the added shader terms (not re-measured; the additions are small next to §15);
 - the Observatory and map arcs were not photographed in this pass (Orion's surface was: it compiles and renders).
+
+## 24. Opening screens: the signal and the living title
+
+The two screens every visit begins with were static (one line and a count; a title
+that faded in). They are seen once per visit, so this is where delight belongs.
+
+**The prelude** (`ui/Prelude.tsx`), while the scene compiles:
+
+- **A signal scope**: a 2D canvas waveform that tunes in with the load count, from
+  static (noise falls as clarity rises) to the Listening Array's motif (three short
+  pulses and one long, scrolling). The pointer tunes it: the wave swells and its glow
+  brightens where the cursor is. Stops drawing once the prelude has gone.
+- The headline **decodes** (glyphs settling left to right; a hidden copy holds the
+  width, so nothing shifts); a **hairline** fills with the count; a **status** steps
+  *Searching the band → Locking the carrier → Decoding → Signal clear*; a faint seeded
+  **starfield** drifts behind (CSS, 90 s).
+- The load count (TitleScreen) drives all of it through `preludeFx` and `--p`; the
+  arrival timeline still owns the exit (`data-prelude`, `data-prelude-line`).
+
+**The title**, once in orbit (`useTitleInteractions` in TitleScreen):
+
+- **Letters lean toward the pointer**, more as it nears (exponential falloff, ±9 px),
+  the **Enter button pulls toward it** within 170 px (±14 px), and the whole **block
+  shifts** a few pixels against it, over the planet. GSAP `quickTo` on CSS variables
+  read as `translate` by wrapper elements (`.wordmark-cell`, `.enter-magnet`): the
+  arrival animates the letters and button themselves, and GSAP's inline
+  `translate: none` would otherwise cancel the offset. Centres are measured once and
+  on resize; the title settles back to rest when the journey starts.
+- **A glint** crosses the word every 9 s, letter by letter (a second background
+  layer under the text clip), only while the title is live.
+- **"Beyond the known." decodes** as it arrives; the **Enter glyph breathes**; a
+  **ring of light** leaves the button on click (WAAPI, 900 ms ease-out).
+- **Enter starts the journey** (when nothing else has focus); after 3.5 s a quiet
+  *or press Enter* appears (fine pointers only).
+- **Reduced motion and touch:** no pointer effects, no glint, no breathing, no drift,
+  no decode, no static; the same picture, settling with the count.
+
+Verified in the dev build: prelude at 5 % (static) and 100 % (the motif, *Signal
+clear*); the letters' and button's offsets under a moving pointer; the hint; Enter →
+warp → galaxy; a 375 px phone (scope and button fit, no hint on touch). No errors;
+lint unchanged.
