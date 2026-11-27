@@ -577,7 +577,8 @@ const LIRIS_POIS: Record<string, Entry[]> = {
       category: 'structure',
       description:
         'Cairns built in pairs along the ridge, one facing each sun. No one knows who built them, or which sun they were built to watch.',
-      placement: { bearing: 0.55, distance: 160, rise: 8 },
+      // On the near ridge (further out, a ridge between hides it; swept clear at 50–90 and ±0.2 rad).
+      placement: { bearing: 0.55, distance: 70, rise: 8 },
     },
   ],
 }

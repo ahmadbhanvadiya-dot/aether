@@ -1,6 +1,6 @@
 import gsap from 'gsap'
 import { sound } from '../audio/sound'
-import { READING_BY_ID } from '../data/waystation'
+import { isSiteId, READING_BY_ID } from '../data/waystation'
 import { useExploration } from '../state/exploration'
 import { readingFx, useSite } from '../state/site'
 import { noteDiscovery } from './storyDirector'
@@ -20,11 +20,11 @@ let stopTone: (() => void) | null = null
 
 const here = () => {
   const st = useExperience.getState()
-  return st.phase === 'galaxy' && st.activeSystem === 'waystation'
+  return st.phase === 'galaxy' && isSiteId(st.activeSystem)
 }
 
 export function startReading(id: string) {
-  if (!here() || !READING_BY_ID[id]) return
+  if (!here() || !READING_BY_ID[id] || READING_BY_ID[id].site !== useExperience.getState().activeSystem) return
   sound.unlock()
   // The record panel steps aside for the reading.
   useExperience.getState().setSiteOpen(false)
@@ -74,7 +74,8 @@ export function closeReadingCard() {
 /** Leaving the Waystation (the map, a transit) stops any reading and closes its card. */
 useExperience.subscribe((s, prev) => {
   if (s.phase === prev.phase && s.activeSystem === prev.activeSystem) return
-  if (s.phase !== 'galaxy' || s.activeSystem !== 'waystation') {
+  // Leaving a site, or changing site, stops the reading.
+  if (s.phase !== 'galaxy' || !isSiteId(s.activeSystem) || s.activeSystem !== prev.activeSystem) {
     cancelReading()
     if (useSite.getState().card) useSite.setState({ card: null })
   }

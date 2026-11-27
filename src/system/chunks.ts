@@ -38,11 +38,13 @@ export const loadObservatoryUI = memoImport(() => import('../ui/ObservatoryUI'))
 /** Phase 11: other star systems, each its own chunk. */
 export const loadTessaly = memoImport(() => import('../systems/tessaly/TessalySystem'))
 export const loadWaystation = memoImport(() => import('../systems/waystation/WaystationSite'))
+export const loadRing = memoImport(() => import('../systems/ring/RingSite'))
 
 /** Phase 11d: fetch a place's scene ahead of a transit (Elys is in the main bundle). */
-export function loadSystem(id: 'elys' | 'tessaly' | 'waystation') {
+export function loadSystem(id: 'elys' | 'tessaly' | 'waystation' | 'ring') {
   if (id === 'tessaly') return loadTessaly()
   if (id === 'waystation') return loadWaystation()
+  if (id === 'ring') return loadRing()
   return Promise.resolve(null)
 }
 

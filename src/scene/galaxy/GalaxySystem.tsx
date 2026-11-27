@@ -1,13 +1,14 @@
 import { lazy, Suspense } from 'react'
 import { PLANETS } from '../../data/planets'
 import { useExperience } from '../../state/useExperience'
-import { loadTessaly, loadWaystation } from '../../system/chunks'
+import { loadRing, loadTessaly, loadWaystation } from '../../system/chunks'
 import { SpiralGalaxy } from './SpiralGalaxy'
 import { Star } from './Star'
 import { World } from './World'
 
 const TessalySystem = lazy(loadTessaly)
 const WaystationSite = lazy(loadWaystation)
+const RingSite = lazy(loadRing)
 
 /**
  * The spiral galaxy, and the one star system mounted in it: Elys and its six
@@ -27,7 +28,7 @@ export function GalaxySystem() {
           ))}
         </>
       ) : (
-        <Suspense fallback={null}>{active === 'tessaly' ? <TessalySystem /> : <WaystationSite />}</Suspense>
+        <Suspense fallback={null}>{active === 'tessaly' ? <TessalySystem /> : active === 'ring' ? <RingSite /> : <WaystationSite />}</Suspense>
       )}
     </group>
   )

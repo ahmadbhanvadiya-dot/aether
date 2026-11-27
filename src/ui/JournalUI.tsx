@@ -8,7 +8,7 @@ import { useExploration } from '../state/exploration'
 import { expeditionStates, mapAccess, unlockedFragments, unlockLine, type ExpeditionState } from '../state/expeditions'
 import { formatWhen, worldProgress } from '../state/progress'
 import { LIRIS } from '../data/tessaly'
-import { READING_BY_ID, READINGS, READINGS_TOTAL } from '../data/waystation'
+import { READING_BY_ID, readingsFor, readingsFoundAt, SITE_IDS, SITE_RECORDS, type SiteId } from '../data/waystation'
 import { useExperience } from '../state/useExperience'
 import { unknownName } from './ScannerUI'
 import { replayStory } from './storyDirector'
@@ -71,7 +71,9 @@ function ExpeditionEntry({ s, active }: { s: ExpeditionState; active: boolean })
                             return (
                               <li key={id} data-found={at ? true : undefined}>
                                 <span className="signal-dot" data-found={at ? true : undefined} style={{ ['--accent' as string]: '#9FE3FF' }} aria-hidden />
-                                <span>{at ? reading.name : 'Unread reading'} · The Waystation</span>
+                                <span>
+                                  {at ? reading.name : 'Unread reading'} · {SITE_RECORDS[reading.site].name}
+                                </span>
                                 <span className="journal-place-state">{at ? formatWhen(at).date : 'Not yet read'}</span>
                               </li>
                             )
@@ -154,33 +156,37 @@ function SurveyEntry() {
   )
 }
 
-/** Phase 11d: the Waystation's readings, as a survey beside Liris's. */
-function WaystationSurvey() {
+/** Phase 11d: a deep-space site's readings, as a survey beside Liris's. */
+function SiteSurvey({ site }: { site: SiteId }) {
   const discovered = useExploration((st) => st.discovered)
-  const found = READINGS.filter((r) => discovered[r.id]).length
-  const done = found === READINGS_TOTAL
+  const rec = SITE_RECORDS[site]
+  const readings = readingsFor(site)
+  const found = readingsFoundAt(discovered, site)
+  const done = found === readings.length
   return (
     <article className="journal-expedition" data-status={done ? 'complete' : 'open'}>
       <p className="journal-code">
         <span>Survey · Deep space</span>
         <span className="journal-status">{done ? 'Complete' : found > 0 ? 'Under way' : 'Not yet read'}</span>
       </p>
-      <h3 className="journal-title">The Waystation</h3>
-      <p className="journal-copy">{found > 0 ? 'Read from orbit: select the markers on the station.' : 'Travel to the Waystation from the galaxy map, and read the station from orbit.'}</p>
-      <div className="journal-progress" aria-label={`${found} of ${READINGS_TOTAL} readings`}>
-        {READINGS.map((r) => (
+      <h3 className="journal-title">{rec.name}</h3>
+      <p className="journal-copy">
+        {found > 0 ? 'Read from orbit: select the markers on the site.' : `Travel there from the galaxy map, and read it from orbit.`}
+      </p>
+      <div className="journal-progress" aria-label={`${found} of ${readings.length} readings`}>
+        {readings.map((r) => (
           <span key={r.id} data-done={discovered[r.id] ? true : undefined} />
         ))}
         <span className="journal-progress-count tabular-nums">
-          {found} of {READINGS_TOTAL}
+          {found} of {readings.length}
         </span>
       </div>
       <ul className="journal-places">
-        {READINGS.map((r) => {
+        {readings.map((r) => {
           const at = discovered[r.id]
           return (
             <li key={r.id} data-found={at ? true : undefined}>
-              <span className="signal-dot" data-found={at ? true : undefined} style={{ ['--accent' as string]: '#9FE3FF' }} aria-hidden />
+              <span className="signal-dot" data-found={at ? true : undefined} style={{ ['--accent' as string]: rec.color }} aria-hidden />
               <span>{at ? r.name : r.hint}</span>
               <span className="journal-place-state">{at ? formatWhen(at).date : 'Not yet read'}</span>
             </li>
@@ -205,7 +211,7 @@ export function JournalUI() {
   const visitedLiris = useExploration((s) => !!s.visited.liris)
   const access = mapAccess(discovered)
   const showSurvey = access.tessalyOpen || visitedLiris
-  const showWaystation = access.open.waystation || READINGS.some((r) => discovered[r.id])
+  const sites = SITE_IDS.filter((site) => access.open[site] || readingsFoundAt(discovered, site) > 0)
 
   useEffect(() => {
     if (!open) return
@@ -245,10 +251,12 @@ export function JournalUI() {
           ))}
         </section>
 
-        {(showSurvey || showWaystation) && (
+        {(showSurvey || sites.length > 0) && (
           <section aria-label="Surveys">
             {showSurvey && <SurveyEntry />}
-            {showWaystation && <WaystationSurvey />}
+            {sites.map((site) => (
+              <SiteSurvey key={site} site={site} />
+            ))}
           </section>
         )}
 

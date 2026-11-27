@@ -134,7 +134,7 @@ export function TitleScreen() {
             director.space = 'galaxy'
             enterGalaxyIntro()
             setPhase('galaxy')
-            if (shot === 'tessaly' || shot === 'waystation') useExperience.getState().setActiveSystem(shot)
+            if (shot === 'tessaly' || shot === 'waystation' || shot === 'ring') useExperience.getState().setActiveSystem(shot)
             else if (shot === 'observatory') setTimeout(openObservatory, 500)
             else if (shot !== 'galaxy') setTimeout(() => useExperience.getState().setFocus(shot as PlanetId), 300)
           }

@@ -484,7 +484,96 @@ export const EXPEDITIONS: Expedition[] = [
       source: 'Expedition record',
       body: [
         'Forty-one surveyors measured the way to Tessaly, built the Waystation, and left in its outer ring with Liris\u2019s moss aboard.',
-        'The lamp still calls them home. Where they went is not yet on any map.',
+        'The lamp still calls them home. Where they went is not yet on any map, but the moss they carried is everywhere they stopped.',
+      ],
+    },
+  },
+  {
+    id: 'exp-violet',
+    code: 'Expedition VI',
+    title: 'Something Grows Violet',
+    unlock: { after: 'exp-keepers' },
+    intro: {
+      id: 'vi-intro',
+      kind: 'transmission',
+      title: 'Follow the moss',
+      source: 'The array · the Waystation\u2019s lamp',
+      body: [
+        'Wherever the keepers went, something grows violet there now. The moss is their trail.',
+        'Find it where it should not be, and it will point the way the ring went.',
+      ],
+    },
+    objectives: [
+      {
+        id: 'vi-1',
+        title: 'The moss that turns',
+        brief: "On Liris's Long Noon, the moss under the arch turns all day. Scan it, and watch where it turns at night.",
+        requires: ['liris-long-noon'],
+        fragment: {
+          id: 'vi-1-log',
+          kind: 'log',
+          title: 'A third direction',
+          source: 'Liris · the Long Noon',
+          body: [
+            'By day the moss turns to one sun, then the other. In the short night between them it turns to neither: to one point between the arms, toward the core.',
+          ],
+        },
+      },
+      {
+        id: 'vi-2',
+        title: 'Steered by violet',
+        brief: "On Nyx, in the Vein Fields, pale moths steer by a violet light below. Scan them.",
+        requires: ['nyx-vein-fields.vein-moths'],
+        fragment: {
+          id: 'vi-2-record',
+          kind: 'record',
+          title: 'Not Nyx\u2019s light',
+          source: 'Nyx · the Vein Fields',
+          body: [
+            'The light the moths steer by is not the crystal\u2019s. It is the moss, grown deep in the cracks where the warm air rises: the keepers stopped on Nyx.',
+          ],
+        },
+      },
+      {
+        id: 'vi-3',
+        title: 'A tower under the sea',
+        brief: "In Thalassa's Lantern Current, the lights gather around a sunken spire. Scan it.",
+        requires: ['thalassa-lantern-current.sunken-spire'],
+        fragment: {
+          id: 'vi-3-clue',
+          kind: 'clue',
+          title: 'Grown over the mark',
+          source: 'Thalassa · the sunken spire',
+          body: [
+            'The spire carries the survey mark, and the moss has grown over it in a long violet line. The line points up, out of the sea, toward the core.',
+          ],
+        },
+      },
+      {
+        id: 'vi-4',
+        title: 'A smaller ring',
+        brief: "From Orion's Ringrise, watch the shadow the rings lay on the clouds. Scan it.",
+        requires: ['orion-ringrise.ring-shadow'],
+        fragment: {
+          id: 'vi-4-transmission',
+          kind: 'transmission',
+          title: 'Not Orion\u2019s',
+          source: 'Orion · the Ringrise',
+          body: [
+            'One shadow on the clouds is not cast by Orion\u2019s rings. It is smaller, and it moves the other way: a ring crossing the light of the core.',
+            'The array finds it at once. Its lamps are answering.',
+          ],
+        },
+      },
+    ],
+    closing: {
+      id: 'vi-closing',
+      kind: 'record',
+      title: 'Something Grows Violet',
+      source: 'Expedition record',
+      body: [
+        'Liris, Nyx, Thalassa, Orion: the keepers left the moss wherever they stopped, and every patch of it leans the same way.',
+        'The Keepers\u2019 Ring is on the map. Open the galaxy map to travel there.',
       ],
     },
   },
