@@ -3082,3 +3082,27 @@ and phones.
   routes (one flown, five dashed); fog clear at Elys, 60 → 74 % in uncharted corners;
   a transit Elys → the Waystation recorded and persisted, and on reopening the map
   that route marked new and traced in. No errors.
+
+## 27. Full-playthrough check
+
+Every expedition after the second had been verified by seeding progress, never by
+playing from a fresh save; Liris showed that a find can be correct in data and still
+impossible to see. This check covers the whole chain.
+
+- **Story logic, from an empty save** (the real `expeditionStates` / `mapAccess`,
+  finds added in story order): Expedition I opens on the first find; II–VI each open
+  only when the one before completes, and every one completes. Places: Tessaly known
+  after II, reachable after III; the Waystation known after III, reachable after IV;
+  the Keepers' Ring known after V, reachable after VI. Each expedition's finds are
+  reachable by the time it opens (IV's on Liris after III, V's at the Waystation
+  after IV, VI's on Liris and Elys).
+- **Visibility, all 70 world finds on 7 worlds** (each from its own place, with the
+  game's own occlusion test: 13 samples along the line of sight; signals at their
+  beacons; hidden finds also checked against the view's pitch limits, pose ± 0.55 /
+  0.5 plus the 0.2 lock cone): Aurelis, Nyx, Solara, Vesper, Thalassa and Orion clear
+  (10/10 each); Liris 9/10 — the Between Days beacon grazed the ridge in front (1 of
+  13 samples), its signal raised 12 → 18, now 10/10.
+- **Deep-space readings:** always reachable (the sites turn, and the view orbits).
+
+Result: a fresh save can be played from Expedition I to the Keepers' Ring with every
+required find in view.
