@@ -24,7 +24,7 @@ import {
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { SURFACES, type Place, type SurfaceSettings } from '../../data/locations'
 import { isElysWorld, type WorldId } from '../../data/planets'
-import { director } from '../../state/director'
+import { director, telemetry } from '../../state/director'
 import { useExploration } from '../../state/exploration'
 import { quality, useExperience } from '../../state/useExperience'
 import { signalFx } from '../../ui/exploreDirector'
@@ -93,6 +93,9 @@ function gridGeometry(rings: number, segments: number, first: number, ratio: num
 
 /** Mounts the surface of the world being explored (from descent to ascent). */
 /** Loaded on demand (see ./lazy.ts); mounted by SurfaceSpace in Experience. */
+const flareView = new Vector3()
+const flareProbe = new Vector3()
+
 export default function SurfaceScene({ planet }: { planet: WorldId }) {
   const s = useMemo(() => prepareSurface(planet), [planet])
   const settings = SURFACES[planet]
@@ -122,6 +125,31 @@ export default function SurfaceScene({ planet }: { planet: WorldId }) {
   useEffect(() => {
     if (group.current) gl.compile(group.current, camera, scene)
   }, [gl, camera, scene])
+
+  // Bold pass: the sun on screen, for the lens flare — only when it is up, in view,
+  // not behind the land and not lost in cloud.
+  const flareSize = useThree((st) => st.size)
+  const projectFlare = (sunDir: Vector3, cover: number) => {
+    const f = telemetry.flare
+    camera.getWorldDirection(flareView)
+    const facing = MathUtils.smoothstep(flareView.dot(sunDir), 0.55, 0.97)
+    const up = MathUtils.smoothstep(sunDir.y, 0.0, 0.1)
+    let k = facing * up * (1 - 0.75 * cover)
+    if (k > 0.01) {
+      // Terrain between the eye and the sun hides it.
+      for (const d of [25, 60, 120, 240, 480]) {
+        flareProbe.copy(camera.position).addScaledVector(sunDir, d)
+        if (surface.height(flareProbe.x, flareProbe.z) > flareProbe.y) {
+          k = 0
+          break
+        }
+      }
+    }
+    flareProbe.copy(camera.position).addScaledVector(sunDir, 1000).project(camera)
+    f.x = (flareProbe.x * 0.5 + 0.5) * flareSize.width
+    f.y = (-flareProbe.y * 0.5 + 0.5) * flareSize.height
+    f.k += (k - f.k) * 0.15
+  }
 
   useFrame((_, delta) => {
     const { reducedMotion, motionPaused } = useExperience.getState()
@@ -161,7 +189,9 @@ export default function SurfaceScene({ planet }: { planet: WorldId }) {
       if (covered > 0) uniforms.uSunColor.value.multiplyScalar(1 - 0.88 * covered)
     }
     uniforms.uTime.value = director.time
+    projectFlare(uniforms.uSunDir.value, uniforms.uCloudCover.value)
   })
+
 
   return (
     <group ref={group}>
@@ -289,7 +319,7 @@ const MOTE_MOTION: Record<SurfaceSettings['motes'], { vel: [number, number, numb
 
 // ---------------------------------------------------------------------------
 // Overhaul: each world's occasional events. The scheduler (in Weather) picks one
-// every 25–60 s; the shaders draw it from uEventDir and uEvent.
+// every 12–30 s (bold pass; was 25–60); the shaders draw it from uEventDir and uEvent.
 
 type EventKind = 'meteor' | 'sunbreak' | 'eruption' | 'devil' | 'deep' | 'aurora' | 'surge' | 'squall' | 'gust' | 'tremor'
 
@@ -421,7 +451,8 @@ function Weather({ uniforms, settings }: { uniforms: SurfaceUniforms; settings: 
   const reducedMotion = useExperience((st) => st.reducedMotion)
   const nextFlash = useRef(4)
   const flash = useRef(0)
-  const event = useRef({ kind: 'meteor' as EventKind, age: -1, wait: 12, dur: 1, az: 0, el: 0 })
+  // Bold pass: the first event comes soon after landing, then every 12–30 s.
+  const event = useRef({ kind: 'meteor' as EventKind, age: -1, wait: 6, dur: 1, az: 0, el: 0 })
 
   // Overhaul: two layers from one shader — fine motes through the middle distance,
   // and a few large, soft ones near the lens that give the frame a foreground.
@@ -544,7 +575,7 @@ function Weather({ uniforms, settings }: { uniforms: SurfaceUniforms; settings: 
       weatherEvent.strength = eu.x
       if (t >= 1) {
         ev.age = -1
-        ev.wait = 25 + Math.random() * 35
+        ev.wait = 12 + Math.random() * 18
         eu.set(0, 0)
         weatherEvent.kind = 'none'
         weatherEvent.strength = 0

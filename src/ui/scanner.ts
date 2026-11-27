@@ -85,7 +85,8 @@ export function startScan(id: string) {
   timeline = tl
   tl.to(scanFx, { progress: 1, duration: length, ease: r ? 'none' : 'power1.inOut' }, 0)
   if (!r) {
-    tl.to(scanFx, { zoom: 6, duration: 1.3, ease: 'power2.inOut' }, 0).to(
+    // Bold pass: the scan leans in harder (10°, was 6°).
+    tl.to(scanFx, { zoom: 10, duration: 1.3, ease: 'power2.inOut' }, 0).to(
       scanFx,
       { beam: 1, duration: 0.9, ease: 'power2.out' },
       0.2,
@@ -114,7 +115,9 @@ function complete(id: string) {
   timeline = tl
   tl.fromTo(scanFx, { pulse: 0 }, { pulse: 1, duration: r ? 0.6 : 1.6, ease: 'power2.out' }, 0)
     .to(scanFx, { beam: 0, duration: r ? 0.3 : 1.4, ease: 'power2.in' }, r ? 0 : 0.3)
-    .to(scanFx, { zoom: 0, duration: r ? 0.3 : 1.8, ease: 'power2.inOut' }, 0.1)
+    // The find lands with a punch-in (3° more, 120 ms), then the lens lets go.
+    .to(scanFx, { zoom: r ? 0 : scanFx.zoom + 3, duration: r ? 0.01 : 0.12, ease: 'power2.out' }, 0)
+    .to(scanFx, { zoom: 0, duration: r ? 0.3 : 1.8, ease: 'power2.inOut' }, r ? 0.02 : 0.14)
 }
 
 /** Stops a scan in progress; nothing is recorded. */

@@ -53,6 +53,12 @@ interface ExplorationState {
    * plays once and the journal can mark what is new.
    */
   story: Record<string, number>
+  /**
+   * Phase 11e: routes travelled on the galaxy map ("a>b", ids sorted → when first
+   * flown). Not progress either: the map draws them. Missing in older saves → {}.
+   */
+  routes: Record<string, number>
+  markRoute: (a: string, b: string) => void
   markStory: (id: string) => void
   setVolume: (v: number) => void
   /** Records a catalogued discovery. Returns true only the first time (never for unknown ids). */
@@ -63,13 +69,22 @@ interface ExplorationState {
   toggleSound: () => void
 }
 
-type Persisted = Pick<ExplorationState, 'discovered' | 'visited' | 'observatorySeenAt' | 'soundOn' | 'volume' | 'story'>
+/** A route's key: the two ends, sorted (a route has no direction). */
+export const routeKey = (a: string, b: string) => [a, b].sort().join('>')
+
+type Persisted = Pick<ExplorationState, 'discovered' | 'visited' | 'observatorySeenAt' | 'soundOn' | 'volume' | 'story' | 'routes'>
 
 export const useExploration = create<ExplorationState>()(
   persist(
     (set, get) => ({
       discovered: {},
       visited: {},
+      routes: {},
+      markRoute: (a, b) => {
+        const key = routeKey(a, b)
+        if (get().routes[key]) return
+        set((s) => ({ routes: { ...s.routes, [key]: Date.now() } }))
+      },
       observatorySeenAt: 0,
       soundOn: true,
       volume: 0.8,
@@ -103,6 +118,7 @@ export const useExploration = create<ExplorationState>()(
         soundOn: s.soundOn,
         volume: s.volume,
         story: s.story,
+        routes: s.routes,
       }),
       /**
        * v1 → v2: v1 stored only discoveries. A world with a discovery was

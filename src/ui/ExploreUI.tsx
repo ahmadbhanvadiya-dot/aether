@@ -198,7 +198,10 @@ export function ExploreUI() {
       <div className="title-card" data-title-card aria-hidden>
         {loc && (
           <>
-            <p className="title-card-name">{loc.name}</p>
+            {/* Keyed: the name decodes into this node, so each place gets a fresh one. */}
+            <p key={loc.id} className="title-card-name">
+              {loc.name}
+            </p>
             <p className="title-card-region">{loc.region}</p>
           </>
         )}

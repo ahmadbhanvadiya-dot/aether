@@ -4,8 +4,18 @@
  * signal scope reads every frame.
  */
 
-/** Loading progress for the prelude's scope (0 → 1), written by TitleScreen's load count. */
-export const preludeFx = { p: 0 }
+/**
+ * The prelude's scope: loading progress (0 → 1, from TitleScreen's load count),
+ * and the lock at the end (0 → 1, the arrival timeline): the wave flattens into a
+ * line, the line draws in to a point.
+ */
+export const preludeFx = { p: 0, lock: 0 }
+
+const smooth = (a: number, b: number, x: number) => {
+  const t = Math.min(1, Math.max(0, (x - a) / (b - a)))
+  return t * t * (3 - 2 * t)
+}
+export { smooth }
 
 const GLYPHS = 'ABCDEFGHIKLMNOPRSTUVXYZ0123456789:/+=<>·'
 
@@ -37,5 +47,43 @@ export function decode(el: HTMLElement, text: string, { duration = 1100, delay =
     raf = requestAnimationFrame(tick)
   }
   raf = requestAnimationFrame(tick)
-  return () => cancelAnimationFrame(raf)
+  // Frames can starve (a background tab): the text still lands, on time.
+  const done = window.setTimeout(() => {
+    cancelAnimationFrame(raf)
+    el.textContent = text
+  }, delay + duration + 60)
+  return () => {
+    cancelAnimationFrame(raf)
+    clearTimeout(done)
+  }
+}
+
+const LETTER_GLYPHS = 'ΛΞΣΠΦΨΩAEHRTVXKMN'
+
+/**
+ * One wordmark letter tuning in: it flickers through a few glyphs, then holds.
+ * The letter's cell is held at its width meanwhile, so the word never shifts.
+ */
+export function flicker(letter: HTMLElement, { frames = 7, every = 55 } = {}) {
+  const final = letter.dataset.char ?? letter.textContent ?? ''
+  letter.dataset.char = final
+  const cell = letter.parentElement
+  if (cell) {
+    cell.style.width = `${cell.getBoundingClientRect().width}px`
+    cell.style.textAlign = 'center'
+  }
+  let i = 0
+  const id = window.setInterval(() => {
+    i++
+    if (i >= frames) {
+      window.clearInterval(id)
+      letter.textContent = final
+      if (cell) {
+        cell.style.width = ''
+        cell.style.textAlign = ''
+      }
+      return
+    }
+    letter.textContent = LETTER_GLYPHS[(Math.random() * LETTER_GLYPHS.length) | 0]
+  }, every)
 }

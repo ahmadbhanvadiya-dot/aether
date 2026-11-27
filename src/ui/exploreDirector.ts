@@ -1,6 +1,7 @@
 import gsap from 'gsap'
 import { sound } from '../audio/sound'
 import { locationsFor, PLACE_BY_ID } from '../data/locations'
+import { decode } from './titleFx'
 import { isElysWorld, WORLD_BY_ID, type WorldId } from '../data/planets'
 import { beginGalaxyAscent, beginGalaxyDescent, primeGalaxyFocus } from '../scene/galaxy/GalaxyRig'
 import { atmosphereFx, climb, DURATION, entry, glide, signalFx } from '../scene/motion'
@@ -74,6 +75,10 @@ export function showTitleCard(hold = 3.6) {
   if (!card) return
   gsap.killTweensOf(card)
   const r = reduced()
+  // Bold pass: the name decodes in, glyph by glyph.
+  const name = card.querySelector<HTMLElement>('.title-card-name')
+  const loc = useExperience.getState().location
+  if (name && loc && !r) decode(name, PLACE_BY_ID[loc]?.name ?? name.textContent ?? '', { duration: 900, delay: 120 })
   gsap
     .timeline()
     .fromTo(card, { opacity: 0, y: r ? 0 : 14 }, { opacity: 1, y: 0, duration: 1.1, ease: 'uiOut' })

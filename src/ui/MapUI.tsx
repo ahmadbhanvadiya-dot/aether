@@ -5,6 +5,7 @@ import { SYSTEM_BY_ID, SYSTEMS, type SystemId } from '../data/systems'
 import { telemetry } from '../state/director'
 import { useExploration } from '../state/exploration'
 import { mapAccess } from '../state/expeditions'
+import { routeKey } from '../state/exploration'
 import { systemProgress, worldProgress } from '../state/progress'
 import { useExperience } from '../state/useExperience'
 import { loadSystem } from '../system/chunks'
@@ -16,6 +17,9 @@ import { closeMap, transitFx, travelTo } from './mapDirector'
  * Tessaly is hinted at once Expedition II is complete (unnamed), and reachable
  * once Expedition III is: select it and travel.
  */
+
+/** When the map was last opened (routes flown since then trace themselves in). */
+const lastMapOpen = { at: Date.now() }
 
 export function MapUI() {
   const phase = useExperience((s) => s.phase)
@@ -44,6 +48,23 @@ export function MapUI() {
   // A place is sealed until its expedition opens it (development shots can stand anywhere regardless).
   const isSealed = (id: SystemId) => !access.open[id] && id !== active
   const shown = SYSTEMS.filter((s) => s.id === active || access.known[s.id])
+  // Phase 11e: routes. Flown ones glow; ones that could be flown (both ends open) are a faint dash.
+  const routes = useExploration((s) => s.routes)
+  const pairs = useMemo(() => {
+    const open = SYSTEMS.filter((s) => s.id === active || access.open[s.id])
+    const out: { a: SystemId; b: SystemId; flown: number }[] = []
+    for (let i = 0; i < open.length; i++)
+      for (let j = i + 1; j < open.length; j++) {
+        const a = open[i].id
+        const b = open[j].id
+        out.push({ a, b, flown: routes[routeKey(a, b)] ?? 0 })
+      }
+    return out
+  }, [access, active, routes])
+  // Routes flown since the map was last open trace themselves in.
+  const [seenAt, setSeenAt] = useState(() => lastMapOpen.at)
+  const fog = useRef<HTMLCanvasElement>(null)
+  const routeSvg = useRef<SVGSVGElement>(null)
 
   // Each time the map opens: start on the system you are in (adjusted during render, not in an effect).
   const [wasOpen, setWasOpen] = useState(open)
@@ -52,19 +73,72 @@ export function MapUI() {
     if (open) {
       setSelected(active)
       setTravelling(false)
+      // Routes flown after the last opening are the new ones (the effect then records this opening).
+      setSeenAt(lastMapOpen.at)
     }
   }
 
   // Markers, the route and the traveller follow the projected systems (written by GalaxyRig in map mode).
   useEffect(() => {
     if (!open) return
+    lastMapOpen.at = Date.now()
     let raf = 0
+    // The fog: uncharted space stays veiled; known places clear it around them,
+    // reachable ones widely, the place you are in most. It breathes slowly.
+    const c = fog.current
+    const ctx = c?.getContext('2d')
+    const dpr = Math.min(window.devicePixelRatio || 1, 1.5)
+    const reduce = useExperience.getState().reducedMotion
+    const clearings = SYSTEMS.map((s) => ({
+      id: s.id,
+      r: s.id === useExperience.getState().activeSystem ? 230 : access.open[s.id] ? 180 : access.known[s.id] ? 95 : 0,
+    })).filter((x) => x.r > 0)
+    const drawFog = () => {
+      if (!c || !ctx) return
+      const W = Math.round(window.innerWidth * dpr)
+      const H = Math.round(window.innerHeight * dpr)
+      if (c.width !== W || c.height !== H) {
+        c.width = W
+        c.height = H
+      }
+      const t = reduce ? 0 : performance.now() / 1000
+      ctx.globalCompositeOperation = 'source-over'
+      ctx.clearRect(0, 0, W, H)
+      ctx.fillStyle = 'rgba(2, 3, 10, 0.74)'
+      ctx.fillRect(0, 0, W, H)
+      ctx.globalCompositeOperation = 'destination-out'
+      for (const k of clearings) {
+        const m = telemetry.map[k.id]
+        if (!m) continue
+        const R = k.r * dpr * (1 + 0.05 * Math.sin(t * 0.5 + k.r))
+        const g = ctx.createRadialGradient(m.x * dpr, m.y * dpr, 0, m.x * dpr, m.y * dpr, R)
+        g.addColorStop(0, 'rgba(0,0,0,1)')
+        g.addColorStop(0.55, 'rgba(0,0,0,0.85)')
+        g.addColorStop(1, 'rgba(0,0,0,0)')
+        ctx.fillStyle = g
+        ctx.beginPath()
+        ctx.arc(m.x * dpr, m.y * dpr, R, 0, Math.PI * 2)
+        ctx.fill()
+      }
+      ctx.globalCompositeOperation = 'source-over'
+    }
     const tick = () => {
       marks.current?.querySelectorAll<HTMLElement>('[data-system]').forEach((el) => {
         const m = telemetry.map[el.dataset.system!]
         el.style.transform = `translate3d(${m.x.toFixed(1)}px, ${m.y.toFixed(1)}px, 0)`
         el.style.visibility = m.on ? 'visible' : 'hidden'
       })
+      // Route lines between the projected places.
+      routeSvg.current?.querySelectorAll<SVGLineElement>('[data-route]').forEach((ln) => {
+        const a = telemetry.map[ln.dataset.a!]
+        const b = telemetry.map[ln.dataset.b!]
+        ln.setAttribute('x1', a.x.toFixed(1))
+        ln.setAttribute('y1', a.y.toFixed(1))
+        ln.setAttribute('x2', b.x.toFixed(1))
+        ln.setAttribute('y2', b.y.toFixed(1))
+        ln.style.visibility = a.on && b.on ? 'visible' : 'hidden'
+      })
+      drawFog()
       const r = route.current
       const t = traveller.current
       if (r && t) {
@@ -84,7 +158,7 @@ export function MapUI() {
     }
     raf = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(raf)
-  }, [open])
+  }, [open, access])
 
   useEffect(() => {
     if (!open) return
@@ -111,6 +185,21 @@ export function MapUI() {
 
   return (
     <div className="map-ui" data-open={open || undefined} data-travelling={travelling || undefined} inert={!open} aria-hidden={!open}>
+      <canvas ref={fog} className="map-fog" aria-hidden />
+      <svg ref={routeSvg} className="map-routes" aria-hidden>
+        {pairs.map(({ a, b, flown }) => (
+          <line
+            key={`${a}>${b}`}
+            data-route
+            data-a={a}
+            data-b={b}
+            data-flown={flown ? true : undefined}
+            data-new={flown > seenAt || undefined}
+            // Only a route tracing itself in is measured in path units (its dash is the whole line).
+            pathLength={flown > seenAt ? 1 : undefined}
+          />
+        ))}
+      </svg>
       <div ref={marks} className="map-marks">
         <div ref={route} className="map-route" aria-hidden />
         <div ref={traveller} className="map-traveller" aria-hidden />

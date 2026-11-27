@@ -4,6 +4,7 @@ import { beginMap, endMap, switchMapReturn } from '../scene/galaxy/GalaxyRig'
 import type { SystemId } from '../data/systems'
 import { director } from '../state/director'
 import { useExperience } from '../state/useExperience'
+import { useExploration } from '../state/exploration'
 import { loadSystem } from '../system/chunks'
 
 /**
@@ -88,6 +89,8 @@ export function travelTo(to: SystemId) {
   timeline?.kill()
   const from = st.activeSystem
   const arrive = () => {
+    // Phase 11e: the map remembers the route.
+    useExploration.getState().markRoute(from, to)
     switchMapReturn(from, to)
     useExperience.getState().setActiveSystem(to)
     Object.assign(transitFx, { t: 0, active: false })
