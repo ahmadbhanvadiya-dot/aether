@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { useExperience } from '../state/useExperience'
-import { decode, preludeFx } from './titleFx'
+import { decode, preludeFx, smooth } from './titleFx'
 
 /**
  * The prelude: what is on screen while the scene compiles. A signal scope tunes
@@ -101,10 +101,17 @@ export function Prelude() {
       const clarity = Math.min(1, Math.max(0, (p - 0.08) / 0.82))
       const noise = reduced ? 0 : (1 - clarity) ** 1.5
 
+      // The lock: the wave flattens, then the line draws in to the centre.
+      const lock = preludeFx.lock
+      const amp = 1 - smooth(0, 0.45, lock)
+      const reach = Math.max(0.004, 1 - smooth(0.3, 1, lock))
+      const x0 = (W / 2) * (1 - reach)
+      const x1 = W - x0
+
       ctx.clearRect(0, 0, W, H)
       const mid = H / 2
       // A faint baseline.
-      ctx.globalAlpha = 0.18
+      ctx.globalAlpha = 0.18 * (1 - lock)
       ctx.strokeStyle = '#8A93B8'
       ctx.lineWidth = dpr
       ctx.beginPath()
@@ -122,11 +129,11 @@ export function Prelude() {
       ctx.strokeStyle = grad
       ctx.lineWidth = 1.4 * dpr
       ctx.shadowColor = 'rgba(90,176,255,0.7)'
-      ctx.shadowBlur = 10 * dpr * (0.5 + 0.5 * clarity + 0.4 * tune.near)
+      ctx.shadowBlur = 10 * dpr * (0.5 + 0.5 * clarity + 0.4 * tune.near + 1.6 * lock)
       ctx.beginPath()
       const step = 2 * dpr
       const shift = (t * 0.07) % 1
-      for (let x = 0; x <= W; x += step) {
+      for (let x = x0; x <= x1; x += step) {
         const u = x / W
         // The motif scrolls through: three short pulses, then one long.
         const v = (((u + shift) % 1) + 1) % 1
@@ -135,11 +142,21 @@ export function Prelude() {
         const lens = 1 + 0.9 * tune.near * bump(u, tune.x, 0.07)
         const signal = carrier * motif * clarity * lens * 0.85
         const hiss = noise * (Math.random() * 2 - 1) * (0.55 + 0.45 * Math.sin(u * 40 + t * 9))
-        const y = mid + H * 0.4 * (signal + hiss * 0.8)
-        if (x === 0) ctx.moveTo(x, y)
+        const y = mid + H * 0.4 * (signal + hiss * 0.8) * amp
+        if (x === x0) ctx.moveTo(x, y)
         else ctx.lineTo(x, y)
       }
       ctx.stroke()
+      // At the end of the lock, all that is left is a point of light.
+      if (lock > 0.75) {
+        const k = smooth(0.75, 1, lock)
+        ctx.fillStyle = `rgba(235, 242, 255, ${k})`
+        ctx.shadowColor = 'rgba(90,176,255,0.95)'
+        ctx.shadowBlur = 22 * dpr * k
+        ctx.beginPath()
+        ctx.arc(W / 2, mid, (1.5 + 2.5 * k) * dpr, 0, Math.PI * 2)
+        ctx.fill()
+      }
       ctx.shadowBlur = 0
       raf = requestAnimationFrame(draw)
     }

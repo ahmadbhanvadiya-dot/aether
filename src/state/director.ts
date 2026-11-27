@@ -94,6 +94,8 @@ export const telemetry = {
   } as Record<string, { x: number; y: number; on: boolean }>,
   /** Phase 11d: the Waystation's readings, projected (CSS px; `on` when in view and facing). */
   site: {} as Record<string, { x: number; y: number; on: boolean }>,
+  /** Bold exploration pass: the sun on screen (CSS px) and the flare's strength (0 → 1). */
+  flare: { x: 0, y: 0, k: 0 },
   /** Ithra's projected screen position in CSS pixels. */
   ithra: { x: 0, y: 0, visible: false },
 }

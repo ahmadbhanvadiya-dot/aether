@@ -3997,3 +3997,175 @@ body {
     animation: none;
   }
 }
+
+/* The signal lock: the dark opens from the scope's point of light, like an iris. */
+.prelude {
+  -webkit-mask-image: radial-gradient(circle at var(--hx, 50%) var(--hy, 50%), transparent var(--hole, 0px), #000 calc(var(--hole, 0px) + 1.5px));
+  mask-image: radial-gradient(circle at var(--hx, 50%) var(--hy, 50%), transparent var(--hole, 0px), #000 calc(var(--hole, 0px) + 1.5px));
+}
+
+.prelude-flare {
+  position: fixed;
+  z-index: 31;
+  left: 50%;
+  top: 50%;
+  width: 120px;
+  height: 120px;
+  margin: -60px 0 0 -60px;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgb(240 246 255 / 0.95) 0 6%, rgb(90 176 255 / 0.55) 18%, rgb(140 108 255 / 0.18) 42%, transparent 70%);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.title-sky {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+/* Bold pass: the scan's lock-on brackets and the burst when a find lands. */
+.scan-ring-brackets {
+  fill: none;
+  stroke: var(--color-starlight, #eef1ff);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  transform-origin: 0 0;
+  transform-box: view-box;
+  filter: drop-shadow(0 0 3px rgb(90 176 255 / 0.9));
+}
+
+.scan-ring-burst {
+  fill: none;
+  stroke: var(--color-ion, #5ab0ff);
+  stroke-width: 2;
+  opacity: 0;
+  transform-origin: 0 0;
+  transform-box: view-box;
+  filter: drop-shadow(0 0 8px rgb(90 176 255 / 0.9));
+}
+
+/* ---------- Bold exploration pass: screen-space cinema ---------- */
+
+.cinema-fx {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.cfx-streaks {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  mix-blend-mode: screen;
+}
+
+/* Plasma at the frame's edge, in the world's atmosphere colour. */
+.cfx-burn {
+  position: absolute;
+  inset: -4%;
+  opacity: 0;
+  background:
+    radial-gradient(ellipse 70% 62% at 50% 50%, transparent 52%, color-mix(in srgb, var(--burn, #8fd0ff) 55%, transparent) 78%, color-mix(in srgb, var(--burn, #8fd0ff) 90%, white) 100%);
+  mix-blend-mode: screen;
+}
+
+.cfx-flare {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  mix-blend-mode: screen;
+}
+
+.cfx-flare-core {
+  position: absolute;
+  left: var(--sx);
+  top: var(--sy);
+  width: 340px;
+  height: 340px;
+  margin: -170px 0 0 -170px;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgb(255 250 235 / 0.55) 0 4%, rgb(255 230 190 / 0.22) 14%, rgb(255 210 160 / 0.06) 40%, transparent 70%);
+}
+
+.cfx-ghost {
+  position: absolute;
+  left: calc(var(--sx) + var(--dx) * var(--f));
+  top: calc(var(--sy) + var(--dy) * var(--f));
+  width: var(--s);
+  height: var(--s);
+  margin: calc(var(--s) / -2) 0 0 calc(var(--s) / -2);
+  border-radius: 999px;
+  background: radial-gradient(circle, rgb(150 200 255 / 0.16), rgb(150 120 255 / 0.06) 60%, transparent 72%);
+}
+
+.cfx-ghost-ring {
+  background: radial-gradient(circle, transparent 58%, rgb(170 210 255 / 0.12) 64%, transparent 70%);
+}
+
+/* Phase 11e: the map's fog over uncharted space, and its routes. */
+.map-fog {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 900ms ease;
+}
+
+.map-ui[data-open] .map-fog {
+  opacity: 1;
+}
+
+.map-routes {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 600ms ease 300ms;
+}
+
+.map-ui[data-open] .map-routes {
+  opacity: 1;
+}
+
+.map-routes line {
+  stroke: rgb(200 210 255 / 0.62);
+  stroke-width: 1.3;
+  stroke-dasharray: 5 6;
+}
+
+.map-routes line[data-flown] {
+  stroke: rgb(150 200 255 / 0.75);
+  stroke-width: 1.5;
+  stroke-dasharray: none;
+  filter: drop-shadow(0 0 4px rgb(90 176 255 / 0.7));
+}
+
+/* A route flown since the map was last open traces itself in. */
+.map-ui[data-open] .map-routes line[data-new] {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: route-trace 1.8s cubic-bezier(0.23, 1, 0.32, 1) 0.9s forwards;
+}
+
+@keyframes route-trace {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .map-ui[data-open] .map-routes line[data-new] {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+}

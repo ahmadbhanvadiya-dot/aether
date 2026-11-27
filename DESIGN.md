@@ -2999,3 +2999,86 @@ Verified in the dev build: prelude at 5 % (static) and 100 % (the motif, *Signal
 clear*); the letters' and button's offsets under a moving pointer; the hint; Enter →
 warp → galaxy; a 375 px phone (scope and button fit, no hint on touch). No errors;
 lint unchanged.
+
+**Second pass ("make it better"):**
+
+- **The signal locks, then opens like an iris.** At 100 % the words, hairline and
+  status go (staggered), the wave flattens into a line that draws in to a point
+  (`preludeFx.lock`, drawn by the scope), the point flares (`.prelude-flare`), and
+  the dark opens from it: a radial mask on the prelude (`--hole`, 0 → 150 vmax,
+  ease-in) reveals Vael through the expanding circle. The arrival starts as the iris
+  opens. Reduced motion keeps the plain fade.
+- **AETHER tunes in:** each letter flickers through a few glyphs (Λ Ξ Σ Π Φ Ψ Ω …) as
+  it sharpens; its cell is held at its width meanwhile, so the word never shifts.
+- **The Enter label re-decodes on hover** (fine pointers, once per hover).
+- **Shooting stars** cross the upper sky every 7–14 s while the title is live
+  (`TitleSky`: draws only while one is crossing; off for reduced motion).
+- **Decodes always land:** a timer finishes the text on schedule even when frames
+  starve (a background tab), found when a throttled tab left the label scrambled.
+
+## 25. Bold exploration pass
+
+The motion overhaul (§23) made exploration smooth; this pass makes it dramatic, on
+request ("bold and cinematic", all four moments). Nothing was replaced: it adds a
+screen-space layer and turns up existing dials.
+
+**Screen-space cinema** (`ui/CinemaFx.tsx`, one rAF, no React updates, under the HUD):
+
+- **Entry burn:** plasma glow at the frame's edge in the world's atmosphere colour
+  (`atmosphere.day`), rising as the dive meets the air (`descent` 0.55 → 0.95) and
+  fading through the landing (`landing` 0.05 → 0.45), flickering slightly; the climb
+  gets a gentler one (0.55). Screen blend.
+- **Speed streaks:** a seeded field of lines rushing outward from the centre (the
+  middle of the frame stays clear), with the burn during the descent and with
+  `travelFx.speed` on flights. The canvas clears when idle.
+- **Lens flare:** the surface scene projects its sun each frame (`telemetry.flare`):
+  strength = facing × above the horizon × (1 − 0.75 × cloud cover), zero if terrain
+  lies between the eye and the sun (five probes, 25–480 units); a bloom at the sun and
+  three ghosts on the line through the frame's centre. Damped.
+
+**Dials turned up:**
+
+| | Was | Now |
+|--|--|--|
+| Flight FOV kick at full cruise | 3° | 9° |
+| Scan lean-in | 6° | 10°, plus a 3° punch-in for 120 ms as the find lands |
+| Surface events | every 25–60 s (first at 12 s) | every 12–30 s (first at 6 s) |
+
+**Moments:**
+
+- **Scan lock-on:** four corner brackets swing in from 45° and 1.75× and snap tight
+  over the first third of the scan, then the burst ring (scale 1 → 2.8) pushes them
+  out as the find lands (`scanFx.progress`, `scanFx.pulse`).
+- **Names decode:** a place's name on every landing and arrival (the title card, keyed
+  per place so React never updates a decoded node), and a new find's name as its card
+  opens.
+
+**Reduced motion:** no burn, streaks, punch-in or decodes; the flare stays (light,
+not motion).
+
+**Verified in the dev build** (Aurelis and Liris): descent burn up to 0.76 in Aurelis
+blue, gone on the surface; the flare at 0.74 with both suns over the Twofold Shore,
+and correctly 0 at the Glass Shelf (its low sun behind the coast); a flight: FOV kick
+8.98°, streaks drawn, the destination's name decoded and correct; a scan: brackets
+from `rotate(45deg) scale(1.75)` to `rotate(0) scale(1)`, the burst at mid-pulse
+(0.46, 1.72×), the find's card; the climb's burn 0.55, cleared in orbit. No errors.
+Not checked: the feel at full frame rate (the preview pane runs at ~2 fps unfocused),
+and phones.
+
+## 26. Phase 11e: routes and fog on the galaxy map
+
+- **Routes are remembered.** Each transit records its pair (`routes` in the exploration
+  store, key = the two ids sorted, value = when first flown; persisted; older saves
+  start with none, no migration). Not progress: only the map reads it.
+- **The map draws them** (SVG under the markers, positioned in the same frame loop):
+  a route flown glows solid; a route that could be flown (both ends open) is a faint
+  dash. A route flown since the map was last open traces itself in (path length 1,
+  dash offset 1 → 0, 1.8 s ease-out, after the rise); reduced motion draws it at once.
+- **Fog over uncharted space** (a canvas under the routes): the map is veiled (74 %)
+  except where places are known: the place you are in clears 230 px around it, a
+  reachable one 180, one only hinted at 95; the clearings breathe slowly (±5 %, still
+  for reduced motion). As expeditions open more of the galaxy, more of it clears.
+- **Verified in the dev build:** with every place open and Elys–Tessaly flown, six
+  routes (one flown, five dashed); fog clear at Elys, 60 → 74 % in uncharted corners;
+  a transit Elys → the Waystation recorded and persisted, and on reopening the map
+  that route marked new and traced in. No errors.

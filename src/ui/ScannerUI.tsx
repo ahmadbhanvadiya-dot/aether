@@ -7,6 +7,7 @@ import { WORLD_BY_ID } from '../data/planets'
 import { scanFx } from '../scene/motion'
 import { telemetry } from '../state/director'
 import { useExploration } from '../state/exploration'
+import { decode } from './titleFx'
 import { formatWhen, worldProgress } from '../state/progress'
 import { quality, useExperience } from '../state/useExperience'
 import { closeCard, startScan } from './scanner'
@@ -103,6 +104,8 @@ function ScanRing() {
   const root = useRef<HTMLDivElement>(null)
   const arc = useRef<SVGCircleElement>(null)
   const pct = useRef<HTMLSpanElement>(null)
+  const brackets = useRef<SVGGElement>(null)
+  const burst = useRef<SVGCircleElement>(null)
   const id = scanning ?? card
   // Completed: the scan has ended and its record is open (the ring is only drawn while its effects play).
   const done = !scanning && !!card
@@ -118,6 +121,21 @@ function ScanRing() {
         if (target) node.style.transform = `translate3d(${target.x.toFixed(1)}px, ${target.y.toFixed(1)}px, 0)`
         if (arc.current) arc.current.style.strokeDashoffset = String(1 - scanFx.progress)
         if (pct.current) pct.current.textContent = `${Math.round(scanFx.progress * 100)}%`
+        // Lock-on: the brackets swing in from wide and turned, and snap tight in the
+        // first third of the scan; the find pushes them out again with the burst.
+        const p = scanFx.progress
+        const k = Math.min(1, p / 0.35)
+        const lock = 1 - (1 - k) ** 3
+        if (brackets.current) {
+          const s = 1.75 - 0.75 * lock + 0.55 * scanFx.pulse
+          brackets.current.style.transform = `rotate(${(45 * (1 - lock)).toFixed(2)}deg) scale(${s.toFixed(3)})`
+          brackets.current.style.opacity = String(Math.min(1, 0.35 + lock) * (1 - scanFx.pulse * 0.9))
+        }
+        if (burst.current) {
+          const b = scanFx.pulse
+          burst.current.style.transform = `scale(${(1 + 1.8 * b).toFixed(3)})`
+          burst.current.style.opacity = b > 0 && b < 1 ? String((1 - b) ** 1.5) : '0'
+        }
       }
       raf = requestAnimationFrame(tick)
     }
@@ -141,6 +159,13 @@ function ScanRing() {
         <circle className="scan-ring-track" r={50} />
         <circle ref={arc} className="scan-ring-arc" r={50} pathLength={1} transform="rotate(-90)" />
         <circle className="scan-ring-inner" r={36} />
+        {/* Lock-on brackets, and the burst when the find lands. */}
+        <g ref={brackets} className="scan-ring-brackets">
+          {[0, 90, 180, 270].map((a) => (
+            <path key={a} d="M -44 -30 L -44 -44 L -30 -44" transform={`rotate(${a})`} />
+          ))}
+        </g>
+        <circle ref={burst} className="scan-ring-burst" r={50} />
       </svg>
       <span className="scan-ring-readout">
         {done ? (d ? CATEGORIES[d.category].label : 'Recorded') : <>Scanning <span ref={pct} className="tabular-nums">0%</span></>}
@@ -160,6 +185,15 @@ function DiscoveryCard() {
   if (card && card !== last) setLast(card)
   const id = card ?? last
   const d = id ? FIND_BY_ID[id] : null
+  // Bold pass: a new find's name decodes in as its card opens.
+  const nameRef = useRef<HTMLHeadingElement>(null)
+  useEffect(() => {
+    const f = card ? FIND_BY_ID[card] : null
+    const at = f ? useExploration.getState().discovered[f.id] : 0
+    const fresh = !!at && useExperience.getState().cardAt - at < 15000
+    if (!f || !fresh || !nameRef.current || useExperience.getState().reducedMotion) return
+    return decode(nameRef.current, f.name, { duration: 800, delay: 180 })
+  }, [card])
   if (!d) return <aside className="discovery-card" aria-hidden />
 
   const at = discovered[d.id]
@@ -184,7 +218,9 @@ function DiscoveryCard() {
         {CATEGORIES[d.category].label}
         {d.kind === 'secret' && <span className="discovery-card-hidden">Hidden discovery</span>}
       </p>
-      <h2 className="discovery-card-name">{d.name}</h2>
+      <h2 ref={nameRef} className="discovery-card-name">
+        {d.name}
+      </h2>
       <p className="discovery-card-copy">{d.description}</p>
       <dl className="discovery-card-facts">
         <div>

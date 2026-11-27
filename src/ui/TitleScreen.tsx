@@ -24,7 +24,9 @@ import { StoryUI } from './StoryUI'
 import { OrbitLabel } from './OrbitLabel'
 import { Wordmark } from './Wordmark'
 import { Prelude } from './Prelude'
-import { decode, preludeFx } from './titleFx'
+import { decode, flicker, preludeFx } from './titleFx'
+import { TitleSky } from './TitleSky'
+import { CinemaFx } from './CinemaFx'
 
 gsap.registerPlugin(useGSAP, CustomEase)
 // Strong UI ease-out — the same curve as --ease-out-ui in CSS.
@@ -175,7 +177,19 @@ function useTitleInteractions(root: React.RefObject<HTMLDivElement | null>, live
     }
     window.addEventListener('pointermove', onMove)
     document.addEventListener('pointerleave', settle)
+    // Hovering the button re-decodes its label (once per hover, never mid-decode).
+    const label = el.querySelector<HTMLElement>('[data-cta-label]')
+    const cta = el.querySelector<HTMLElement>('[data-cta]')
+    let decoding = false
+    const onEnterHover = () => {
+      if (!label || decoding) return
+      decoding = true
+      decode(label, 'ENTER UNIVERSE', { duration: 480 })
+      window.setTimeout(() => (decoding = false), 520)
+    }
+    cta?.addEventListener('pointerenter', onEnterHover)
     return () => {
+      cta?.removeEventListener('pointerenter', onEnterHover)
       window.removeEventListener('keydown', onKey)
       window.removeEventListener('pointermove', onMove)
       document.removeEventListener('pointerleave', settle)
@@ -270,16 +284,34 @@ export function TitleScreen() {
       const tl = gsap.timeline({ onComplete: () => setPhase('orbit') })
       timeline.current = tl
 
-      // Let the count land on 100 before the void opens.
-      tl.to(q('[data-prelude-line]'), {
-        opacity: 0,
-        filter: reducedMotion ? 'blur(0px)' : 'blur(8px)',
-        duration: 0.7,
-        ease: 'power2.out',
-        delay: 0.75,
-      }).to(q('[data-prelude]'), { autoAlpha: 0, duration: 0.6, ease: 'power1.out' }, '>-0.2')
-
-      const start = tl.duration() - 0.3
+      const prelude = q('[data-prelude]')[0] as HTMLElement | undefined
+      const flare = q('[data-prelude-flare]')[0] as HTMLElement | undefined
+      let start: number
+      if (reducedMotion || !prelude || !flare) {
+        // Let the count land on 100 before the void opens.
+        tl.to(q('[data-prelude-line]'), { opacity: 0, duration: 0.7, ease: 'power2.out', delay: 0.75 }).to(
+          q('[data-prelude]'),
+          { autoAlpha: 0, duration: 0.6, ease: 'power1.out' },
+          '>-0.2',
+        )
+        start = tl.duration() - 0.3
+      } else {
+        // The signal locks: the words go, the wave flattens and draws in to a point,
+        // the point flares, and the dark opens from it like an iris onto Vael.
+        const scope = prelude.querySelector('.prelude-scope')?.getBoundingClientRect()
+        const cx = scope ? scope.left + scope.width / 2 : window.innerWidth / 2
+        const cy = scope ? scope.top + scope.height / 2 : window.innerHeight / 2
+        gsap.set(prelude, { '--hx': `${cx}px`, '--hy': `${cy}px`, '--hole': '0px' })
+        gsap.set(flare, { left: cx, top: cy })
+        tl.to(q('.prelude-line, .prelude-bar, .prelude-stage'), { opacity: 0, y: 6, duration: 0.5, ease: 'power2.out', stagger: 0.06, delay: 0.6 })
+          .to(preludeFx, { lock: 1, duration: 1.0, ease: 'power3.inOut' }, '<0.15')
+          .addLabel('open', '>-0.05')
+          .fromTo(flare, { scale: 0.15, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.22, ease: 'power2.out' }, 'open')
+          .to(flare, { scale: 16, opacity: 0, duration: 1.4, ease: 'power2.out' }, 'open+=0.2')
+          .to(prelude, { '--hole': '150vmax', duration: 1.5, ease: 'power3.in' }, 'open+=0.12')
+          .set(prelude, { autoAlpha: 0 })
+        start = (tl.labels.open as number) + 0.35
+      }
 
       if (reducedMotion) {
         director.arrival = 1
@@ -301,6 +333,9 @@ export function TitleScreen() {
           { opacity: 1, y: 0, filter: 'blur(0px)', duration: 1.4, ease: 'uiOut', stagger: 0.07 },
           start + 2.5,
         )
+      // Each letter tunes in as it sharpens, like the signal did.
+      letters.forEach((l, i) => tl.call(() => flicker(l as HTMLElement), undefined, start + 2.55 + i * 0.07))
+      tl
         .fromTo(
           q('[data-tagline]'),
           { opacity: 0, y: 10 },
@@ -448,6 +483,12 @@ export function TitleScreen() {
     <div ref={root} className="pointer-events-none fixed inset-0 z-10" data-cinema={cinema || undefined}>
       <OrbitLabel />
 
+      {/* Bold exploration pass: entry burn, speed streaks and lens flare over the scene. */}
+      <CinemaFx />
+
+      {/* Now and then, a shooting star crosses the sky above Vael. */}
+      <TitleSky active={phase === 'orbit' && !reducedMotion} />
+
       {/* Title block: the wordmark sits on the planet's dark equator. */}
       <section
         className="title-block ui-hideable absolute inset-x-0 top-1/2 flex flex-col items-center px-6 text-center"
@@ -484,7 +525,14 @@ export function TitleScreen() {
         >
           <span className="enter-ripple" aria-hidden data-enter-ripple />
           <span className="enter-glyph" aria-hidden />
-          ENTER UNIVERSE
+          <span className="decode" aria-label="Enter universe">
+            <span className="decode-sizer" aria-hidden>
+              ENTER UNIVERSE
+            </span>
+            <span className="decode-live" aria-hidden data-cta-label>
+              ENTER UNIVERSE
+            </span>
+          </span>
         </button>
         </span>
         <p className="enter-hint" data-enter-hint aria-hidden>
@@ -517,8 +565,9 @@ export function TitleScreen() {
       <div className="letterbox letterbox-top" data-letterbox aria-hidden />
       <div className="letterbox letterbox-bottom" data-letterbox aria-hidden />
 
-      {/* Prelude: the signal tunes in on black while the scene compiles. */}
+      {/* Prelude: the signal tunes in on black while the scene compiles; it locks, and opens onto Vael. */}
       <Prelude />
+      <div className="prelude-flare" data-prelude-flare aria-hidden />
     </div>
   )
 }

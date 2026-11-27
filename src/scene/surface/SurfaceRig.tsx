@@ -390,7 +390,8 @@ export function SurfaceRig() {
     const flying = surfaceCam.mode === 'travel' && live
     travelFx.speed = MathUtils.damp(travelFx.speed, flying ? Math.min(1, surfaceCam.vel.length() / 160) : 0, 3, dt)
     // Speed widens the view in flight; a scan narrows it (scanFx.zoom is already eased).
-    surfaceCam.speedKick = MathUtils.damp(surfaceCam.speedKick, flying ? travelFx.speed * 3 : 0, 3, dt)
+    // Bold pass: the lens widens with speed (9° at full cruise, was 3°), so a flight feels fast.
+    surfaceCam.speedKick = MathUtils.damp(surfaceCam.speedKick, flying ? travelFx.speed * 9 : 0, 3, dt)
     director.fovKick = surfaceCam.speedKick - scanFx.zoom
     surfaceCam.roll = MathUtils.damp(surfaceCam.roll, rollTarget, 3, dt)
 
