@@ -23,6 +23,8 @@ import { closeMap, openMap } from './mapDirector'
 import { StoryUI } from './StoryUI'
 import { OrbitLabel } from './OrbitLabel'
 import { Wordmark } from './Wordmark'
+import { Prelude } from './Prelude'
+import { decode, preludeFx } from './titleFx'
 
 gsap.registerPlugin(useGSAP, CustomEase)
 // Strong UI ease-out — the same curve as --ease-out-ui in CSS.
@@ -75,6 +77,117 @@ function useCinemaShortcut() {
   }, [toggleCinema])
 }
 
+const TAGLINE = 'Beyond the known.'
+
+/**
+ * The title, alive under the pointer (fine pointers, full motion only): each
+ * letter leans toward the cursor as it nears, the Enter button pulls toward it,
+ * and the whole block shifts a few pixels with it, over the planet. The Enter key
+ * starts the journey; after a few idle seconds a quiet hint says so.
+ */
+function useTitleInteractions(root: React.RefObject<HTMLDivElement | null>, live: boolean, reduced: boolean, enter: () => void) {
+  // The latest handler, without re-running the effect on every render.
+  const enterRef = useRef(enter)
+  useEffect(() => {
+    enterRef.current = enter
+  }, [enter])
+  useEffect(() => {
+    if (!live) return
+    const el = root.current
+    if (!el) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Enter' || e.metaKey || e.ctrlKey || e.altKey) return
+      // A focused control handles its own Enter.
+      if (document.activeElement && document.activeElement !== document.body) return
+      e.preventDefault()
+      enterRef.current()
+    }
+    window.addEventListener('keydown', onKey)
+    const hint = el.querySelector<HTMLElement>('[data-enter-hint]')
+    const fine = window.matchMedia('(hover: hover) and (pointer: fine)').matches
+    const hintTimer = fine ? window.setTimeout(() => hint?.setAttribute('data-shown', ''), 3500) : 0
+
+    if (reduced || !fine) {
+      return () => {
+        window.removeEventListener('keydown', onKey)
+        clearTimeout(hintTimer)
+        hint?.removeAttribute('data-shown')
+      }
+    }
+
+    // Wrappers carry the pointer's offset (the arrival animates the letters and button themselves).
+    const letters = Array.from(el.querySelectorAll<HTMLElement>('[data-magnet]'))
+    const button = el.querySelector<HTMLElement>('[data-cta-magnet]')
+    const block = el.querySelector<HTMLElement>('[data-title-block]')
+    const all = [...letters, ...(button ? [button] : []), ...(block ? [block] : [])]
+    gsap.set(all, { '--mx': '0px', '--my': '0px' })
+    const to = (t: HTMLElement) => ({
+      x: gsap.quickTo(t, '--mx', { duration: 0.7, ease: 'power3' }),
+      y: gsap.quickTo(t, '--my', { duration: 0.7, ease: 'power3' }),
+    })
+    const lq = letters.map(to)
+    const bq = button ? to(button) : null
+    const pq = block ? to(block) : null
+    // Centres are measured once and on resize (never per move).
+    let centres: { x: number; y: number }[] = []
+    let bc = { x: 0, y: 0 }
+    const measure = () => {
+      centres = letters.map((l) => {
+        const r = l.getBoundingClientRect()
+        return { x: r.left + r.width / 2, y: r.top + r.height / 2 }
+      })
+      if (button) {
+        const r = button.getBoundingClientRect()
+        bc = { x: r.left + r.width / 2, y: r.top + r.height / 2 }
+      }
+    }
+    measure()
+    window.addEventListener('resize', measure)
+
+    const onMove = (e: PointerEvent) => {
+      const { clientX: x, clientY: y } = e
+      letters.forEach((_, i) => {
+        const c = centres[i]
+        const dx = x - c.x
+        const dy = y - c.y
+        const pull = Math.exp(-Math.hypot(dx, dy) / 320)
+        lq[i].x(Math.max(-9, Math.min(9, dx * 0.05 * pull)))
+        lq[i].y(Math.max(-7, Math.min(7, dy * 0.05 * pull)))
+      })
+      if (bq) {
+        const dx = x - bc.x
+        const dy = y - bc.y
+        const near = Math.hypot(dx, dy) < 170
+        bq.x(near ? Math.max(-14, Math.min(14, dx * 0.2)) : 0)
+        bq.y(near ? Math.max(-10, Math.min(10, dy * 0.2)) : 0)
+      }
+      if (pq) {
+        pq.x(((x / window.innerWidth) - 0.5) * -10)
+        pq.y(((y / window.innerHeight) - 0.5) * -8)
+      }
+    }
+    const settle = () => {
+      lq.forEach((q) => (q.x(0), q.y(0)))
+      bq?.x(0)
+      bq?.y(0)
+      pq?.x(0)
+      pq?.y(0)
+    }
+    window.addEventListener('pointermove', onMove)
+    document.addEventListener('pointerleave', settle)
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      window.removeEventListener('pointermove', onMove)
+      document.removeEventListener('pointerleave', settle)
+      window.removeEventListener('resize', measure)
+      clearTimeout(hintTimer)
+      hint?.removeAttribute('data-shown')
+      // Hand the title back at rest (the journey's own timeline takes it from here).
+      gsap.to(all, { '--mx': '0px', '--my': '0px', duration: 0.5, ease: 'power3.out', overwrite: true })
+    }
+  }, [root, live, reduced])
+}
+
 export function TitleScreen() {
   const root = useRef<HTMLDivElement>(null)
   const timeline = useRef<gsap.core.Timeline | null>(null)
@@ -93,6 +206,8 @@ export function TitleScreen() {
     () => {
       const q = gsap.utils.selector(root)
       const count = q('[data-prelude-count]')[0]
+      const prelude = q('[data-prelude]')[0] as HTMLElement | undefined
+      const stage = q('[data-prelude-stage]')[0]
       const target = (fontsReady ? 35 : 0) + (sceneReady ? 65 : 0)
       gsap.to(progress.current, {
         value: target,
@@ -100,7 +215,15 @@ export function TitleScreen() {
         ease: 'power2.out',
         overwrite: true,
         onUpdate: () => {
-          if (count) count.textContent = `${Math.round(progress.current.value)}%`
+          const v = progress.current.value
+          if (count) count.textContent = `${Math.round(v)}%`
+          preludeFx.p = v / 100
+          prelude?.style.setProperty('--p', (v / 100).toFixed(3))
+          const label = v >= 99.5 ? 'Signal clear' : v >= 70 ? 'Decoding' : v >= 35 ? 'Locking the carrier' : 'Searching the band'
+          if (stage && stage.textContent !== label) {
+            stage.textContent = label
+            stage.animate?.([{ opacity: 0, transform: 'translateY(4px)' }, { opacity: 1, transform: 'none' }], { duration: 420, easing: 'cubic-bezier(0.23, 1, 0.32, 1)' })
+          }
         },
       })
     },
@@ -184,6 +307,10 @@ export function TitleScreen() {
           { opacity: 1, y: 0, duration: 1.1, ease: 'uiOut' },
           start + 3.4,
         )
+        .call(() => {
+          const live = q('[data-tagline-live]')[0] as HTMLElement | undefined
+          if (live) decode(live, TAGLINE, { duration: 1100 })
+        }, undefined, start + 3.4)
         .fromTo(
           q('[data-cta]'),
           { opacity: 0, y: 10, scale: 0.97 },
@@ -206,6 +333,16 @@ export function TitleScreen() {
   // ---- Enter universe: skim Vael's limb, jump, arrive in the Aether system ---
   const enter = contextSafe(() => {
     if (phase !== 'orbit' && phase !== 'arriving') return
+    const ripple = root.current?.querySelector<HTMLElement>('[data-enter-ripple]')
+    if (ripple && !reducedMotion) {
+      ripple.animate(
+        [
+          { transform: 'scale(1)', opacity: 0.7 },
+          { transform: 'scale(2.6)', opacity: 0 },
+        ],
+        { duration: 900, easing: 'cubic-bezier(0.23, 1, 0.32, 1)' },
+      )
+    }
     // If the arrival is still settling, let it finish smoothly instead of snapping.
     timeline.current?.kill()
     setPhase('warping')
@@ -305,6 +442,7 @@ export function TitleScreen() {
   })
 
   const titleInteractive = phase === 'orbit' || phase === 'arriving'
+  useTitleInteractions(root, phase === 'orbit', reducedMotion, enter)
 
   return (
     <div ref={root} className="pointer-events-none fixed inset-0 z-10" data-cinema={cinema || undefined}>
@@ -312,8 +450,10 @@ export function TitleScreen() {
 
       {/* Title block: the wordmark sits on the planet's dark equator. */}
       <section
-        className="ui-hideable absolute inset-x-0 top-1/2 flex flex-col items-center px-6 text-center"
+        className="title-block ui-hideable absolute inset-x-0 top-1/2 flex flex-col items-center px-6 text-center"
         aria-hidden={!titleInteractive}
+        data-title-live={(phase === 'orbit' && !reducedMotion) || undefined}
+        data-title-block
       >
         <div className="-translate-y-1/2">
           <Wordmark />
@@ -323,20 +463,33 @@ export function TitleScreen() {
           data-reveal
           data-tagline
         >
-          Beyond the known.
+          <span className="decode" aria-label={TAGLINE}>
+            <span className="decode-sizer" aria-hidden>
+              {TAGLINE}
+            </span>
+            <span className="decode-live" aria-hidden data-tagline-live>
+              {TAGLINE}
+            </span>
+          </span>
         </p>
+        <span className="enter-magnet mt-[min(6svh,9vw)]" data-cta-magnet>
         <button
           type="button"
-          className={`enter-button mt-[min(6svh,9vw)] ${titleInteractive ? 'pointer-events-auto' : 'pointer-events-none'}`}
+          className={`enter-button ${titleInteractive ? 'pointer-events-auto' : 'pointer-events-none'}`}
           onClick={enter}
           disabled={!titleInteractive}
           tabIndex={titleInteractive ? 0 : -1}
           data-reveal
           data-cta
         >
+          <span className="enter-ripple" aria-hidden data-enter-ripple />
           <span className="enter-glyph" aria-hidden />
           ENTER UNIVERSE
         </button>
+        </span>
+        <p className="enter-hint" data-enter-hint aria-hidden>
+          or press Enter
+        </p>
       </section>
 
       <GalaxyUI onReturnToVael={returnToVael} />
@@ -364,15 +517,8 @@ export function TitleScreen() {
       <div className="letterbox letterbox-top" data-letterbox aria-hidden />
       <div className="letterbox letterbox-bottom" data-letterbox aria-hidden />
 
-      {/* Prelude: one quiet line on black while shaders compile. */}
-      <div className="prelude" data-prelude>
-        <p className="prelude-line" data-prelude-line>
-          <span>Receiving signal from Vael</span>
-          <span className="prelude-count tabular-nums" data-prelude-count>
-            0%
-          </span>
-        </p>
-      </div>
+      {/* Prelude: the signal tunes in on black while the scene compiles. */}
+      <Prelude />
     </div>
   )
 }

@@ -7,8 +7,11 @@ export function Wordmark({ ref }: { ref?: Ref<HTMLHeadingElement> }) {
   return (
     <h1 ref={ref} className="wordmark" aria-label="Aether">
       {WORD.split('').map((letter, i) => (
-        <span key={i} className="wordmark-letter" data-reveal data-letter aria-hidden>
-          {letter}
+        // The cell leans with the pointer; the letter inside is the arrival's to animate.
+        <span key={i} className="wordmark-cell" data-magnet aria-hidden>
+          <span className="wordmark-letter" data-reveal data-letter>
+            {letter}
+          </span>
         </span>
       ))}
     </h1>
