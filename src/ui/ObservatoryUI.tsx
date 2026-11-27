@@ -4,7 +4,7 @@ import { CATEGORIES, CATEGORY_ORDER, discoveriesAt, type Find } from '../data/di
 import { LOCATIONS } from '../data/locations'
 import { isElysWorld, PLANET_BY_ID, PLANETS, WORLD_BY_ID, type PlanetId } from '../data/planets'
 import { LIRIS } from '../data/tessaly'
-import { READINGS, READINGS_TOTAL } from '../data/waystation'
+import { readingsFor, readingsFoundAt, SITE_IDS, SITE_RECORDS } from '../data/waystation'
 import { useThumbs } from '../scene/galaxy/Thumbnails'
 import { telemetry } from '../state/director'
 import { useExploration } from '../state/exploration'
@@ -452,10 +452,11 @@ export function ObservatoryUI() {
   const liris = useMemo(() => worldProgress(LIRIS, discovered, visited), [discovered, visited])
   const access = mapAccess(discovered)
   const showLiris = access.tessalyOpen || !!visited.liris || liris.found + liris.hiddenFound > 0
-  // The Waystation: once Expedition IV opens it, or once anything is read there.
-  const wayFound = READINGS.filter((r) => discovered[r.id]).length
-  const showWaystation = access.open.waystation || wayFound > 0
-  const showBeyond = showLiris || showWaystation
+  // Deep-space sites: each once its expedition opens it, or once anything is read there.
+  const sitesShown = SITE_IDS.map((site) => ({ site, found: readingsFoundAt(discovered, site), total: readingsFor(site).length })).filter(
+    (x) => access.open[x.site] || x.found > 0,
+  )
+  const showBeyond = showLiris || sitesShown.length > 0
   const [archiveLiris, setArchiveLiris] = useState(false)
   // Selecting a world on the dial (or stepping) brings the archive back to it.
   const [archiveFor, setArchiveFor] = useState(observed)
@@ -659,29 +660,34 @@ export function ObservatoryUI() {
                 <p className="obs-beyond-note">Reached from the galaxy map</p>
               </li>
               )}
-              {showWaystation && (
-                <li>
-                  <div className="obs-world-row" role="group" aria-label="The Waystation record">
-                    <span className="obs-portrait obs-portrait-waystation" style={{ width: 64, height: 64 }} aria-hidden />
-                    <span className="obs-world-main">
-                      <span className="obs-world-name">THE WAYSTATION</span>
-                      <span className="obs-world-class">A survey station, derelict · Between the arms</span>
-                      <span className="obs-world-teaser">Three of its nine lamps still turn.</span>
-                    </span>
-                    <span className="obs-world-stat">
-                      <span className="obs-stat-label">Readings</span>
-                      <span className="tabular-nums">
-                        {wayFound} of {READINGS_TOTAL}
+              {sitesShown.map(({ site, found, total }) => {
+                const rec = SITE_RECORDS[site]
+                return (
+                  <li key={site}>
+                    <div className="obs-world-row" role="group" aria-label={`${rec.name} record`}>
+                      <span className={`obs-portrait obs-portrait-${site}`} style={{ width: 64, height: 64 }} aria-hidden />
+                      <span className="obs-world-main">
+                        <span className="obs-world-name">{rec.name.toUpperCase()}</span>
+                        <span className="obs-world-class">
+                          {rec.kind} · {rec.place[0].toUpperCase() + rec.place.slice(1)}
+                        </span>
+                        <span className="obs-world-teaser">{rec.teaser}</span>
                       </span>
-                    </span>
-                    <span className="obs-world-stat">
-                      <span className="obs-stat-label">Explored</span>
-                      <span className="tabular-nums">{Math.round((wayFound / READINGS_TOTAL) * 100)}%</span>
-                    </span>
-                  </div>
-                  <p className="obs-beyond-note">Read from orbit, reached from the galaxy map</p>
-                </li>
-              )}
+                      <span className="obs-world-stat">
+                        <span className="obs-stat-label">Readings</span>
+                        <span className="tabular-nums">
+                          {found} of {total}
+                        </span>
+                      </span>
+                      <span className="obs-world-stat">
+                        <span className="obs-stat-label">Explored</span>
+                        <span className="tabular-nums">{Math.round((found / total) * 100)}%</span>
+                      </span>
+                    </div>
+                    <p className="obs-beyond-note">Read from orbit, reached from the galaxy map</p>
+                  </li>
+                )
+              })}
             </ol>
           </section>
         )}

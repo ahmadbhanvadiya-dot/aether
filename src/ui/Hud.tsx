@@ -126,10 +126,10 @@ export function Hud() {
         ? quality.coarse
           ? 'Drag to orbit, pinch to zoom'
           : 'Drag to orbit, scroll to zoom'
-        : activeSystem === 'waystation'
+        : SYSTEM_BY_ID[activeSystem].kind === 'site'
           ? quality.coarse
-            ? 'Drag to rotate, tap the station or a reading'
-            : 'Drag to rotate, select the station or a reading'
+            ? 'Drag to rotate, tap the site or a reading'
+            : 'Drag to rotate, select the site or a reading'
           : !atElys
           ? 'Drag to rotate'
           : quality.coarse

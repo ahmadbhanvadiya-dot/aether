@@ -188,7 +188,7 @@ export const debugShot = (() => {
   const shot = new URLSearchParams(window.location.search).get('shot')
   if (shot === 'orbit' || shot === 'galaxy' || shot === 'observatory') return shot
   // Phase 11: Tessaly is story-gated; until its expedition exists, only development can reach it.
-  if ((shot === 'tessaly' || shot === 'waystation') && import.meta.env.DEV) return shot
+  if ((shot === 'tessaly' || shot === 'waystation' || shot === 'ring') && import.meta.env.DEV) return shot
   if (shot && PLANETS.some((p) => p.id === shot)) return shot as PlanetId
   if (shot && LOCATION_BY_ID[shot]) return `loc:${shot}` as const
   // Liris's places, like Tessaly itself, only in development for now.

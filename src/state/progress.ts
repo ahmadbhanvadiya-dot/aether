@@ -11,7 +11,7 @@ import {
   type Find,
 } from '../data/discoveries'
 import { LOCATION_BY_ID, locationsFor, PLACE_BY_ID, type LocationData, type Place } from '../data/locations'
-import { READINGS } from '../data/waystation'
+import { READINGS, SITE_RECORDS } from '../data/waystation'
 import { PLANET_BY_ID, PLANETS, WORLD_BY_ID, type PlanetData, type PlanetId, type WorldData, type WorldId } from '../data/planets'
 
 /**
@@ -171,8 +171,8 @@ export function fullTimeline(discovered: Found): FindEntry[] {
   }))
   const readings: FindEntry[] = READINGS.filter((r) => discovered[r.id]).map((r) => ({
     discovery: { id: r.id, name: r.name, category: r.category, kind: 'poi' as const },
-    location: { name: 'The Waystation' },
-    planet: { name: 'between the arms', accent: '#9FE3FF' },
+    location: { name: SITE_RECORDS[r.site].name },
+    planet: { name: SITE_RECORDS[r.site].place, accent: SITE_RECORDS[r.site].color },
     at: discovered[r.id],
   }))
   return [...finds, ...readings].sort((a, b) => a.at - b.at)

@@ -1,9 +1,8 @@
 import { Orbit, X } from 'lucide-react'
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { CATEGORIES } from '../data/discoveries'
 import { expeditionsFor } from '../data/expeditions'
-import { SYSTEM_BY_ID } from '../data/systems'
-import { READING_BY_ID, READINGS, READINGS_TOTAL, readingsFound } from '../data/waystation'
+import { isSiteId, READING_BY_ID, readingsFor, readingsFoundAt, SITE_RECORDS, type SiteId } from '../data/waystation'
 import { telemetry } from '../state/director'
 import { useExploration } from '../state/exploration'
 import { formatWhen } from '../state/progress'
@@ -13,26 +12,23 @@ import { closeReadingCard, readingFx, startReading, useSite } from './siteDirect
 
 /**
  * Phase 11d: a deep-space site's interface — its record (opened by selecting the
- * station: `siteOpen`), the markers of its readings over the scene, and the card
- * of a reading once it is taken. The same panel and card as a world's.
+ * site in the scene: `siteOpen`), the markers of its readings over the scene, and
+ * the card of a reading once it is taken. The same panel and card as a world's.
+ * One interface for every site (the Waystation, the keepers' ring).
  */
 
-const FACTS = [
-  { label: 'Built', value: 'By the old survey' },
-  { label: 'Lamps', value: 'Three of nine still turning' },
-  { label: 'Light', value: 'No star; the galaxy’s core' },
-  { label: 'Found', value: 'Expedition IV, from Liris' },
-]
+/** "The Waystation" reads "the Waystation" mid-sentence. */
+const inSentence = (name: string) => (name.startsWith('The ') ? `the ${name.slice(4)}` : name)
 
-function useHere() {
+/** The site you are at, in its overview (null elsewhere). */
+function useHere(): SiteId | null {
   const phase = useExperience((s) => s.phase)
   const active = useExperience((s) => s.activeSystem)
-  return phase === 'galaxy' && active === 'waystation'
+  return phase === 'galaxy' && isSiteId(active) ? active : null
 }
 
-/** Markers over the station: a ring to read, a filled dot once read, a sweep while reading. */
-function Markers() {
-  const here = useHere()
+/** Markers over the site: a ring to read, a filled dot once read, a sweep while reading. */
+function Markers({ here }: { here: SiteId | null }) {
   const discovered = useExploration((s) => s.discovered)
   const scanning = useSite((s) => s.scanning)
   const layer = useRef<HTMLDivElement>(null)
@@ -54,9 +50,16 @@ function Markers() {
     return () => cancelAnimationFrame(raf)
   }, [here])
 
+  const readings = here ? readingsFor(here) : []
   return (
-    <div ref={layer} className="site-marks" data-visible={here || undefined} aria-label="Readings at the Waystation">
-      {READINGS.map((r) => {
+    <div
+      ref={layer}
+      className="site-marks"
+      data-visible={here || undefined}
+      aria-label={here ? `Readings at ${inSentence(SITE_RECORDS[here].name)}` : undefined}
+      style={here ? { ['--site' as string]: SITE_RECORDS[here].color } : undefined}
+    >
+      {readings.map((r) => {
         const found = !!discovered[r.id]
         return (
           <button
@@ -80,12 +83,11 @@ function Markers() {
 }
 
 /** The card of a reading, once taken. */
-function ReadingCard() {
-  const here = useHere()
+function ReadingCard({ here }: { here: SiteId | null }) {
   const card = useSite((s) => s.card)
   const discovered = useExploration((s) => s.discovered)
   const r = card ? READING_BY_ID[card] : null
-  const open = here && !!r
+  const open = !!r && here === r.site
 
   useEffect(() => {
     if (!open) return
@@ -98,6 +100,7 @@ function ReadingCard() {
   }, [open])
 
   if (!r) return <aside className="discovery-card site-card" aria-hidden />
+  const rec = SITE_RECORDS[r.site]
   const Icon = CATEGORY_ICON[r.category]
   const at = discovered[r.id]
   const when = at ? formatWhen(at) : null
@@ -108,7 +111,7 @@ function ReadingCard() {
       aria-hidden={!open}
       aria-live="polite"
       aria-label={`Reading: ${r.name}`}
-      style={{ ['--accent' as string]: SYSTEM_BY_ID.waystation.color }}
+      style={{ ['--accent' as string]: rec.color }}
       key={r.id}
     >
       <p className="discovery-card-kind">
@@ -120,7 +123,9 @@ function ReadingCard() {
       <dl className="discovery-card-facts">
         <div>
           <dt>Where</dt>
-          <dd>The Waystation, between the arms</dd>
+          <dd>
+            {rec.name}, {rec.place}
+          </dd>
         </div>
         <div>
           <dt>Recorded</dt>
@@ -133,7 +138,7 @@ function ReadingCard() {
         </p>
       ))}
       <p className="discovery-card-archive tabular-nums">
-        Read from orbit · {readingsFound(discovered)} of {READINGS_TOTAL} readings at the Waystation
+        Read from orbit · {readingsFoundAt(discovered, r.site)} of {readingsFor(r.site).length} readings at {inSentence(rec.name)}
       </p>
       <button type="button" className="discovery-card-close quiet-button" onClick={closeReadingCard} tabIndex={open ? 0 : -1}>
         <X size={14} strokeWidth={1.5} aria-hidden />
@@ -149,8 +154,14 @@ export function SiteUI() {
   const setSiteOpen = useExperience((s) => s.setSiteOpen)
   const discovered = useExploration((s) => s.discovered)
   const aside = useRef<HTMLElement>(null)
-  const open = siteOpen && here
-  const found = readingsFound(discovered)
+  const open = siteOpen && !!here
+  // Keep the last site's record while the panel fades out.
+  const [last, setLast] = useState<SiteId>('waystation')
+  if (here && here !== last) setLast(here)
+  const site = here ?? last
+  const rec = SITE_RECORDS[site]
+  const readings = readingsFor(site)
+  const found = readingsFoundAt(discovered, site)
 
   useEffect(() => {
     if (!open) return
@@ -163,37 +174,36 @@ export function SiteUI() {
     return () => window.removeEventListener('keydown', onKey)
   }, [open])
 
-  const site = SYSTEM_BY_ID.waystation
   return (
     <div className="site-ui">
-      <Markers />
-      <ReadingCard />
+      <Markers here={here} />
+      <ReadingCard here={here} />
       <aside ref={aside} className="world-panel ui-hideable" data-open={open || undefined} aria-hidden={!open} inert={!open} aria-live="polite">
         <div className="world-panel-body">
-          <p className="text-[0.8125rem] text-haze">Deep space · between the arms</p>
-          <h2 className="world-panel-name">{site.name.toUpperCase()}</h2>
+          <p className="text-[0.8125rem] text-haze">{rec.kicker}</p>
+          <h2 className="world-panel-name">{rec.name.toUpperCase()}</h2>
           <p className="flex items-center gap-2.5 text-[1.02rem] font-light text-starlight/85">
-            <span className="h-1.5 w-1.5 rounded-full" style={{ background: site.color, boxShadow: `0 0 10px ${site.color}` }} aria-hidden />
-            {site.siteKind}
+            <span className="h-1.5 w-1.5 rounded-full" style={{ background: rec.color, boxShadow: `0 0 10px ${rec.color}` }} aria-hidden />
+            {rec.kind}
           </p>
-          <p className="world-panel-copy">
-            A station the old survey left in the dark between the arms, turned out of the plane of the galaxy. Its hull carries their mark, three rising
-            lines over a circle, and three of its nine lamps still turn, slower every year.
-          </p>
+          <p className="world-panel-copy">{rec.copy}</p>
           <dl className="world-facts">
-            {FACTS.map((f) => (
+            {rec.facts.map((f) => (
               <div key={f.label}>
                 <dt>{f.label}</dt>
                 <dd>{f.value}</dd>
               </div>
             ))}
           </dl>
-          <div className="site-readings">
+          <div className="site-readings" style={{ ['--site' as string]: rec.color }}>
             <p className="site-readings-head tabular-nums">
-              Readings <span>{found} of {READINGS_TOTAL}</span>
+              Readings{' '}
+              <span>
+                {found} of {readings.length}
+              </span>
             </p>
             <ul>
-              {READINGS.map((r) => {
+              {readings.map((r) => {
                 const at = discovered[r.id]
                 return (
                   <li key={r.id}>
@@ -210,7 +220,7 @@ export function SiteUI() {
           <div className="world-panel-actions">
             <button type="button" className="quiet-button ml-auto px-4" onClick={() => setSiteOpen(false)} tabIndex={open ? 0 : -1} title="Close (Esc)">
               <Orbit size={15} strokeWidth={1.5} aria-hidden />
-              Return to the station
+              Return to {inSentence(rec.name)}
             </button>
           </div>
         </div>

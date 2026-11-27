@@ -2267,9 +2267,53 @@ The proposal (`docs/proposals/phase-11-beyond-the-system.md`) is updated to matc
   → the reading and its record; a new player finds nothing under *waystation*. No
   errors; lint unchanged.
 
+### Liris placement sweep (11d, fix)
+
+- Liris's finds never had Elys's placement sweep. Line of sight from each place
+  (the game's own occlusion test) found two hidden by terrain: *the third shadow*
+  (90 units out, behind a dune above eye level; now 30, on its near slope, clue to
+  match) and *the paired cairns* (160 out, behind a ridge; now 70, swept clear
+  50–90 and ±0.2 rad). All Liris finds are now clear from their places.
+- On bright skies (Liris's lilac noon) the HUD's haze text vanished: a soft scrim
+  along the top and bottom of the surface view keeps it readable; it hides with H.
+
+### The keepers' ring and Expedition VI (11d, fourth stage)
+
+- **Expedition VI, Something Grows Violet**, opens after Expedition V and follows the
+  moss the keepers left wherever they stopped: the Long Noon's moss turning toward
+  the core at night (`liris-long-noon`), Nyx's vein moths steering by it, Thalassa's
+  sunken spire grown over with it, and a second, smaller ring shadow on Orion's
+  clouds. Its closing puts **the Keepers' Ring** on the map. Expedition V's closing
+  now points onward (the moss is everywhere they stopped).
+- **Sites are general.** `data/waystation.ts` holds every site's readings (each names
+  its `site`), `SITE_RECORDS` (name, kicker, kind, place, teaser, copy, facts,
+  colour) and `RING_ARC`; `readingsFor` / `readingsFoundAt` replace the Waystation's
+  totals. One shared hook (`systems/siteReadings.ts`) projects any site's anchors and
+  sets the scan's light; `SiteUI`, the site director, the HUD, the Observatory's
+  *Beyond Elys* (a row per known site), the Journal (a survey per site), the
+  timeline and search all work from the active or known sites. Waystation ids are
+  unchanged, so saved readings stand.
+- **The Keepers' Ring** (`systems/ring`, its own 1.7 kB chunk): an arc of the old ring
+  (radius 7, ±1.15 rad) with ribs, a row of windows lit violet by the moss grown
+  inside, three cold engines on one end and a flange on the cut end, lamps sending
+  the four notes (three short, one long), tumbling slowly in violet spores. Lit by
+  the core, a cold fill and the garden's light. Known after Expedition V (*A small
+  ring, drifting*), open after VI; a third of the way from the Waystation toward the
+  core. Three readings: *cold engines* (structure), *the violet garden* (life),
+  *answering lamps* (anomaly: its fourth note says *wait*).
+- **Verified in the dev build:** Expeditions I–V and three of VI seeded; the ring
+  shadow scanned for real on Orion (*Part of Expedition VI*) → *Not Orion's* → the
+  closing; the map lists four places, the ring open; travelled there (3.6 km);
+  its record panel and a reading taken from its list (*1 of 3*); the Observatory
+  (Liris, the Waystation, the ring), the timeline, three Journal surveys,
+  Expedition VI complete; the Waystation unchanged after the refactor (its four
+  markers, its card, its colour); gating: after V only, the ring unnamed and not
+  reachable. No errors; lint unchanged.
+
 ### Not built yet (Phase 11, next)
 
-- **Where the keepers went:** the next place, found from the lamp's four notes.
+- **Wait for what:** the ring's lamps say *wait*; what the keepers waited for is the
+  next story.
 - **11e:** expedition routes and unexplored regions on the map.
 - **Liris:** drawn double shadows, and a surface recipe of its own.
 

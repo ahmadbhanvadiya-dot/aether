@@ -22,7 +22,7 @@ export const GALAXY = {
 const toScene = new Matrix4().makeRotationFromEuler(GALAXY.rotation).setPosition(GALAXY.position)
 const toLocal = toScene.clone().invert()
 
-export type SystemId = 'elys' | 'tessaly' | 'waystation'
+export type SystemId = 'elys' | 'tessaly' | 'waystation' | 'ring'
 
 export interface StarSystem {
   id: SystemId
@@ -73,6 +73,8 @@ const waystationLocal = (() => {
   const a = Math.atan2(elysLocal.z, elysLocal.x) - 0.24
   return new Vector3(Math.cos(a) * r, elysLocal.y + 14, Math.sin(a) * r)
 })()
+/** The keepers' ring: a third of the way from the Waystation toward the core, still above the disc. */
+const ringLocal = waystationLocal.clone().multiplyScalar(0.66).setY(waystationLocal.y * 0.8 + 6)
 
 export const SYSTEMS: StarSystem[] = [
   {
@@ -124,6 +126,25 @@ export const SYSTEMS: StarSystem[] = [
     knownAfter: 'exp-double-star',
     opensWith: 'exp-third-shadow',
     sealedNote: 'Expedition IV, in the Journal, finds the way there.',
+  },
+  {
+    id: 'ring',
+    name: 'The Keepers\u2019 Ring',
+    unknownName: 'A small ring, drifting',
+    star: 'None',
+    siteKind: 'A ring ship, adrift',
+    description: 'Something ring-shaped crosses the light of the core, too small for a world and too regular for a rock. Nothing yet leads there.',
+    openDescription:
+      'The Waystation\u2019s outer ring, cut free and flown away by its keepers, drifting toward the core on engines long cold. Expedition VI followed the moss to it.',
+    color: '#C8A2FF',
+    worlds: 0,
+    position: fromGalaxy(ringLocal),
+    unlock: 'story',
+    kind: 'site',
+    status: 'The Keepers\u2019 Ring',
+    knownAfter: 'exp-keepers',
+    opensWith: 'exp-violet',
+    sealedNote: 'Expedition VI, in the Journal, follows the moss there.',
   },
 ]
 
