@@ -274,6 +274,291 @@ class SoundEngine {
   }
 
   // -------------------------------------------------------------------------
+  // Sound for the bold motion: the jump between spaces, the scan's lock and
+  // burst, the entry roar, flights, the opening's lock and new map routes.
+  // Same rules as the rest: synthesized, quiet, nothing before the first click.
+  // -------------------------------------------------------------------------
+
+  /** A gain that rises to `peak` in `attack`, then falls away by `end` (seconds after t). */
+  private env(ctx: AudioContext, t: number, peak: number, attack: number, end: number) {
+    const g = ctx.createGain()
+    g.gain.setValueAtTime(0, t)
+    g.gain.linearRampToValueAtTime(peak, t + attack)
+    g.gain.exponentialRampToValueAtTime(0.0001, t + end)
+    return g
+  }
+
+  /** The shared noise, looping from a random point, for `dur` seconds. */
+  private noiseFrom(ctx: AudioContext, t: number, dur: number, buffer = this.noise) {
+    const src = ctx.createBufferSource()
+    src.buffer = buffer
+    src.loop = true
+    src.start(t, Math.random() * 1.9)
+    src.stop(t + dur + 0.05)
+    return src
+  }
+
+  /** A short echo into `out`, for tones that should ring in space. */
+  private space(ctx: AudioContext, out: AudioNode, time = 0.31, feedback = 0.34, level = 0.32) {
+    const delay = ctx.createDelay(1)
+    delay.delayTime.value = time
+    const fb = ctx.createGain()
+    fb.gain.value = feedback
+    const wet = ctx.createGain()
+    wet.gain.value = level
+    delay.connect(fb).connect(delay)
+    delay.connect(wet).connect(out)
+    return delay
+  }
+
+  /**
+   * The arrival on the far side of a jump: a deep drop, an open fifth that
+   * blooms and rings, and a breath of bright air. `strength` 0 – 1.
+   */
+  bloom(strength = 1, at = 0) {
+    const r = this.ready()
+    if (!r || !this.noise) return
+    const { ctx, out } = r
+    const t = ctx.currentTime + at
+    const echo = this.space(ctx, out, 0.37, 0.4, 0.3)
+    // The drop: a sine falling an octave and more, felt more than heard.
+    const boom = ctx.createOscillator()
+    boom.type = 'sine'
+    boom.frequency.setValueAtTime(72, t)
+    boom.frequency.exponentialRampToValueAtTime(31, t + 1.4)
+    const bg = this.env(ctx, t, 0.13 * strength, 0.012, 2.6)
+    boom.connect(bg).connect(out)
+    boom.start(t)
+    boom.stop(t + 2.7)
+    // The open fifth, slightly detuned, swelling in and ringing out.
+    ;[110, 164.81, 220, 329.63].forEach((f, i) => {
+      const o = ctx.createOscillator()
+      o.type = i < 2 ? 'triangle' : 'sine'
+      o.frequency.value = f
+      o.detune.value = (i % 2 ? 1 : -1) * 4
+      const g = this.env(ctx, t, (i < 2 ? 0.02 : 0.012) * strength, 0.5, 5.2)
+      o.connect(g)
+      g.connect(out)
+      g.connect(echo)
+      o.start(t)
+      o.stop(t + 5.3)
+    })
+    // Bright air, as the light floods back.
+    const hp = ctx.createBiquadFilter()
+    hp.type = 'highpass'
+    hp.frequency.value = 4800
+    const ag = this.env(ctx, t, 0.022 * strength, 0.02, 1.1)
+    this.noiseFrom(ctx, t, 1.2).connect(hp).connect(ag).connect(out)
+  }
+
+  /**
+   * The jump between spaces (Enter universe, Return to Vael): air and a tone
+   * rising together for `build` seconds, cut at the flash, then the bloom.
+   */
+  jump(build: number) {
+    const r = this.ready()
+    if (!r || !this.noise) return
+    const { ctx, out } = r
+    const t = ctx.currentTime
+    const end = t + build
+    // Rushing air, tightening and rising toward the flash.
+    const bp = ctx.createBiquadFilter()
+    bp.type = 'bandpass'
+    bp.Q.value = 1.1
+    bp.frequency.setValueAtTime(180, t)
+    bp.frequency.exponentialRampToValueAtTime(2800, end)
+    const ng = ctx.createGain()
+    ng.gain.setValueAtTime(0.0001, t)
+    ng.gain.exponentialRampToValueAtTime(0.055, end - 0.05)
+    ng.gain.linearRampToValueAtTime(0, end + 0.12)
+    this.noiseFrom(ctx, t, build + 0.2).connect(bp).connect(ng).connect(out)
+    // A low tone climbing two octaves underneath it.
+    const riser = ctx.createOscillator()
+    riser.type = 'sawtooth'
+    riser.frequency.setValueAtTime(55, t)
+    riser.frequency.exponentialRampToValueAtTime(220, end)
+    const lp = ctx.createBiquadFilter()
+    lp.type = 'lowpass'
+    lp.frequency.setValueAtTime(300, t)
+    lp.frequency.exponentialRampToValueAtTime(1400, end)
+    const rg = ctx.createGain()
+    rg.gain.setValueAtTime(0.0001, t)
+    rg.gain.exponentialRampToValueAtTime(0.02, end - 0.05)
+    rg.gain.linearRampToValueAtTime(0, end + 0.08)
+    riser.connect(lp).connect(rg).connect(out)
+    riser.start(t)
+    riser.stop(end + 0.15)
+    this.bloom(1, build)
+  }
+
+  /**
+   * The opening's lock (only heard if a click has already enabled sound):
+   * static thinning out as a pure tone settles in.
+   */
+  tuneIn(duration = 1) {
+    const r = this.ready()
+    if (!r || !this.noise) return
+    const { ctx, out } = r
+    const t = ctx.currentTime
+    const bp = ctx.createBiquadFilter()
+    bp.type = 'bandpass'
+    bp.frequency.value = 2200
+    bp.Q.value = 0.9
+    const sg = ctx.createGain()
+    sg.gain.setValueAtTime(0.035, t)
+    sg.gain.exponentialRampToValueAtTime(0.0001, t + duration * 0.8)
+    this.noiseFrom(ctx, t, duration).connect(bp).connect(sg).connect(out)
+    const o = ctx.createOscillator()
+    o.type = 'sine'
+    o.frequency.setValueAtTime(840, t)
+    o.frequency.exponentialRampToValueAtTime(880, t + duration * 0.6)
+    const og = ctx.createGain()
+    og.gain.setValueAtTime(0, t)
+    og.gain.linearRampToValueAtTime(0.022, t + duration * 0.6)
+    og.gain.exponentialRampToValueAtTime(0.0001, t + duration + 0.5)
+    o.connect(og).connect(out)
+    o.start(t)
+    o.stop(t + duration + 0.55)
+  }
+
+  /** The scan locks on (the beam reaches the target): two quick high blips. */
+  lock() {
+    const r = this.ready()
+    if (!r) return
+    const { ctx, out } = r
+    const t = ctx.currentTime
+    ;[1760, 2637].forEach((f, i) => {
+      const o = ctx.createOscillator()
+      o.type = 'sine'
+      o.frequency.value = f
+      const g = this.env(ctx, t + i * 0.075, 0.02, 0.006, 0.2)
+      o.connect(g).connect(out)
+      o.start(t + i * 0.075)
+      o.stop(t + i * 0.075 + 0.22)
+    })
+  }
+
+  /** A find lands: a soft low thump and a puff of air under the chime. */
+  burst() {
+    const r = this.ready()
+    if (!r || !this.noise) return
+    const { ctx, out } = r
+    const t = ctx.currentTime
+    const o = ctx.createOscillator()
+    o.type = 'sine'
+    o.frequency.setValueAtTime(150, t)
+    o.frequency.exponentialRampToValueAtTime(42, t + 0.35)
+    const g = this.env(ctx, t, 0.11, 0.006, 0.9)
+    o.connect(g).connect(out)
+    o.start(t)
+    o.stop(t + 0.95)
+    const bp = ctx.createBiquadFilter()
+    bp.type = 'bandpass'
+    bp.frequency.setValueAtTime(1400, t)
+    bp.frequency.exponentialRampToValueAtTime(500, t + 0.4)
+    bp.Q.value = 0.7
+    const ng = this.env(ctx, t, 0.032, 0.008, 0.45)
+    this.noiseFrom(ctx, t, 0.5).connect(bp).connect(ng).connect(out)
+  }
+
+  /**
+   * Atmospheric entry (descent, `down`) or the climb out (`up`, gentler): a low
+   * roar that swells with the entry burn, with plasma crackle on the way in.
+   */
+  entry(duration: number, direction: 'down' | 'up') {
+    const r = this.ready()
+    if (!r || !this.noise) return
+    const { ctx, out } = r
+    const t = ctx.currentTime
+    const k = direction === 'down' ? 1 : 0.55
+    const peak = t + duration * (direction === 'down' ? 0.6 : 0.75)
+    const lp = ctx.createBiquadFilter()
+    lp.type = 'lowpass'
+    lp.Q.value = 0.6
+    lp.frequency.setValueAtTime(110, t)
+    lp.frequency.exponentialRampToValueAtTime(560, peak)
+    lp.frequency.exponentialRampToValueAtTime(140, t + duration)
+    const g = ctx.createGain()
+    g.gain.setValueAtTime(0.0001, t)
+    g.gain.exponentialRampToValueAtTime(0.17 * k, peak)
+    g.gain.linearRampToValueAtTime(0, t + duration)
+    this.noiseFrom(ctx, t, duration).connect(lp).connect(g).connect(out)
+    if (direction === 'down' && this.crackles) {
+      const src = ctx.createBufferSource()
+      src.buffer = this.crackles
+      src.loop = true
+      src.playbackRate.value = 2.2
+      const bp = ctx.createBiquadFilter()
+      bp.type = 'bandpass'
+      bp.frequency.value = 1900
+      const cg = ctx.createGain()
+      cg.gain.setValueAtTime(0, t)
+      cg.gain.linearRampToValueAtTime(0.14, peak)
+      cg.gain.linearRampToValueAtTime(0, t + duration * 0.9)
+      src.connect(bp).connect(cg).connect(out)
+      src.start(t)
+      src.stop(t + duration)
+    }
+  }
+
+  /**
+   * A flight passing through (between places, between worlds, across the map):
+   * air that rises and falls with the speed, panning across. `strength` 0 – 1.
+   */
+  whoosh(duration: number, strength = 1) {
+    const r = this.ready()
+    if (!r || !this.noise) return
+    const { ctx, out } = r
+    const t = ctx.currentTime
+    const mid = t + duration * 0.48
+    const bp = ctx.createBiquadFilter()
+    bp.type = 'bandpass'
+    bp.Q.value = 0.9
+    bp.frequency.setValueAtTime(260, t)
+    bp.frequency.exponentialRampToValueAtTime(1700, mid)
+    bp.frequency.exponentialRampToValueAtTime(320, t + duration)
+    const g = ctx.createGain()
+    g.gain.setValueAtTime(0, t)
+    g.gain.linearRampToValueAtTime(0.1 * strength, mid)
+    g.gain.linearRampToValueAtTime(0, t + duration)
+    const chain = this.noiseFrom(ctx, t, duration).connect(bp).connect(g)
+    if (ctx.createStereoPanner) {
+      const pan = ctx.createStereoPanner()
+      pan.pan.setValueAtTime(-0.5, t)
+      pan.pan.linearRampToValueAtTime(0.5, t + duration)
+      chain.connect(pan).connect(out)
+    } else chain.connect(out)
+  }
+
+  /** A new route traces itself on the map: a soft glide up an octave. */
+  trace(duration = 1.6) {
+    const r = this.ready()
+    if (!r) return
+    const { ctx, out } = r
+    const t = ctx.currentTime
+    const echo = this.space(ctx, out, 0.27, 0.3, 0.3)
+    ;[
+      [523.25, 0.014],
+      [1046.5, 0.005],
+    ].forEach(([f, peak]) => {
+      const o = ctx.createOscillator()
+      o.type = 'sine'
+      o.frequency.setValueAtTime(f, t)
+      o.frequency.exponentialRampToValueAtTime(f * 2, t + duration)
+      const g = ctx.createGain()
+      g.gain.setValueAtTime(0, t)
+      g.gain.linearRampToValueAtTime(peak, t + 0.15)
+      g.gain.setValueAtTime(peak, t + duration * 0.8)
+      g.gain.exponentialRampToValueAtTime(0.0001, t + duration + 0.6)
+      o.connect(g)
+      g.connect(out)
+      g.connect(echo)
+      o.start(t)
+      o.stop(t + duration + 0.65)
+    })
+  }
+
+  // -------------------------------------------------------------------------
   // Phase 7: ambient soundscapes. One continuous bed per world, built from the
   // shared noise buffer and a few oscillators; the location's weather shapes it
   // (rain, surf, aurora, gusts). Beds crossfade; nothing plays before the

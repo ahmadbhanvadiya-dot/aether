@@ -12,6 +12,7 @@ import { galaxy } from '../../state/galaxy'
 import { useExperience } from '../../state/useExperience'
 import { approach, atmosphereFx, bezier, cruise, DURATION, smooth01, travelFx } from '../motion'
 import { baseFov } from '../Warp'
+import { sound } from '../../audio/sound'
 
 const baseFovFor = (aspect: number) => baseFov('galaxy', aspect)
 
@@ -188,6 +189,8 @@ export function startGalaxyTravel(focus: WorldId | null) {
       .multiplyScalar(length * 0.3)
   }
 
+  // A flight between worlds passes with a breath of air (silent until sound is enabled).
+  if (!reduced) sound.whoosh(duration, focus ? 0.75 : 0.55)
   galaxyCam.mode = 'travel'
   galaxyCam.t = 0
   galaxyCam.settle = 0

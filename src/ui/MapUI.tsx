@@ -10,6 +10,7 @@ import { systemProgress, worldProgress } from '../state/progress'
 import { useExperience } from '../state/useExperience'
 import { loadSystem } from '../system/chunks'
 import { closeMap, transitFx, travelTo } from './mapDirector'
+import { sound } from '../audio/sound'
 
 /**
  * Phase 11: the universe map. The galaxy AETHER has always drawn, seen from
@@ -159,6 +160,14 @@ export function MapUI() {
     raf = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(raf)
   }, [open, access])
+
+  // A route flown since the last opening traces itself in, with a soft glide (CSS: 0.9 s in).
+  const fresh = open && pairs.some((p) => p.flown > seenAt)
+  useEffect(() => {
+    if (!fresh) return
+    const id = window.setTimeout(() => sound.trace(1.6), 900)
+    return () => clearTimeout(id)
+  }, [fresh])
 
   useEffect(() => {
     if (!open) return

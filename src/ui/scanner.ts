@@ -91,6 +91,8 @@ export function startScan(id: string) {
       { beam: 1, duration: 0.9, ease: 'power2.out' },
       0.2,
     )
+    // The beam reaches the target: the lock.
+    tl.call(() => sound.lock(), undefined, 1.1)
   }
   tl.call(() => complete(id), undefined, length)
 }
@@ -102,7 +104,10 @@ function complete(id: string) {
   const isNew = useExploration.getState().discover(id)
   // Phase 8: queue any story this discovery unlocked (it plays after the record closes).
   if (isNew) noteDiscovery(before, useExploration.getState().discovered)
-  if (isNew) sound.chime()
+  if (isNew) {
+    sound.burst()
+    sound.chime()
+  }
   if (isNew && FIND_BY_ID[id].kind === 'signal') {
     gsap.fromTo(signalFx, { bloom: reduced() ? 0.4 : 1 }, { bloom: 0, duration: reduced() ? 0.8 : 1.6, ease: 'power2.out' })
   }

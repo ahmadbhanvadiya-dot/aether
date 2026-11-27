@@ -101,6 +101,7 @@ export function travelTo(to: SystemId) {
     return
   }
   sound.swell(3.4)
+  sound.whoosh(3.2)
   const tl = gsap.timeline({ onComplete: arrive })
   timeline = tl
   tl.to(transitFx, { t: 1, duration: 3.2, ease: 'power2.inOut' })
