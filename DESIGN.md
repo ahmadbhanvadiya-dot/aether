@@ -3106,3 +3106,29 @@ impossible to see. This check covers the whole chain.
 
 Result: a fresh save can be played from Expedition I to the Keepers' Ring with every
 required find in view.
+
+## 28. Sound for the bold motion
+
+The opening, scan and flight passes (§24–26) added motion that played in silence. Each
+big moment now has a cue, synthesized like the rest of the sound (`src/audio/sound.ts`,
+no audio files) and as quiet by default.
+
+| Moment | Cue | What it is |
+|---|---|---|
+| Enter universe, Return to Vael | `jump(build)` | Air and a sawtooth rising two octaves for `build` s (2.15 / 1.75, the space switch), cut at the flash, then `bloom` |
+| The far side of a jump | `bloom(strength)` | A sine dropping 72 → 31 Hz, an open fifth on A (triangle + sine) swelling and ringing in an echo, a breath of bright air |
+| The opening's lock and iris | `tuneIn`, `bloom(0.6)` | Static thinning as a pure 880 Hz tone settles; the bloom as the iris opens. Heard only if a click has already enabled sound |
+| Scan locks on (beam at the target, 1.1 s) | `lock()` | Two quick high blips |
+| A new find lands | `burst()` + `chime()` | A thump 150 → 42 Hz and a falling puff of air under the bell; readings at the sites too |
+| Descent | `entry(6.4, 'down')` + `wind` | A low roar opening with the entry burn, with plasma crackle |
+| Climb out | `entry(5.5, 'up')` + `wind` | The same roar, gentler, no crackle |
+| Flights between places, between worlds, across the map | `whoosh(duration, strength)` | Air rising and falling with the speed, panning left to right |
+| A new route traces itself on the map | `trace()` | A soft glide up an octave, timed to the CSS trace (0.9 s in) |
+
+Browsers allow sound only after a user gesture, so the first click or key anywhere now
+creates the audio context (it was only created by certain buttons before, so Enter
+universe was silent). Levels were measured with an analyser on the master bus against the
+existing cues: the jump peaks near 0.11 and the burst with the chime near 0.09, against
+0.08 for the chime alone; the roar, whoosh and lock sit above the ambient bed but under
+the chime. Reduced motion keeps the sound but trades the jump for the soft swell and
+skips the flight whooshes and the scan lock (the motion they follow is gone).

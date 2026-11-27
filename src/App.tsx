@@ -20,6 +20,13 @@ if (import.meta.env.DEV) {
   Object.assign(window, { __store: useExperience, __director: director, __galaxyCam: galaxyCam, __galaxy: galaxy, __gsap: gsap, __telemetry: telemetry, __sound: sound, __exploration: useExploration, __surfaceCam: surfaceCam, __surface: surface, __sim: sim, __simulation: useSimulation, __sky: useSky, __scanFx: scanFx })
 }
 
+// Sound can only start inside a user gesture: the first click or key anywhere enables it.
+if (typeof window !== 'undefined') {
+  const unlock = () => sound.unlock()
+  window.addEventListener('pointerdown', unlock, { once: true, capture: true })
+  window.addEventListener('keydown', unlock, { once: true, capture: true })
+}
+
 // Phase 10: without WebGL 2 there is no scene to wait for; say so at once.
 if (!webglSupported) useExperience.getState().setFault(NO_WEBGL)
 

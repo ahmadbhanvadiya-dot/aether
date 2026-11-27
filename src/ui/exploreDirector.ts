@@ -181,7 +181,14 @@ function runDescent() {
   tl.to(bars(), { scaleY: 1, duration: 0.9, ease: 'uiOut' }, 0)
     .to(director, { panelShift: 0, duration: 1.4, ease: 'power2.inOut' }, 0)
     .to(director, { descent: 1, duration: E, ease: entry }, 0.15)
-    .call(() => sound.wind(7, 'down'), undefined, 0.4)
+    .call(
+      () => {
+        sound.wind(7, 'down')
+        sound.entry(6.4, 'down')
+      },
+      undefined,
+      0.4,
+    )
     .to(director, { atmo: HANDOVER, duration: 1.9, ease: 'power2.in' }, at - 1.9)
     .to(atmosphereFx, { flow: 1.3, duration: 2.2, ease: 'power1.in' }, at - 2.2)
     // The switch, then the glide down through the location's sky and clouds.
@@ -243,7 +250,14 @@ export function startAscent(then?: () => void) {
   tl.to(bars(), { scaleY: 1, duration: 0.9, ease: 'uiOut' }, 0)
     .to(surfaceCam, { climb: 1, duration: C, ease: climb }, 0)
     .to(surfaceCam, { climbClock: C, duration: C, ease: 'none' }, 0)
-    .call(() => sound.wind(6, 'up'), undefined, 0.2)
+    .call(
+      () => {
+        sound.wind(6, 'up')
+        sound.entry(5.5, 'up')
+      },
+      undefined,
+      0.2,
+    )
     .to(director, { atmo: HANDOVER, duration: 1.7, ease: 'power2.in' }, C - 1.7)
     .to(atmosphereFx, { flow: 1.3, duration: 1.8, ease: 'power1.in' }, C - 1.8)
     // The switch, then the pull-back that reveals the limb and the whole world.
@@ -295,6 +309,7 @@ export function travelTo(id: string) {
   const duration = beginTravel(target, DURATION.flight(distance))
   st.setLocation(id)
   sound.swell(duration)
+  sound.whoosh(duration, 0.8)
   travelTween = gsap.to(surfaceCam, {
     t: 1,
     duration,

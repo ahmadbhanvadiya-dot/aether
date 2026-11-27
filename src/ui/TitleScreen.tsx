@@ -27,6 +27,7 @@ import { Prelude } from './Prelude'
 import { decode, flicker, preludeFx } from './titleFx'
 import { TitleSky } from './TitleSky'
 import { CinemaFx } from './CinemaFx'
+import { sound } from '../audio/sound'
 
 gsap.registerPlugin(useGSAP, CustomEase)
 // Strong UI ease-out — the same curve as --ease-out-ui in CSS.
@@ -306,6 +307,9 @@ export function TitleScreen() {
         tl.to(q('.prelude-line, .prelude-bar, .prelude-stage'), { opacity: 0, y: 6, duration: 0.5, ease: 'power2.out', stagger: 0.06, delay: 0.6 })
           .to(preludeFx, { lock: 1, duration: 1.0, ease: 'power3.inOut' }, '<0.15')
           .addLabel('open', '>-0.05')
+          // Heard only if a click has already enabled sound (browsers keep it off until then).
+          .call(() => sound.tuneIn(1), undefined, 'open-=0.95')
+          .call(() => sound.bloom(0.6), undefined, 'open')
           .fromTo(flare, { scale: 0.15, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.22, ease: 'power2.out' }, 'open')
           .to(flare, { scale: 16, opacity: 0, duration: 1.4, ease: 'power2.out' }, 'open+=0.2')
           .to(prelude, { '--hole': '150vmax', duration: 1.5, ease: 'power3.in' }, 'open+=0.12')
@@ -381,6 +385,10 @@ export function TitleScreen() {
     // If the arrival is still settling, let it finish smoothly instead of snapping.
     timeline.current?.kill()
     setPhase('warping')
+    // The press is the first gesture for most visitors: sound starts here.
+    sound.unlock()
+    if (reducedMotion) sound.swell(1.6)
+    else sound.jump(2.15)
     const q = gsap.utils.selector(root)
     const bars = q('[data-letterbox]')
     const veil = q('[data-veil]')
@@ -434,6 +442,9 @@ export function TitleScreen() {
     if (phase !== 'galaxy') return
     useExperience.getState().setFocus(null)
     setPhase('returning')
+    sound.unlock()
+    if (reducedMotion) sound.swell(1.6)
+    else sound.jump(1.75)
     const q = gsap.utils.selector(root)
     const bars = q('[data-letterbox]')
     const veil = q('[data-veil]')

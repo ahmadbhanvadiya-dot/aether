@@ -50,6 +50,7 @@ export function startReading(id: string) {
       // Phase 11d: a reading can complete an objective too (Expedition V): queue its story.
       const before = useExploration.getState().discovered
       if (useExploration.getState().discover(id)) noteDiscovery(before, useExploration.getState().discovered)
+      sound.burst()
       sound.chime()
       Object.assign(readingFx, { id: null, progress: 0 })
       useSite.setState({ scanning: null, card: id })
