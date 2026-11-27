@@ -3769,3 +3769,35 @@ body {
     #05070f;
   box-shadow: 0 0 0 1px rgb(159 227 255 / 0.3);
 }
+
+/*
+ * Readability on bright skies (Liris's lilac noon especially): a soft scrim along
+ * the top and bottom of the surface view, under the HUD's corners. Gone with the
+ * interface (H), so clean frames stay clean.
+ */
+.explore-ui::before,
+.explore-ui::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  pointer-events: none;
+  transition: opacity 200ms ease;
+}
+
+.explore-ui::before {
+  top: 0;
+  height: 150px;
+  background: linear-gradient(to bottom, rgb(2 3 10 / 0.52), rgb(2 3 10 / 0.2) 55%, rgb(2 3 10 / 0));
+}
+
+.explore-ui::after {
+  bottom: 0;
+  height: 170px;
+  background: linear-gradient(to top, rgb(2 3 10 / 0.5), rgb(2 3 10 / 0.18) 55%, rgb(2 3 10 / 0));
+}
+
+[data-cinema] .explore-ui::before,
+[data-cinema] .explore-ui::after {
+  opacity: 0;
+}
