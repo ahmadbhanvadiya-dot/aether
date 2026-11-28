@@ -3176,3 +3176,33 @@ averaging far heights made no visible difference: the triangular peaks are the l
 own shape (the ridged noise in `baseHeight`), not mesh resolution. Rounding them means
 changing the height function on both the GPU and the CPU copy, which moves every camera,
 landmark and find, so it would need the visibility sweep of §27 run again.
+
+## 30. Expedition VII: The Gardener
+
+Expedition VI ends at the Keepers' Ring, whose lamps answer the Waystation's "here, here,
+here" with a fourth note that says *wait*, and whose moss garden was "tended not very long
+ago". Expedition VII answers it: the keepers did not carry the moss, the moss carried them.
+Forty-one surveyors became a garden that keeps their lamps, their rows and their count.
+
+**Waiting.** The sky clock could not carry it (places have authored light, and time runs at
+the clock's speed during a descent, so a jumped-to eclipse is over before you land). So
+waiting is literal: a new kind of hidden find, `wait` (seconds), shows only to a visitor who
+**stays** at its place, not one who looks. In `ScanTargets` its timer counts while you are
+at the place and free (not flying, not scanning) and starts over when you leave; a faint
+glow gathers where it is as the time runs out, whichever way you look; at the end the usual
+"Something hidden is here" notice. It counts only once an expedition it serves is open
+(`servesOpenExpedition`), so nothing shows before the story asks for it.
+
+**Finds** (hidden, 30 s each, along Expedition VI's moss trail): *Fresh rows* under the arch
+on Liris's Long Noon, *The moss lamp* in Nyx's Vein Fields, *Tended lights* over Thalassa's
+sunken spire, *Forty-one lights* in the cloud tops under Orion's rings.
+
+**Expedition VII** opens when VI completes: intro *Wait* (the ring's lamps), four objectives
+in order (*Fresh rows*, *A lamp in the cracks*, *Lanterns in order*, *The count*), closing
+*The Gardener*.
+
+**Checked.** Story logic from an empty save: I–VI complete in order, VII opens only then,
+the four finds can show only then (not on an empty save), and VII completes. Sight lines (the
+§27 test): all four clear, 0 of 13 samples blocked, within the view's pitch. Live: with VII
+closed nothing showed in 35 s; with it open the notice came on time. Elys's 54 visible
+discoveries and every total are unchanged; hidden finds are 9 on Elys, 2 on Liris.

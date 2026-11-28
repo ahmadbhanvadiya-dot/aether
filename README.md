@@ -23,10 +23,10 @@ continuous scene rather than a set of pages.
   to land, and its own terrain, weather, events and soundscape.
 - **Two deep-space sites.** The Waystation, a derelict survey station, and the Keepers' Ring,
   read from orbit instead of landed on.
-- **Discovery.** 70 discoveries on the worlds (signals, points of interest and hidden finds
-  that only appear when you look at the right place) and 7 readings at the sites, each with
-  its own record.
-- **Six expeditions.** A story told through what you find. Each expedition opens when the one
+- **Discovery.** 74 discoveries on the worlds (signals, points of interest, and hidden finds
+  that only appear when you look at the right place, or stay at it long enough) and 7 readings
+  at the sites, each with its own record.
+- **Seven expeditions.** A story told through what you find. Each expedition opens when the one
   before it ends, and some open new places on the galaxy map.
 - **The Observatory.** A planisphere of the Aether system with every world's record, the
   archives of what you have found, a timeline of your discoveries, search and the sky's
