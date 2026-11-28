@@ -133,6 +133,93 @@ vec3 applyFog(vec3 col, vec3 wpos) {
   return mix(col, air, f);
 }
 
+/**
+ * Realism pass: shadows. Landmark pieces are stood in for by capsules (a → b,
+ * radius; written by SurfaceScene from the landmark builders) for the ground's
+ * contact shadow and the sun shadows they cast, worked out exactly, no shadow map.
+ */
+#define MAX_CAPS 16
+uniform vec4 uCapA[MAX_CAPS]; // a.xyz, radius
+uniform vec4 uCapB[MAX_CAPS]; // b.xyz, unused
+uniform int uCapN;
+
+/** Ambient occlusion at the foot of every landmark piece (1 = open). */
+float capsuleOcclusion(vec3 p) {
+  float o = 1.0;
+  for (int i = 0; i < MAX_CAPS; i++) {
+    if (i >= uCapN) break;
+    vec3 a = uCapA[i].xyz;
+    vec3 ba = uCapB[i].xyz - a;
+    float r = uCapA[i].w;
+    // Far from this piece: nothing to darken (most of the ground).
+    vec2 c = p.xz - (a.xz + ba.xz * 0.5);
+    float reach = length(ba) * 0.5 + r * 4.0 + 8.0;
+    if (dot(c, c) > reach * reach) continue;
+    float h = clamp(dot(p - a, ba) / dot(ba, ba), 0.0, 1.0);
+    float d = length(p - a - ba * h) - r;
+    o *= 1.0 - 0.6 * exp(-max(d, 0.0) / (0.4 * r + 1.0));
+  }
+  return o;
+}
+
+/** Sun shadow from the landmark pieces along L (1 = lit), soft with distance. */
+float capsuleShadow(vec3 p, vec3 L) {
+  if (L.y < 0.02) return 1.0;
+  float s = 1.0;
+  float spread = length(L.xz) / L.y;
+  for (int i = 0; i < MAX_CAPS; i++) {
+    if (i >= uCapN) break;
+    vec3 a = uCapA[i].xyz;
+    vec3 ba = uCapB[i].xyz - a;
+    float r = uCapA[i].w;
+    // The ray toward the sun clears this piece's top within this horizontal reach:
+    // beyond it (or above the top) the piece cannot shade p (most of the ground).
+    float rise = max(a.y, a.y + ba.y) + r - p.y;
+    if (rise < 0.0) continue;
+    vec2 c = p.xz - (a.xz + ba.xz * 0.5);
+    float reach = rise * spread + length(ba.xz) * 0.5 + r + 2.0;
+    if (dot(c, c) > reach * reach) continue;
+    // Closest approach between the ray p + L·t (t ≥ 0) and the segment a + ba·u.
+    vec3 w = p - a;
+    float B = dot(L, ba);
+    float C = dot(ba, ba);
+    float D = dot(L, w);
+    float E = dot(ba, w);
+    float u = clamp((E - B * D) / max(C - B * B, 1e-4), 0.0, 1.0);
+    float t = max(B * u - D, 0.0);
+    u = clamp((E + B * t) / C, 0.0, 1.0);
+    float d = length(w + L * t - ba * u);
+    float pen = 0.4 + t * 0.025;
+    s *= smoothstep(r - pen, r + pen, d);
+  }
+  return s;
+}
+
+/**
+ * Sun shadow from the land itself (ridges, rims, canyon walls): marched toward
+ * the sun from each terrain vertex, soft at the edges. Not on the cloud decks.
+ */
+#ifndef SHADOW_STEPS
+#define SHADOW_STEPS 8
+#endif
+float ridgeShadow(vec3 wp) {
+#if SKIND == 3 || SKIND == 5
+  return 1.0;
+#else
+  vec3 L = uSunDir;
+  if (L.y < -0.05) return 1.0;
+  float s = 1.0;
+  float t = 3.0;
+  for (int i = 0; i < SHADOW_STEPS; i++) {
+    vec3 q = wp + L * t;
+    float above = q.y - terrainHeight(q.xz);
+    s = min(s, smoothstep(0.0, 1.0, 0.5 + 5.0 * above / t));
+    t = t * 1.8 + 2.0;
+  }
+  return s;
+#endif
+}
+
 vec3 ambient(vec3 n) {
   vec3 sky = mix(uGround, uZenith, n.y * 0.5 + 0.5) * 0.55 + uHorizon * 0.12;
   // Starlight and aurora: night scenes keep a readable floor of light.
@@ -439,6 +526,7 @@ export const terrainVertex = /* glsl */ `
 ${header}
 varying vec3 vWorld;
 varying vec3 vNormalW;
+varying float vShadow;
 
 void main() {
   vec3 wp = (modelMatrix * vec4(position, 1.0)).xyz;
@@ -450,6 +538,7 @@ void main() {
   vNormalW = normalize(vec3(h - hx, e, h - hz));
   wp.y = h;
   vWorld = wp;
+  vShadow = ridgeShadow(wp);
   gl_Position = projectionMatrix * viewMatrix * vec4(wp, 1.0);
 }
 `
@@ -458,6 +547,32 @@ export const terrainFragment = /* glsl */ `
 ${header}
 varying vec3 vWorld;
 varying vec3 vNormalW;
+varying float vShadow;
+
+// Realism pass: ground detail. The vertex grid carries the shape of the land, not
+// the metre-scale relief near the eye, so that comes from here: three octaves of
+// noise (≈ 1 m, 0.4 m, 0.15 m) bump the normal and vary the albedo. Each octave
+// fades out before it is smaller than a pixel (fp = metres per pixel), so the
+// detail never shimmers in the distance. Not on the cloud decks (Vesper, Orion).
+#if SKIND == 0 || SKIND == 1 || SKIND == 2 || SKIND == 4
+#define GROUND_DETAIL
+float detailField(vec2 q, float fp) {
+  float s = vnoise(q * 0.9) * 0.5 * (1.0 - smoothstep(0.2, 0.5, fp * 0.9));
+  s += vnoise(q * 2.3 + 17.0) * 0.25 * (1.0 - smoothstep(0.2, 0.5, fp * 2.3));
+  s += vnoise(q * 6.1 + 41.0) * 0.12 * (1.0 - smoothstep(0.2, 0.5, fp * 6.1));
+  return s;
+}
+// On steep ground the detail is mapped along the face (horizontal × height, layered
+// like rock strata), not from above, where it would smear down the wall.
+float groundDetail(vec3 p, vec3 n, float steep, float fp) {
+  float d = detailField(p.xz, fp);
+  if (steep > 0.0) {
+    vec2 t = normalize(vec2(-n.z, n.x) + vec2(1e-4));
+    d = mix(d, detailField(vec2(dot(p.xz, t) * 0.6, p.y * 2.2), fp * 2.2), steep);
+  }
+  return d;
+}
+#endif
 
 void main() {
   vec3 n = normalize(vNormalW);
@@ -608,14 +723,51 @@ void main() {
   }
 #endif
 
+#ifdef GROUND_DETAIL
+  {
+    // Relief (normal bump) and tint strength per world: grassland and rock, the dark
+    // glass plain, sand (smooth: mostly grain), island rock.
+#if SKIND == 0
+    const float RELIEF = 0.14; const float TINT = 0.5;
+#elif SKIND == 1
+    const float RELIEF = 0.1; const float TINT = 0.35;
+#elif SKIND == 2
+    const float RELIEF = 0.05; const float TINT = 0.25;
+#else
+    const float RELIEF = 0.12; const float TINT = 0.4;
+#endif
+    float near = 1.0 - smoothstep(40.0, 220.0, length(p - cameraPosition));
+#if SKIND == 2
+    // The Salt Mirror stays a mirror.
+    near *= 1.0 - uMirror * (1.0 - smoothstep(2.0, 6.0, h));
+#endif
+    if (near > 0.0) {
+      float fp = length(fwidth(p));
+      // Rock faces carry the same strong relief on every world; flats their own.
+      float steep = smoothstep(0.3, 0.6, slope);
+      float e = 0.06;
+      float d0 = groundDetail(p, n, steep, fp);
+      vec3 g = vec3(
+        groundDetail(p + vec3(e, 0.0, 0.0), n, steep, fp) - d0,
+        groundDetail(p + vec3(0.0, e, 0.0), n, steep, fp) - d0,
+        groundDetail(p + vec3(0.0, 0.0, e), n, steep, fp) - d0) / e;
+      // Bump along the surface only (the gradient's part across the normal).
+      n = normalize(n - (g - dot(g, n) * n) * mix(RELIEF, 0.3, steep) * near);
+      // Hollows darker, rises lighter: the albedo follows the relief.
+      albedo *= 1.0 + d0 * mix(TINT, 0.7, steep) * near;
+    }
+  }
+#endif
+
   vec3 L = uSunDir;
-  float diff = max((dot(n, L) + wrap) / (1.0 + wrap), 0.0) * sunVisible() * cloudShadow(p);
-  vec3 col = albedo * (uSunColor * diff * 1.6 + ambient(n));
+  float occ = capsuleOcclusion(p);
+  float diff = max((dot(n, L) + wrap) / (1.0 + wrap), 0.0) * sunVisible() * cloudShadow(p) * vShadow * capsuleShadow(p, L);
+  vec3 col = albedo * (uSunColor * diff * 1.6 + ambient(n) * occ);
   vec3 V = normalize(cameraPosition - p);
   vec3 Hh = normalize(L + V);
   col += uSunColor * pow(max(dot(n, Hh), 0.0), 60.0) * specAmt * diff;
 #ifdef SUN2
-  float diff2 = max((dot(n, uSun2Dir) + wrap) / (1.0 + wrap), 0.0) * sun2Visible();
+  float diff2 = max((dot(n, uSun2Dir) + wrap) / (1.0 + wrap), 0.0) * sun2Visible() * capsuleShadow(p, uSun2Dir);
   col += albedo * uSun2Color * diff2 * 1.3;
   col += uSun2Color * pow(max(dot(n, normalize(uSun2Dir + V)), 0.0), 60.0) * specAmt * diff2;
 #endif
@@ -889,13 +1041,16 @@ void main() {
 // ---------------------------------------------------------------------------
 
 export const landmarkVertex = /* glsl */ `
+${header}
 varying vec3 vWorld;
 varying vec3 vNormalW;
 varying vec3 vLocal;
+varying float vShadow;
 void main() {
   vLocal = position;
   vec4 wp = modelMatrix * vec4(position, 1.0);
   vWorld = wp.xyz;
+  vShadow = ridgeShadow(wp.xyz);
   vNormalW = normalize(mat3(modelMatrix) * normal);
   gl_Position = projectionMatrix * viewMatrix * wp;
 }
@@ -911,6 +1066,7 @@ uniform float uHeight;
 varying vec3 vWorld;
 varying vec3 vNormalW;
 varying vec3 vLocal;
+varying float vShadow;
 
 void main() {
   vec3 n = normalize(vNormalW);
@@ -926,7 +1082,7 @@ void main() {
   float foot = 1.0 - smoothstep(0.0, 0.14, rise);
   rock *= 1.0 - foot * 0.45;
   float shade = cloudShadow(vWorld);
-  float diff = max(dot(n, uSunDir), 0.0) * sunVisible() * shade;
+  float diff = max(dot(n, uSunDir), 0.0) * sunVisible() * shade * vShadow;
   // Ambient occlusion toward the base; the sky lights what faces up.
   float occl = mix(0.55, 1.0, smoothstep(0.0, 0.35, rise));
   vec3 col = rock * (uSunColor * diff * 1.5 + ambient(n) * occl + uZenith * max(n.y, 0.0) * 0.18);

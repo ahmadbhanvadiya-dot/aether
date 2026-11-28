@@ -3132,3 +3132,41 @@ existing cues: the jump peaks near 0.11 and the burst with the chime near 0.09, 
 0.08 for the chime alone; the roar, whoosh and lock sit above the ambient bed but under
 the chime. Reduced motion keeps the sound but trades the jump for the soft swell and
 skips the flight whooshes and the scan lock (the motion they follow is gone).
+
+## 29. Realism pass: ground detail and shadows
+
+Looking at the surfaces with the interface hidden, four things read as rendered rather
+than real: ground near the eye smeared flat (the terrain is shaded per vertex, metres
+apart), landmarks that seem pasted on, nothing casting a shadow, and faceted far peaks.
+The first three are fixed here, all in `src/scene/surface/shaders.ts` plus the capsules
+in `SurfaceScene.tsx`.
+
+- **Ground detail** (`detailField`, `groundDetail`): three octaves of noise (≈ 1 m,
+  0.4 m, 0.15 m) bump the normal and vary the albedo within 220 m of the eye, on every
+  world with ground (not Vesper's or Orion's cloud decks). Each octave fades before it is
+  smaller than a pixel (`fwidth`), so nothing shimmers. On steep ground the detail is
+  mapped along the face, stretched like rock strata, with stronger relief; flats keep
+  each world's own (grass and rock, the dark plain, sand, island rock). The Salt Mirror
+  stays smooth.
+- **Contact shadows** (`capsuleOcclusion`): every landmark piece is stood in for by a
+  capsule (a sea stack, a crystal, the slab, six along an arch; built with the geometry
+  in `buildSpires` / `buildMonolith` / `buildArch`). The ground's ambient light darkens
+  around each foot.
+- **Sun shadows from landmarks** (`capsuleShadow`): the ray from each ground point toward
+  the sun is tested against the capsules exactly (closest approach to each segment), soft
+  with distance. Liris's second sun casts them too. Up to 16 capsules per world, largest
+  first; pieces thinner than 0.7 m (Solara's salt spires) are left out.
+- **Shadows from the land** (`ridgeShadow`): marched toward the sun from each terrain
+  vertex (10 steps, 6 on the low tier), soft-edged; landmarks receive them as well.
+  Canyon walls now throw their shadow across the floor. The grid follows the eye, so far
+  shadow edges can creep slightly while the camera flies; at rest they are steady.
+
+**Cost**, the scene alone at 1920 × 1080 on an RTX 3050 laptop GPU: 1.53 ms before, 3.33 ms
+after (ground detail +0.85, landmark shadows +0.23 with 7 capsules, land shadows +0.72).
+Capsule cost grows with their number (32 measured at about +1.3 ms), hence the cap of 16.
+
+**Not done:** smoother far peaks. Sampling the slope across the grid's spacing and
+averaging far heights made no visible difference: the triangular peaks are the land's
+own shape (the ridged noise in `baseHeight`), not mesh resolution. Rounding them means
+changing the height function on both the GPU and the CPU copy, which moves every camera,
+landmark and find, so it would need the visibility sweep of §27 run again.

@@ -170,6 +170,10 @@ export function createSurfaceUniforms(settings: SurfaceSettings) {
     uRevealColor: { value: new Color(settings.glow) },
     uLocA: { value: [new Vector4(), new Vector4(), new Vector4()] },
     uLocB: { value: [new Vector4(), new Vector4(), new Vector4()] },
+    /** Realism pass: landmark pieces as capsules (a.xyz + radius, b.xyz), for shadows (SurfaceScene writes them). */
+    uCapA: { value: Array.from({ length: 16 }, () => new Vector4()) },
+    uCapB: { value: Array.from({ length: 16 }, () => new Vector4()) },
+    uCapN: { value: 0 },
   }
 }
 
