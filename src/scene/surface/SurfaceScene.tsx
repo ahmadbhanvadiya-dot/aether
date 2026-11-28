@@ -21,7 +21,7 @@ import {
   Vector4,
   type BufferGeometry as BG,
 } from 'three'
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
+import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { SURFACES, type Place, type SurfaceSettings } from '../../data/locations'
 import { isElysWorld, type WorldId } from '../../data/planets'
 import { director, telemetry } from '../../state/director'
@@ -645,6 +645,36 @@ interface Capsule {
   r: number
 }
 
+/**
+ * A sea stack: a tapering column of worn rock, lumpy around and stepped in ledges
+ * up its height, welded so the light rolls over it (not eight flat faces). Its
+ * shape comes from its own seed; it still draws the random numbers the old
+ * jittered prism did (97 vertices x 3), so every later stack keeps its place.
+ */
+const OLD_STACK_DRAWS = 291
+function rockColumn(w: number, h: number, rand: () => number) {
+  const seed = rand() * 100
+  for (let k = 1; k < OLD_STACK_DRAWS; k++) rand()
+  const g = new CylinderGeometry(w * 0.7, w, h, 20, 14)
+  g.deleteAttribute('uv')
+  g.deleteAttribute('normal')
+  const pos = g.attributes.position as BufferAttribute
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i)
+    const y = pos.getY(i)
+    const z = pos.getZ(i)
+    const ang = Math.atan2(z, x)
+    const t = y / h + 0.5
+    const lumps = 0.14 * Math.sin(ang * 3 + seed + t * 2.1) + 0.08 * Math.sin(ang * 7 - seed * 1.3 + t * 5.7)
+    const ledges = 0.05 * Math.sin(y * 0.45 + seed)
+    const k = 1 + lumps + ledges
+    pos.setXYZ(i, x * k, y, z * k)
+  }
+  const welded = mergeVertices(g)
+  welded.computeVertexNormals()
+  return welded
+}
+
 function buildSpires(planet: WorldId, scale: number, rand: () => number) {
   const parts: BG[] = []
   const caps: Capsule[] = []
@@ -656,17 +686,13 @@ function buildSpires(planet: WorldId, scale: number, rand: () => number) {
     const r = Math.sqrt(rand()) * (salt ? 26 : stacks ? 60 : 30)
     const h = salt ? 2 + rand() * 6 : stacks ? 22 + rand() * 28 : 18 + rand() * 46
     const w = salt ? 0.4 + rand() * 0.6 : stacks ? 4 + rand() * 4 : 1.4 + rand() * 2.2
-    const body = stacks
-      ? jitter(new CylinderGeometry(w * 0.7, w, h, 8, 6), 1.4, rand)
-      : new CylinderGeometry(w, w, h * 0.85, 6, 1)
+    const body = stacks ? rockColumn(w, h, rand) : new CylinderGeometry(w, w, h * 0.85, 6, 1)
     body.translate(0, h * 0.425, 0)
     let geo = body
     if (!stacks) {
       const tip = new ConeGeometry(w, h * 0.15, 6, 1)
       tip.translate(0, h * 0.85 + h * 0.075, 0)
       geo = mergeGeometries([body.toNonIndexed(), tip.toNonIndexed()])
-    } else {
-      geo = body.toNonIndexed()
     }
     // Crystals lean toward a shared point in the sky; stacks stand straight.
     const top = new Vector3(0, h, 0)
