@@ -5,11 +5,92 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#02030A" />
-    <meta name="description" content="AETHER — beyond the known. A real-time journey to the ocean world Vael." />
     <title>AETHER — Beyond the known</title>
+    <meta
+      name="description"
+      content="A cinematic real-time 3D journey in your browser: land on seven generated worlds, scan what you find, and follow a signal across two star systems."
+    />
+    <meta name="author" content="Ahmad" />
+    <link rel="canonical" href="https://ahmadbhanvadiya-dot.github.io/aether/" />
+
+    <!-- Share previews -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="AETHER" />
+    <meta property="og:title" content="AETHER — Beyond the known" />
+    <meta
+      property="og:description"
+      content="A cinematic real-time 3D journey in your browser: land on seven generated worlds, scan what you find, and follow a signal across two star systems."
+    />
+    <meta property="og:url" content="https://ahmadbhanvadiya-dot.github.io/aether/" />
+    <meta property="og:image" content="https://ahmadbhanvadiya-dot.github.io/aether/og.jpg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="AETHER: the ocean world Vael in orbit, under the title Beyond the known" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="AETHER — Beyond the known" />
+    <meta
+      name="twitter:description"
+      content="A cinematic real-time 3D journey in your browser: land on seven generated worlds, scan what you find, and follow a signal across two star systems."
+    />
+    <meta name="twitter:image" content="https://ahmadbhanvadiya-dot.github.io/aether/og.jpg" />
+
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "VideoGame",
+        "name": "AETHER",
+        "alternateName": "AETHER — Beyond the known",
+        "url": "https://ahmadbhanvadiya-dot.github.io/aether/",
+        "description": "A cinematic, real-time 3D journey through an invented universe, built in the browser. Land on seven generated worlds in two star systems, scan what you find, and follow a story told through your discoveries.",
+        "image": "https://ahmadbhanvadiya-dot.github.io/aether/og.jpg",
+        "genre": ["Exploration", "Adventure"],
+        "gamePlatform": "Web browser",
+        "applicationCategory": "GameApplication",
+        "operatingSystem": "Any (a browser with WebGL 2)",
+        "playMode": "SinglePlayer",
+        "inLanguage": "en",
+        "isAccessibleForFree": true,
+        "author": { "@type": "Person", "name": "Ahmad", "url": "https://github.com/ahmadbhanvadiya-dot" }
+      }
+    </script>
+
+    <!-- What shows (and what crawlers read) before the scripts run; React replaces it. -->
+    <style>
+      .intro {
+        display: grid;
+        place-content: center;
+        gap: 12px;
+        height: 100%;
+        padding: 0 24px;
+        text-align: center;
+        color: #8a93b8;
+        font: 14px/1.6 system-ui, sans-serif;
+      }
+      .intro h1 {
+        margin: 0;
+        font-weight: 400;
+        font-size: 13px;
+        letter-spacing: 0.5em;
+        color: #c9d0ee;
+      }
+      .intro p {
+        margin: 0 auto;
+        max-width: 34em;
+      }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div class="intro">
+        <h1>AETHER</h1>
+        <p>Beyond the known.</p>
+        <p>
+          A cinematic, real-time 3D journey through an invented universe, in your browser. Land on seven worlds in two
+          star systems, scan what you find, and follow a signal from no point in the system.
+        </p>
+        <noscript><p>AETHER needs JavaScript and WebGL 2 to run.</p></noscript>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

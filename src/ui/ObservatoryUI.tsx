@@ -485,9 +485,9 @@ export function ObservatoryUI() {
         {/* First view: title, the dial (the scene behind), the selected world's record. */}
         <section className="obs-first">
           <header className="obs-header">
-            <h1 className="obs-title obs-reveal" style={{ ['--d' as string]: '0.5s' }}>
+            <h2 className="obs-title obs-reveal" style={{ ['--d' as string]: '0.5s' }}>
               THE OBSERVATORY
-            </h1>
+            </h2>
             <p className="obs-subtitle obs-reveal" style={{ ['--d' as string]: '0.8s' }}>
               A record of everything discovered beyond the known.
             </p>
