@@ -734,6 +734,9 @@ class SoundEngine {
         this.lfo(bed, 0.028, 140, wind.filter.frequency)
         const pad = this.tone(bed, [196, 293.66], 'sine', 0.006, out)
         this.lfo(bed, 0.035, 0.003, pad.gain)
+        // Liris polish: dry grass hissing on the steppe, louder in the gusts.
+        const grass = this.noiseLayer(bed, 'highpass', 4200, 0.6, 0.006, gust)
+        this.lfo(bed, 0.11, 0.003, grass.gain.gain)
         const surf = this.noiseLayer(bed, 'lowpass', 400, 0.4, 1, out)
         bed.surf = ctx.createGain()
         bed.surf.gain.value = 0

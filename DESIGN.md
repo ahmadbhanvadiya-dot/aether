@@ -3210,3 +3210,13 @@ the four finds can show only then (not on an empty save), and VII completes. Sig
 §27 test): all four clear, 0 of 13 samples blocked, within the view's pitch. Live: with VII
 closed nothing showed in 35 s; with it open the notice came on time. Elys's 54 visible
 discoveries and every total are unchanged; hidden finds are 9 on Elys, 2 on Liris.
+
+## 31. Liris polish
+
+Liris is terrestrial like Aurelis, so it had Aurelis's weather and nothing of its own. Now
+(`LIRIS_EVENTS`, chosen by `twoSuns`): by day, half the time a break in the cloud, half the
+time a **gust across the steppe**, the existing gust event, which drives the wind up (so the
+grass waves race), lifts the seeds in the air, softens the distance and swells the wind;
+by night, as Aurelis. Its soundscape gains **dry grass** hissing on the steppe (high-passed
+noise on the gust bus), so it rises with every gust. Checked: a forced gust raises the wind,
+and the bed builds with the new layer (10 sources, was 8), no errors.
