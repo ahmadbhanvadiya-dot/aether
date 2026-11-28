@@ -72,12 +72,16 @@ float fbm2(vec2 p, int oct) {
   return sum;
 }
 
+// Realism pass: ridges are rounded at the crest (a smooth |x|, the same in the
+// TypeScript mirror), so peaks end in a curve instead of a knife-edge point.
+#define RIDGE_ROUND 0.05
 float ridged2(vec2 p, int oct) {
   float sum = 0.0;
   float amp = 0.5;
   for (int i = 0; i < 8; i++) {
     if (i >= oct) break;
-    float n = 1.0 - abs(vnoise(p));
+    float v = vnoise(p);
+    float n = 1.0 - (sqrt(v * v + RIDGE_ROUND) - sqrt(RIDGE_ROUND));
     sum += amp * n * n;
     p = vec2(0.8 * p.x - 0.6 * p.y, 0.6 * p.x + 0.8 * p.y) * 2.02;
     amp *= 0.5;
@@ -217,11 +221,14 @@ export function makeHeightFn(kindId: number, seed: number, locs: LocField[]) {
     return sum
   }
 
+  // Rounded crests: the same smooth |x| as the GLSL (RIDGE_ROUND).
+  const ROUND = 0.05
   const ridged2 = (px: number, py: number, oct: number) => {
     let sum = 0
     let amp = 0.5
     for (let i = 0; i < oct; i++) {
-      const n = 1 - Math.abs(vnoise(px, py))
+      const v = vnoise(px, py)
+      const n = 1 - (Math.sqrt(v * v + ROUND) - Math.sqrt(ROUND))
       sum += amp * n * n
       const nx = (0.8 * px - 0.6 * py) * 2.02
       const ny = (0.6 * px + 0.8 * py) * 2.02
