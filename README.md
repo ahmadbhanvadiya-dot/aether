@@ -4,6 +4,8 @@
 
 [Live site](https://ahmadbhanvadiya-dot.github.io/aether/) · [Design notes](DESIGN.md) · [Product brief](PRODUCT.md)
 
+![Leaving orbit around Vael and jumping into the Aether system](docs/media/aether.gif)
+
 You arrive in orbit around the ocean world Vael. From there you jump into the Aether system:
 six worlds around the star Elys, each with its own sky, weather and life, that you can descend
 to and walk. Scan what you find and a story starts to answer back: a signal from no point in
@@ -144,4 +146,4 @@ base path, so the same output works at the site root or under a subpath.
 
 ## License
 
-No license has been chosen yet. All rights reserved by the author until one is added.
+[MIT](LICENSE) © 2026 Ahmad.
