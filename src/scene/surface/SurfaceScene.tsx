@@ -362,6 +362,14 @@ const EVENTS: Partial<Record<SurfaceSettings['kind'], (night: boolean, aurora: n
   giant: () => 'deep',
 }
 
+/**
+ * Liris polish: its own weather, not Aurelis's (both are terrestrial). By day, a
+ * break in the cloud or a gust that runs across the steppe grass (the wind speeds
+ * up, the grass waves race, seeds lift); by night, as Aurelis.
+ */
+const LIRIS_EVENTS = (night: boolean, aurora: number): EventKind =>
+  night ? EVENTS.terrestrial!(night, aurora) : Math.random() < 0.5 ? 'gust' : 'sunbreak'
+
 const DURATION: Record<EventKind, number> = {
   meteor: 1.4,
   sunbreak: 14,
@@ -549,7 +557,7 @@ function Weather({ uniforms, settings }: { uniforms: SurfaceUniforms; settings: 
     // reduced motion or while paused, always roughly where the visitor is looking.
     const ev = event.current
     const eu = uniforms.uEvent.value
-    const spec = EVENTS[settings.kind]
+    const spec = settings.twoSuns ? LIRIS_EVENTS : EVENTS[settings.kind]
     if (spec && !motionPaused && !reducedMotion && director.space === 'surface' && surfaceCam.mode === 'free') {
       if (ev.age < 0) {
         ev.wait -= dt
