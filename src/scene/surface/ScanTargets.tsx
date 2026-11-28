@@ -5,6 +5,7 @@ import { discoveriesFor, type Find } from '../../data/discoveries'
 import { WORLD_BY_ID, type WorldId } from '../../data/planets'
 import { director, telemetry } from '../../state/director'
 import { useExploration } from '../../state/exploration'
+import { servesOpenExpedition } from '../../state/expeditions'
 import { useExperience } from '../../state/useExperience'
 import { noticeHidden } from '../../ui/scanner'
 import { scanFx } from '../motion'
@@ -171,6 +172,8 @@ export function ScanTargets({ planet }: { planet: WorldId }) {
   }, [accent])
   const beam = useRef<Mesh>(null)
   const frame = useRef(0)
+  // Expedition VII: which `wait` finds can show yet, worked out once per change of progress.
+  const waitOpen = useRef<{ found: Record<string, number> | null; open: Map<string, boolean> }>({ found: null, open: new Map() })
   const sweeps = useRef<(Mesh | null)[]>([])
   const pulse = useRef<Mesh>(null)
 
@@ -201,12 +204,28 @@ export function ScanTargets({ planet }: { planet: WorldId }) {
       if (g.d.kind === 'secret' && !found) {
         // Hidden: a faint shimmer only as the view nears it; holding it there reveals it.
         const detected = !!st.detected[g.d.id]
-        if (!detected && atHere && free) {
+        const wait = g.d.wait
+        if (wait) {
+          // Expedition VII: it shows to a visitor who stays, not one who looks. Leaving starts over.
+          if (waitOpen.current.found !== discovered) waitOpen.current = { found: discovered, open: new Map() }
+          let open = waitOpen.current.open.get(g.d.id)
+          if (open === undefined) waitOpen.current.open.set(g.d.id, (open = servesOpenExpedition(discovered, g.d.id)))
+          if (!atHere || !open) g.dwell = 0
+          else if (!detected && free) {
+            g.dwell += dt
+            if (g.dwell >= wait) noticeHidden(g.d.id)
+          }
+        } else if (!detected && atHere && free) {
           g.dwell = gaze > LOCK_CONE ? g.dwell + dt : Math.max(0, g.dwell - dt * 0.6)
           if (g.dwell >= DWELL) noticeHidden(g.d.id)
         }
         g.reveal = MathUtils.damp(g.reveal, detected ? 1 : 0, 1.6, dt)
-        const warm = atHere ? MathUtils.smoothstep(gaze, WARM_OUTER, WARM_INNER) * (0.12 + 0.3 * Math.min(1, g.dwell / DWELL)) : 0
+        // While a visitor stays, the sign gathers where it is, whichever way they look.
+        const warm = !atHere
+          ? 0
+          : wait
+            ? 0.42 * MathUtils.smoothstep(g.dwell / wait, 0.15, 1)
+            : MathUtils.smoothstep(gaze, WARM_OUTER, WARM_INNER) * (0.12 + 0.3 * Math.min(1, g.dwell / DWELL))
         alpha = Math.max(warm, g.reveal * (0.45 + 0.55 * MathUtils.smoothstep(gaze, 0.8, 0.995)))
       } else {
         const near = atHere ? 1 : MathUtils.smoothstep(dist, 1500, 600) * 0.45

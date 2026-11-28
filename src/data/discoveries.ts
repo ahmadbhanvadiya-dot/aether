@@ -52,6 +52,11 @@ export interface DiscoveryData<P extends WorldId = PlanetId> {
   placement?: Placement
   /** Hidden discoveries: the report the Observatory shows before one is found. */
   lead?: string
+  /**
+   * Expedition VII: a hidden find that shows only to a visitor who stays at its
+   * place this many seconds (not one who looks), once an expedition it serves is open.
+   */
+  wait?: number
 }
 
 type Entry = Omit<DiscoveryData, 'kind' | 'planet' | 'location' | 'id'> & { key: string }
@@ -474,6 +479,61 @@ const SECRETS: Record<PlanetId, Entry & { location: string }> = {
   },
 }
 
+/**
+ * Expedition VII, the Gardener: four signs along the moss trail of Expedition VI.
+ * Hidden finds that ask for patience (`wait`): stay at the place and they show.
+ */
+const GARDENER: (Entry & { location: string; planet: WorldId })[] = [
+  {
+    key: 'fresh-rows',
+    planet: 'liris',
+    location: 'liris-long-noon',
+    name: 'Fresh rows',
+    category: 'life',
+    description:
+      'Under the arch the moss lies in rows, combed straight, and never the same way twice. Stay, and a row is laid while you watch, with nothing there to lay it.',
+    lead: 'The ring said wait. Under the arch on the Long Noon, stay a while.',
+    placement: { bearing: 0.12, distance: 80, rise: 0.6 },
+    wait: 30,
+  },
+  {
+    key: 'moss-lamp',
+    planet: 'nyx',
+    location: 'nyx-vein-fields',
+    name: 'The moss lamp',
+    category: 'anomaly',
+    description:
+      'In a crack where the warm air rises, the moss has grown into the shape of a lamp. It lights in the Waystation’s rhythm, three short and one long, and holds the last note.',
+    lead: 'In the Vein Fields, a light that waits for you to wait.',
+    placement: { bearing: -0.05, distance: 55, rise: 0.4 },
+    wait: 30,
+  },
+  {
+    key: 'tended-lights',
+    planet: 'thalassa',
+    location: 'thalassa-lantern-current',
+    name: 'Tended lights',
+    category: 'life',
+    description:
+      'The lanterns around the sunken spire hold their rows against the current. When a row breaks it is set back, slowly, from below.',
+    lead: 'Over the sunken spire, stay until the lights settle.',
+    placement: { bearing: -0.22, distance: 95, rise: 0.4 },
+    wait: 30,
+  },
+  {
+    key: 'forty-one-lights',
+    planet: 'orion',
+    location: 'orion-ringrise',
+    name: 'Forty-one lights',
+    category: 'anomaly',
+    description:
+      'Forty-one points of violet in the cloud tops under the rings, held still while the clouds stream past them.',
+    lead: 'Under the rings, watch the clouds until something in them stops moving.',
+    placement: { bearing: 0.12, distance: 380, rise: 3 },
+    wait: 30,
+  },
+]
+
 function build(): DiscoveryData[] {
   const out: DiscoveryData[] = []
   for (const loc of LOCATIONS) {
@@ -493,6 +553,9 @@ function build(): DiscoveryData[] {
   for (const p of PLANETS) {
     const { key, location, ...e } = SECRETS[p.id]
     out.push({ ...e, id: `${location}.${key}`, kind: 'secret', planet: p.id, location })
+  }
+  for (const { key, location, planet, ...e } of GARDENER) {
+    if (planet !== 'liris') out.push({ ...e, id: `${location}.${key}`, kind: 'secret', planet, location })
   }
   return out
 }
@@ -613,6 +676,9 @@ function buildLiris(): DiscoveryData<'liris'>[] {
   }
   const { key, location, ...e } = LIRIS_SECRET
   out.push({ ...e, id: `${location}.${key}`, kind: 'secret', planet: 'liris', location })
+  for (const { key, location, planet, ...e } of GARDENER) {
+    if (planet === 'liris') out.push({ ...e, id: `${location}.${key}`, kind: 'secret', planet, location })
+  }
   return out
 }
 

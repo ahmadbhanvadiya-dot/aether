@@ -1,4 +1,4 @@
-import { EXPEDITIONS, EXPEDITION_BY_ID, type Expedition, type Fragment, type Objective } from '../data/expeditions'
+import { EXPEDITIONS, EXPEDITION_BY_ID, expeditionsFor, type Expedition, type Fragment, type Objective } from '../data/expeditions'
 import { SYSTEMS, type SystemId } from '../data/systems'
 
 /**
@@ -77,6 +77,12 @@ export function expeditionStates(found: Found): ExpeditionState[] {
     }
   }
   return EXPEDITIONS.map((e) => byId[e.id])
+}
+
+/** Expedition VII: whether an expedition this find serves is open (a `wait` find shows only then). */
+export function servesOpenExpedition(found: Found, id: string) {
+  const ids = expeditionsFor(id).map((e) => e.id)
+  return expeditionStates(found).some((s) => ids.includes(s.expedition.id) && s.openedAt !== null)
 }
 
 /**

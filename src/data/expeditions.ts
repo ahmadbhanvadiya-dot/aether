@@ -577,6 +577,90 @@ export const EXPEDITIONS: Expedition[] = [
       ],
     },
   },
+  {
+    id: 'exp-gardener',
+    code: 'Expedition VII',
+    title: 'The Gardener',
+    unlock: { after: 'exp-violet' },
+    intro: {
+      id: 'gd-intro',
+      kind: 'transmission',
+      title: 'Wait',
+      source: 'The Keepers\u2019 Ring · its lamps',
+      body: [
+        'The ring\u2019s lamps do not say follow. They say wait.',
+        'Someone tended its garden not long ago. Go back to where the moss grows, and stay a while.',
+      ],
+    },
+    objectives: [
+      {
+        id: 'gd-1',
+        title: 'Fresh rows',
+        brief: "Under the arch on Liris's Long Noon, stay a while and watch the moss.",
+        requires: ['liris-long-noon.fresh-rows'],
+        fragment: {
+          id: 'gd-1-log',
+          kind: 'log',
+          title: 'Laid in rows',
+          source: 'Liris · the Long Noon',
+          body: [
+            'Stay long enough and the moss under the arch moves: not with the suns, but row by row, as if combed. Nothing you can see is combing it.',
+          ],
+        },
+      },
+      {
+        id: 'gd-2',
+        title: 'A lamp in the cracks',
+        brief: 'In the Vein Fields on Nyx, stay by the cracks until something answers.',
+        requires: ['nyx-vein-fields.moss-lamp'],
+        fragment: {
+          id: 'gd-2-transmission',
+          kind: 'transmission',
+          title: 'Here, here, here',
+          source: 'Nyx · the Vein Fields',
+          body: ['Deep in a crack the moss has grown into a lamp. It plays the Waystation\u2019s three notes, and then the ring\u2019s fourth: wait.'],
+        },
+      },
+      {
+        id: 'gd-3',
+        title: 'Lanterns in order',
+        brief: "In Thalassa's Lantern Current, stay over the sunken spire until the lights settle.",
+        requires: ['thalassa-lantern-current.tended-lights'],
+        fragment: {
+          id: 'gd-3-record',
+          kind: 'record',
+          title: 'Kept',
+          source: 'Thalassa · the Lantern Current',
+          body: [
+            'The lanterns are not drifting. They are kept: set back into their rows whenever the current breaks them, by something that never comes up into the light.',
+          ],
+        },
+      },
+      {
+        id: 'gd-4',
+        title: 'The count',
+        brief: "From Orion's Ringrise, watch the clouds under the rings until something in them holds still.",
+        requires: ['orion-ringrise.forty-one-lights'],
+        fragment: {
+          id: 'gd-4-clue',
+          kind: 'clue',
+          title: 'Forty-one',
+          source: 'Orion · the Ringrise',
+          body: ['Forty-one points of violet, held still against the wind: the number of names under the survey mark.'],
+        },
+      },
+    ],
+    closing: {
+      id: 'gd-closing',
+      kind: 'record',
+      title: 'The Gardener',
+      source: 'Expedition record',
+      body: [
+        'The keepers did not carry the moss. The moss carried them: forty-one surveyors, grown into a garden that keeps their lamps, their rows and their count.',
+        'It never asked to be followed. It asked you to wait, because it was waiting for you.',
+      ],
+    },
+  },
 ]
 
 export const EXPEDITION_BY_ID: Record<string, Expedition> = Object.fromEntries(EXPEDITIONS.map((e) => [e.id, e]))
