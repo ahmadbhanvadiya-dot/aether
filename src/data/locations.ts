@@ -669,7 +669,7 @@ export const LIRIS_LOCATIONS: LocationData<'liris'>[] = [
     terrain: { radius: 340, lift: 58, rough: 0.95, shape: 'none', a: 0, b: 0 },
     camera: { at: [0, 0], eye: 2.5, pitch: 0.04 },
     landmark: { kind: 'monolith', at: [-30, -70], scale: 0.6 },
-    signalHeight: 18, // raised to clear the ridge in front (playthrough sweep)
+    signalHeight: 26, // raised to clear the ridge in front (playthrough sweep; again for the rounded crests)
     env: {
       ...base,
       sun: [-0.14, 4.3],

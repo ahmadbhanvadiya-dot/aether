@@ -3171,11 +3171,15 @@ in `SurfaceScene.tsx`.
 after (ground detail +0.85, landmark shadows +0.23 with 7 capsules, land shadows +0.72).
 Capsule cost grows with their number (32 measured at about +1.3 ms), hence the cap of 16.
 
-**Not done:** smoother far peaks. Sampling the slope across the grid's spacing and
-averaging far heights made no visible difference: the triangular peaks are the land's
-own shape (the ridged noise in `baseHeight`), not mesh resolution. Rounding them means
-changing the height function on both the GPU and the CPU copy, which moves every camera,
-landmark and find, so it would need the visibility sweep of §27 run again.
+**Rounded peaks.** Sampling the slope across the grid's spacing and averaging far heights
+made no visible difference: the triangular peaks were the land's own shape. Ridged noise is
+`1 − |n|`, a knife-edge crease at every crest. `ridged2` now uses a smooth |n|
+(`sqrt(n² + 0.05) − sqrt(0.05)`), identical in the GLSL and the TypeScript mirror, so
+crests end in a curve about ±20 m across on the big ridges; peak heights are unchanged.
+It moves the land on every world built with ridged noise (Aurelis, Liris, Nyx, Thalassa),
+so the §27 sweep was run again on all four: Aurelis 10/10, Nyx 11/11, Thalassa 11/11 clear;
+on Liris the Between Days beacon grazed the rounded ridge in front again (1 of 13 samples)
+and was raised 18 → 26 (clear from +6), then 11/11.
 
 ## 30. Expedition VII: The Gardener
 
