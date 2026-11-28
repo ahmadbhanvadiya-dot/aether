@@ -3161,6 +3161,12 @@ in `SurfaceScene.tsx`.
   Canyon walls now throw their shadow across the floor. The grid follows the eye, so far
   shadow edges can creep slightly while the camera flies; at rest they are steady.
 
+- **Sea stacks** (`rockColumn`): Aurelis's stacks were eight-sided jittered prisms,
+  flat-shaded. They are now 20-sided columns worn by lumps around and ledges up their
+  height, welded so they shade smoothly. Each still draws the random numbers the old
+  prism did, so every stack stands exactly where it stood (checked: all 8 capsules
+  identical). Crystals and monoliths keep their flat faces: they are cut or grown, not worn.
+
 **Cost**, the scene alone at 1920 × 1080 on an RTX 3050 laptop GPU: 1.53 ms before, 3.33 ms
 after (ground detail +0.85, landmark shadows +0.23 with 7 capsules, land shadows +0.72).
 Capsule cost grows with their number (32 measured at about +1.3 ms), hence the cap of 16.
