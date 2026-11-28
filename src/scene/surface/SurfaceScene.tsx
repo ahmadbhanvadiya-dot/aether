@@ -116,8 +116,15 @@ export default function SurfaceScene({ planet }: { planet: WorldId }) {
 
   // LIVE_OCT: noise octaves for the Phase 7 cloud shadows (one fewer on the low tier).
   // SUN2: a second sun's paths (Liris), compiled only where there is one (Phase 11).
+  // SHADOW_STEPS: the realism pass's march toward the sun for the land's own shadows.
   const defines = useMemo(
-    () => ({ SEED: `${settings.seed}u`, SKIND: KIND_IDS[settings.kind], LIVE_OCT: HIGH ? 3 : 2, ...(settings.twoSuns ? { SUN2: 1 } : {}) }),
+    () => ({
+      SEED: `${settings.seed}u`,
+      SKIND: KIND_IDS[settings.kind],
+      LIVE_OCT: HIGH ? 3 : 2,
+      SHADOW_STEPS: HIGH ? 10 : 6,
+      ...(settings.twoSuns ? { SUN2: 1 } : {}),
+    }),
     [settings],
   )
 
@@ -630,8 +637,17 @@ function jitter(geometry: BG, amount: number, rand: () => number) {
   return geometry
 }
 
+// Realism pass: each landmark piece also as a capsule (a -> b, radius), in the
+// landmark's own space, for the shadows the shaders work out (capsuleShadow).
+interface Capsule {
+  a: Vector3
+  b: Vector3
+  r: number
+}
+
 function buildSpires(planet: WorldId, scale: number, rand: () => number) {
   const parts: BG[] = []
+  const caps: Capsule[] = []
   const salt = planet === 'solara'
   const stacks = planet === 'aurelis'
   const count = salt ? 28 : stacks ? 7 : 12
@@ -653,46 +669,83 @@ function buildSpires(planet: WorldId, scale: number, rand: () => number) {
       geo = body.toNonIndexed()
     }
     // Crystals lean toward a shared point in the sky; stacks stand straight.
+    const top = new Vector3(0, h, 0)
     if (!stacks) {
-      geo.rotateZ(0.18 + (rand() - 0.5) * 0.12)
-      geo.rotateY(rand() * 0.3)
+      const lean = 0.18 + (rand() - 0.5) * 0.12
+      const turn = rand() * 0.3
+      geo.rotateZ(lean)
+      geo.rotateY(turn)
+      top.applyAxisAngle(new Vector3(0, 0, 1), lean).applyAxisAngle(new Vector3(0, 1, 0), turn)
     }
     geo.translate(Math.cos(a) * r, 0, Math.sin(a) * r)
     parts.push(geo)
+    const foot = new Vector3(Math.cos(a) * r, 0, Math.sin(a) * r)
+    caps.push({ a: foot.clone().multiplyScalar(scale), b: top.add(foot).multiplyScalar(scale), r: w * (stacks ? 0.85 : 0.9) * scale })
   }
   const merged = mergeGeometries(parts)
   merged.scale(scale, scale, scale)
   merged.computeVertexNormals()
-  return merged
+  return { geometry: merged, caps }
 }
 
 function buildMonolith(planet: WorldId, scale: number) {
   let g: BG
+  let cap: Capsule
   if (planet === 'solara') {
     g = new CylinderGeometry(1.4, 2.6, 26, 4, 1)
     g.rotateY(Math.PI / 4)
     g.translate(0, 13, 0)
     g.rotateZ(0.18)
+    cap = { a: new Vector3(), b: new Vector3(0, 26, 0).applyAxisAngle(new Vector3(0, 0, 1), 0.18), r: 2 }
   } else if (planet === 'aurelis') {
     g = new CylinderGeometry(2.2, 3.4, 14, 5, 3)
     g.translate(0, 7, 0)
+    cap = { a: new Vector3(), b: new Vector3(0, 14, 0), r: 2.8 }
   } else {
     g = new CylinderGeometry(1, 1, 1, 4, 1)
     g.rotateY(Math.PI / 4)
     g.scale(7, 34, 1.8)
     g.translate(0, 17, 0)
+    // A slab: one capsule between its width and its depth.
+    cap = { a: new Vector3(), b: new Vector3(0, 34, 0), r: 2.6 }
   }
   g = g.toNonIndexed()
   g.scale(scale, scale, scale)
   g.computeVertexNormals()
-  return g
+  cap.b.multiplyScalar(scale)
+  cap.r *= scale
+  return { geometry: g, caps: [cap] }
 }
 
 function buildArch(scale: number, rand: () => number) {
   const g = new TorusGeometry(30, 6.5, 12, 56, Math.PI)
   jitter(g, 1.6, rand)
   g.scale(scale, scale, scale)
-  return g
+  // Six capsules along the half ring.
+  const at = (i: number) =>
+    new Vector3(Math.cos((i / 6) * Math.PI) * 30, Math.sin((i / 6) * Math.PI) * 30, 0).multiplyScalar(scale)
+  const caps = Array.from({ length: 6 }, (_, i) => ({ a: at(i), b: at(i + 1), r: 6.5 * scale }))
+  return { geometry: g, caps }
+}
+
+// The pieces of every landmark on this world, written into the shared uniforms:
+// the largest first, when there are more than the shaders take (MAX_CAPS: each
+// costs every ground pixel a little). Pieces thinner than 0.7 m (Solara's salt
+// spires) are left out: their shadows would hardly show.
+const MAX_CAPS = 16
+const landmarkCaps = new Map<string, Capsule[]>()
+function writeCaps(u: SurfaceUniforms) {
+  const size = (c: Capsule) => c.r * (c.a.distanceTo(c.b) + c.r)
+  const all = [...landmarkCaps.values()]
+    .flat()
+    .filter((c) => c.r >= 0.7)
+    .sort((x, y) => size(y) - size(x))
+  const n = Math.min(all.length, MAX_CAPS)
+  for (let i = 0; i < n; i++) {
+    u.uCapA.value[i].set(all[i].a.x, all[i].a.y, all[i].a.z, all[i].r)
+    u.uCapB.value[i].set(all[i].b.x, all[i].b.y, all[i].b.z, 0)
+  }
+  u.uCapN.value = n
 }
 
 function buildVent(scale: number) {
@@ -721,18 +774,19 @@ function Landmark({
   const base = surface.landmarkBase[loc.id]
   const kind = loc.landmark.kind
 
-  const { geometry, material, height } = useMemo(() => {
+  const { geometry, caps, material, height } = useMemo(() => {
     const rand = mulberry32(settings.seed * 97 + loc.id.length)
     let geometry: BG | null = null
+    let caps: Capsule[] = []
     let height = 30
     if (kind === 'spires') {
-      geometry = buildSpires(loc.planet, loc.landmark.scale, rand)
+      ;({ geometry, caps } = buildSpires(loc.planet, loc.landmark.scale, rand))
       height = 60 * loc.landmark.scale
     } else if (kind === 'monolith') {
-      geometry = buildMonolith(loc.planet, loc.landmark.scale)
+      ;({ geometry, caps } = buildMonolith(loc.planet, loc.landmark.scale))
       height = 34 * loc.landmark.scale
     } else if (kind === 'arch') {
-      geometry = buildArch(loc.landmark.scale, rand)
+      ;({ geometry, caps } = buildArch(loc.landmark.scale, rand))
     } else if (kind === 'geyser') {
       geometry = buildVent(loc.landmark.scale)
       height = 3
@@ -753,9 +807,23 @@ function Landmark({
       },
       defines,
     })
-    return { geometry, material, height }
+    return { geometry, caps, material, height }
   }, [kind, loc, settings, uniforms, defines])
   useDispose(geometry)
+
+  // This landmark's pieces join the world's shadow casters while it is mounted.
+  useEffect(() => {
+    if (!base || !caps.length) return
+    landmarkCaps.set(
+      loc.id,
+      caps.map((c) => ({ a: c.a.clone().add(base), b: c.b.clone().add(base), r: c.r })),
+    )
+    writeCaps(uniforms)
+    return () => {
+      landmarkCaps.delete(loc.id)
+      writeCaps(uniforms)
+    }
+  }, [base, caps, loc.id, uniforms])
 
   if (!base) return null
   return (
